@@ -3,7 +3,7 @@ import { executeCommand, importAndOpen, openBook } from "./executor.js";
 import { clampFocusBlockIndex, mapFocusIndexToBlockOffset, renderFocusBlock } from "./focus.js";
 import { handleInput } from "./input.js";
 import { bg, bold, fg } from "./color.js";
-import { discoverEpubs } from "./discovery.js";
+import { discoverBooks } from "./discovery.js";
 import { KEYBOARD_SHORTCUTS } from "./help.js";
 import { renderBlocks } from "./renderers.js";
 import {
@@ -320,7 +320,7 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     status: "Ready",
     overlay: "none",
     overlayCursor: 0,
-    discoveries: await discoverEpubs(process.cwd()),
+    discoveries: await discoverBooks(process.cwd()),
     shouldQuit: false,
     filePickerCursor: 0,
     filePickerItems: [],

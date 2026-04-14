@@ -8,7 +8,18 @@ const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bm
 
 export async function importCbz(filePath: string): Promise<CanonicalBook> {
   const buf = await fs.readFile(filePath);
-  const zip = await JSZip.loadAsync(buf);
+  const baseName = path.basename(filePath, path.extname(filePath));
+  const bookId = crypto.createHash("sha256").update(filePath).digest("hex").slice(0, 16);
+  const importHash = crypto.createHash("sha256").update(buf).digest("hex");
+  const diagnostics: ImportDiagnostic[] = [];
+
+  let zip: Awaited<ReturnType<typeof JSZip.loadAsync>>;
+  try {
+    zip = await JSZip.loadAsync(buf);
+  } catch (err) {
+    diagnostics.push({ severity: "error", message: `Failed to read CBZ archive: ${err instanceof Error ? err.message : String(err)}` });
+    return { id: bookId, title: baseName, author: "Unknown", sourcePath: filePath, importHash, parserVersion: 1, diagnostics, chapters: [] };
+  }
 
   const imageFiles = Object.keys(zip.files)
     .filter((name) => {
@@ -17,14 +28,14 @@ export async function importCbz(filePath: string): Promise<CanonicalBook> {
     })
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
-  const diagnostics: ImportDiagnostic[] = [];
   if (imageFiles.length === 0) {
     diagnostics.push({ severity: "warning", message: "No images found in CBZ archive." });
+  } else {
+    diagnostics.push({
+      severity: "warning",
+      message: `CBZ imported without OCR — ${imageFiles.length} page(s) shown as image placeholders. No text available.`
+    });
   }
-
-  const baseName = path.basename(filePath, path.extname(filePath));
-  const bookId = crypto.createHash("sha256").update(filePath).digest("hex").slice(0, 16);
-  const importHash = crypto.createHash("sha256").update(buf).digest("hex");
 
   const chapters: CanonicalChapter[] = imageFiles.map((imageName, index) => {
     const pageNum = index + 1;
@@ -44,11 +55,6 @@ export async function importCbz(filePath: string): Promise<CanonicalBook> {
       blocks: [block],
       wordCount: 0
     };
-  });
-
-  diagnostics.push({
-    severity: "warning",
-    message: `CBZ imported without OCR — ${imageFiles.length} page(s) shown as image placeholders. No text available.`
   });
 
   return {

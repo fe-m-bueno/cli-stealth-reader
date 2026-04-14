@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { commandHelp, parseSlashCommand } from "./commands.js";
-import { discoverEpubs } from "./discovery.js";
+import { discoverBooks } from "./discovery.js";
 import { mapBlockOffsetToFocusIndex, mapFocusIndexToBlockOffset } from "./focus.js";
 import { EPUB_PARSER_VERSION, importEpub } from "./parser/epub.js";
 import { importFile } from "./parser/index.js";
@@ -46,8 +46,10 @@ function findBookByQuery(books: LibraryEntry[], query: string): LibraryEntry | u
 }
 
 export async function openBook(state: AppState, book: CanonicalBook): Promise<void> {
-  if ((book.parserVersion ?? 1) < EPUB_PARSER_VERSION && fs.existsSync(book.sourcePath)) {
-    const refreshed = await importEpub(book.sourcePath);
+  const ext = book.sourcePath.toLowerCase();
+  const isEpub = ext.endsWith(".epub");
+  if (isEpub && (book.parserVersion ?? 1) < EPUB_PARSER_VERSION && fs.existsSync(book.sourcePath)) {
+    const refreshed = await importFile(book.sourcePath);
     state.storage.saveBook(refreshed, state.renderMode);
     book = refreshed;
   }
@@ -75,7 +77,7 @@ export async function importAndOpen(state: AppState, filePath: string, force = f
 
 async function refreshDiscoveries(state: AppState): Promise<void> {
   state.cwd = process.cwd();
-  state.discoveries = await discoverEpubs(state.cwd);
+  state.discoveries = await discoverBooks(state.cwd);
 }
 
 function filterDiscoveries(discoveries: FolderDiscovery[], query: string): FolderDiscovery[] {
@@ -709,7 +711,9 @@ const handlers: Record<string, CommandHandler> = {
     try {
       const data = state.storage.exportAll();
       fs.writeFileSync(outPath, JSON.stringify(data, null, 2), "utf8");
-      state.status = `Exported ${data.positions.length} book(s) to ${path.relative(state.cwd, outPath) || outPath}`;
+      const bookCount = new Set(data.positions.map((p) => p.bookImportHash)).size;
+      const rel = path.relative(state.cwd, outPath) || outPath;
+      state.status = `Exported ${bookCount} book(s) — ${data.positions.length} position(s), ${data.bookmarks.length} bookmark(s), ${data.notes.length} note(s), ${data.tags.length} tag(s) → ${rel}`;
     } catch (err) {
       state.status = err instanceof Error ? `Export failed: ${err.message}` : "Export failed.";
     }
@@ -728,6 +732,10 @@ const handlers: Record<string, CommandHandler> = {
       const data = JSON.parse(raw) as ExportData;
       if (data.version !== 1) {
         state.status = "Unsupported export format version.";
+        return;
+      }
+      if (!Array.isArray(data.positions) || !Array.isArray(data.bookmarks) || !Array.isArray(data.notes) || !Array.isArray(data.tags)) {
+        state.status = "Invalid export file: missing required arrays.";
         return;
       }
       const result = state.storage.importMerge(data);

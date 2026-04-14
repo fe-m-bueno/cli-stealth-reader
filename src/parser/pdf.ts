@@ -35,11 +35,12 @@ export async function importPdf(filePath: string): Promise<CanonicalBook> {
   }
 
   const pageTexts = parsed.text.split(/\f/);
-  const totalPages = Math.max(pageTexts.length, parsed.numpages ?? 1);
+  const totalPages = parsed.numpages ?? pageTexts.length;
+  const cappedTexts = pageTexts.slice(0, totalPages);
 
   const chapters: CanonicalChapter[] = [];
   for (let i = 0; i < totalPages; i++) {
-    const rawText = (pageTexts[i] ?? "").trim();
+    const rawText = (cappedTexts[i] ?? "").trim();
     const blocks: CanonicalBlock[] = [];
 
     if (!rawText) {

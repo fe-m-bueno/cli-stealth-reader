@@ -4,7 +4,7 @@ import type { FolderDiscovery } from "./types.js";
 
 const SUPPORTED_EXTENSIONS = new Set([".epub", ".cbz", ".pdf"]);
 
-export async function discoverEpubs(cwd: string): Promise<FolderDiscovery[]> {
+export async function discoverBooks(cwd: string): Promise<FolderDiscovery[]> {
   const entries = await fs.readdir(cwd, { withFileTypes: true });
   return entries
     .filter((entry) => entry.isFile() && SUPPORTED_EXTENSIONS.has(path.extname(entry.name).toLowerCase()))

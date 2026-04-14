@@ -362,8 +362,9 @@ export class Storage {
     return row?.id ?? null;
   }
 
-  needsReimport(bookId: string): boolean {
-    const row = this.db.prepare("SELECT parser_version FROM books WHERE id = ?").get(bookId) as { parser_version?: number } | undefined;
+  needsEpubReimport(bookId: string): boolean {
+    const row = this.db.prepare("SELECT parser_version, source_path FROM books WHERE id = ?").get(bookId) as { parser_version?: number; source_path: string } | undefined;
+    if (!row?.source_path.toLowerCase().endsWith(".epub")) return false;
     return (row?.parser_version ?? 1) < EPUB_PARSER_VERSION;
   }
 
@@ -514,47 +515,69 @@ export class Storage {
 
   importMerge(data: ExportData): ImportResult {
     const exportedAtMs = new Date(data.exportedAt).getTime();
+    if (Number.isNaN(exportedAtMs)) {
+      throw new Error("Export file has an invalid exportedAt date.");
+    }
+
+    const findBook = this.db.prepare("SELECT id, last_opened_at FROM books WHERE import_hash = ?");
+    const findBookById = this.db.prepare("SELECT id FROM books WHERE import_hash = ?");
+    const updatePos = this.db.prepare(`
+      INSERT INTO positions (book_id, chapter_index, chapter_progress, book_progress, block_offset)
+      VALUES (?, ?, 0, ?, ?)
+      ON CONFLICT(book_id) DO UPDATE SET
+        chapter_index = excluded.chapter_index,
+        chapter_progress = 0,
+        book_progress = excluded.book_progress,
+        block_offset = excluded.block_offset
+    `);
+    const findBm = this.db.prepare("SELECT id FROM bookmarks WHERE book_id = ? AND chapter_index = ? AND block_offset = ?");
+    const insertBm = this.db.prepare("INSERT INTO bookmarks (id, book_id, chapter_index, block_offset, label, created_at) VALUES (?, ?, ?, ?, ?, ?)");
+    const findNote = this.db.prepare("SELECT id FROM notes WHERE book_id = ? AND content = ? AND created_at = ?");
+    const insertNote = this.db.prepare("INSERT INTO notes (id, book_id, chapter_index, block_offset, content, created_at) VALUES (?, ?, ?, ?, ?, ?)");
+    const insertTag = this.db.prepare("INSERT OR IGNORE INTO book_tags (book_id, tag) VALUES (?, ?)");
+
     let positionsUpdated = 0;
     let bookmarksAdded = 0;
     let notesAdded = 0;
     let tagsAdded = 0;
 
-    for (const pos of data.positions) {
-      const book = this.db.prepare("SELECT id, last_opened_at FROM books WHERE import_hash = ?").get(pos.bookImportHash) as { id: string; last_opened_at: number } | undefined;
-      if (!book) continue;
-      if (exportedAtMs > book.last_opened_at) {
-        this.savePosition({ bookId: book.id, chapterIndex: pos.chapterIndex, blockOffset: pos.blockOffset, bookProgress: pos.bookProgress, chapterProgress: 0 });
-        positionsUpdated++;
+    const tx = this.db.transaction(() => {
+      for (const pos of data.positions) {
+        const book = findBook.get(pos.bookImportHash) as { id: string; last_opened_at: number } | undefined;
+        if (!book) continue;
+        if (exportedAtMs > book.last_opened_at) {
+          updatePos.run(book.id, pos.chapterIndex, pos.bookProgress, pos.blockOffset);
+          positionsUpdated++;
+        }
       }
-    }
 
-    for (const bm of data.bookmarks) {
-      const book = this.db.prepare("SELECT id FROM books WHERE import_hash = ?").get(bm.bookImportHash) as { id: string } | undefined;
-      if (!book) continue;
-      const exists = this.db.prepare("SELECT id FROM bookmarks WHERE book_id = ? AND chapter_index = ? AND block_offset = ?").get(book.id, bm.chapterIndex, bm.blockOffset);
-      if (!exists) {
-        this.db.prepare("INSERT INTO bookmarks (id, book_id, chapter_index, block_offset, label, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(crypto.randomUUID(), book.id, bm.chapterIndex, bm.blockOffset, bm.label, bm.createdAt);
-        bookmarksAdded++;
+      for (const bm of data.bookmarks) {
+        const book = findBookById.get(bm.bookImportHash) as { id: string } | undefined;
+        if (!book) continue;
+        if (!findBm.get(book.id, bm.chapterIndex, bm.blockOffset)) {
+          insertBm.run(crypto.randomUUID(), book.id, bm.chapterIndex, bm.blockOffset, bm.label, bm.createdAt);
+          bookmarksAdded++;
+        }
       }
-    }
 
-    for (const note of data.notes) {
-      const book = this.db.prepare("SELECT id FROM books WHERE import_hash = ?").get(note.bookImportHash) as { id: string } | undefined;
-      if (!book) continue;
-      const exists = this.db.prepare("SELECT id FROM notes WHERE book_id = ? AND content = ? AND created_at = ?").get(book.id, note.content, note.createdAt);
-      if (!exists) {
-        this.db.prepare("INSERT INTO notes (id, book_id, chapter_index, block_offset, content, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(crypto.randomUUID(), book.id, note.chapterIndex, note.blockOffset, note.content, note.createdAt);
-        notesAdded++;
+      for (const note of data.notes) {
+        const book = findBookById.get(note.bookImportHash) as { id: string } | undefined;
+        if (!book) continue;
+        if (!findNote.get(book.id, note.content, note.createdAt)) {
+          insertNote.run(crypto.randomUUID(), book.id, note.chapterIndex, note.blockOffset, note.content, note.createdAt);
+          notesAdded++;
+        }
       }
-    }
 
-    for (const tag of data.tags) {
-      const book = this.db.prepare("SELECT id FROM books WHERE import_hash = ?").get(tag.bookImportHash) as { id: string } | undefined;
-      if (!book) continue;
-      const result = this.db.prepare("INSERT OR IGNORE INTO book_tags (book_id, tag) VALUES (?, ?)").run(book.id, tag.tag);
-      if (result.changes > 0) tagsAdded++;
-    }
+      for (const tag of data.tags) {
+        const book = findBookById.get(tag.bookImportHash) as { id: string } | undefined;
+        if (!book) continue;
+        const result = insertTag.run(book.id, tag.tag);
+        if (result.changes > 0) tagsAdded++;
+      }
+    });
 
+    tx();
     return { positionsUpdated, bookmarksAdded, notesAdded, tagsAdded };
   }
 }
