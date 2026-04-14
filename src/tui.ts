@@ -46,7 +46,7 @@ function currentLines(state: AppState, width: number, height: number): string[] 
   }
 
   const chapter = state.currentBook.chapters[state.chapterIndex];
-  return renderBlocks(chapter.blocks, state.renderMode, width, state.theme);
+  return renderBlocks(chapter.blocks, state.renderMode, width, state.theme, state.codeLanguage);
 }
 
 function chapterTransitionLine(state: AppState, width: number): string | null {
@@ -188,6 +188,7 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     cwd: process.cwd(),
     theme: THEMES.find((item) => item.id === settings.themeId) ?? DEFAULT_THEME,
     renderMode: settings.renderMode,
+    codeLanguage: settings.codeLanguage,
     progressVisibility: settings.progressVisibility,
     currentBook: null,
     chapterIndex: 0,

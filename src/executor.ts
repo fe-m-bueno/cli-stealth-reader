@@ -7,6 +7,7 @@ import { THEMES } from "./themes.js";
 import type {
   AppState,
   CanonicalBook,
+  CodeLanguage,
   FolderDiscovery,
   LibraryEntry,
   ParsedCommandResult,
@@ -238,12 +239,25 @@ const handlers: Record<string, CommandHandler> = {
 
   mode: async (state, parsed) => {
     const value = parsed.args[0];
-    if (value !== "code" && value !== "plain") {
-      throw new Error("Mode must be code or plain");
+    const CODE_LANGUAGES: CodeLanguage[] = ["typescript", "python", "rust"];
+    if (value === "plain") {
+      state.renderMode = "plain";
+      state.storage.setSetting("renderMode", "plain");
+      state.status = "Render mode: plain";
+    } else if (value === "code") {
+      // Legacy: /mode code keeps the current code language
+      state.renderMode = "code";
+      state.storage.setSetting("renderMode", "code");
+      state.status = `Render mode: code (${state.codeLanguage})`;
+    } else if ((CODE_LANGUAGES as string[]).includes(value)) {
+      state.renderMode = "code";
+      state.codeLanguage = value as CodeLanguage;
+      state.storage.setSetting("renderMode", "code");
+      state.storage.setSetting("codeLanguage", value as CodeLanguage);
+      state.status = `Render mode: ${value}`;
+    } else {
+      throw new Error("Mode must be plain, typescript, python, or rust");
     }
-    state.renderMode = value;
-    state.storage.setSetting("renderMode", value);
-    state.status = `Render mode: ${value}`;
   },
 
   help: async (state, parsed) => {

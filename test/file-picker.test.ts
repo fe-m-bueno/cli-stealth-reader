@@ -118,6 +118,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     cwd: "/tmp",
     theme,
     renderMode: "plain",
+    codeLanguage: "typescript",
     progressVisibility: "book",
     currentBook: null,
     chapterIndex: 0,
@@ -488,8 +489,15 @@ test("m key toggles render mode from plain to code", async () => {
   assert.equal(state.renderMode, "code");
 });
 
-test("m key toggles render mode from code to plain", async () => {
-  const state = makeState({ overlay: "none", renderMode: "code" });
+test("m key cycles from typescript to python", async () => {
+  const state = makeState({ overlay: "none", renderMode: "code", codeLanguage: "typescript" });
+  await handleInput("m", state, redraw, async (cmd) => { await executeCommand(state, cmd); }, () => {}, noop);
+  assert.equal(state.renderMode, "code");
+  assert.equal(state.codeLanguage, "python");
+});
+
+test("m key cycles from rust to plain", async () => {
+  const state = makeState({ overlay: "none", renderMode: "code", codeLanguage: "rust" });
   await handleInput("m", state, redraw, async (cmd) => { await executeCommand(state, cmd); }, () => {}, noop);
   assert.equal(state.renderMode, "plain");
 });

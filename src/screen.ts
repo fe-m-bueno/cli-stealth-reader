@@ -105,6 +105,7 @@ function ensureLayoutMetrics(state: AppState, mainWidth: number, bodyHeight: num
     cached
     && cached.bookId === state.currentBook.id
     && cached.renderMode === state.renderMode
+    && cached.codeLanguage === state.codeLanguage
     && cached.width === mainWidth
     && cached.bodyHeight === bodyHeight
   ) {
@@ -112,12 +113,13 @@ function ensureLayoutMetrics(state: AppState, mainWidth: number, bodyHeight: num
   }
 
   const chapterLineCounts = state.currentBook.chapters.map((chapter) => (
-    renderBlocks(chapter.blocks, state.renderMode, mainWidth, state.theme).length
+    renderBlocks(chapter.blocks, state.renderMode, mainWidth, state.theme, state.codeLanguage).length
   ));
   const chapterViewCounts = chapterLineCounts.map((lineCount) => Math.max(1, Math.max(0, lineCount - bodyHeight) + 1));
   state.layoutMetrics = {
     bookId: state.currentBook.id,
     renderMode: state.renderMode,
+    codeLanguage: state.codeLanguage,
     width: mainWidth,
     bodyHeight,
     chapterLineCounts,
@@ -185,7 +187,8 @@ export function renderStatusBar(state: AppState, width: number): string {
   }
 
   // Right content
-  const right = `${state.renderMode} · ${theme.label}`;
+  const modeLabel = state.renderMode === "plain" ? "plain" : state.codeLanguage;
+  const right = `${modeLabel} · ${theme.label}`;
 
   // Calculate plain text lengths (strip ANSI for width calculation)
   const prefix = "╭─ ";

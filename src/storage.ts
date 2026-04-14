@@ -20,7 +20,8 @@ export type { AppSettings };
 const DEFAULT_SETTINGS: AppSettings = {
   themeId: "codex",
   progressVisibility: "both",
-  renderMode: "code"
+  renderMode: "code",
+  codeLanguage: "typescript"
 };
 
 export class Storage {

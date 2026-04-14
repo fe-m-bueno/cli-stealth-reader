@@ -61,9 +61,9 @@ export const COMMANDS: CommandDefinition[] = [
   },
   {
     name: "mode",
-    description: "Switch between plain and code rendering.",
+    description: "Switch rendering mode or code language.",
     args: [{ name: "mode", required: true }],
-    usage: "/mode [code|plain]"
+    usage: "/mode [plain|typescript|python|rust]"
   },
   {
     name: "help",

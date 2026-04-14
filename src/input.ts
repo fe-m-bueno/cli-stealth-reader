@@ -440,7 +440,11 @@ export async function handleInput(
     state.overlay = "chapters";
     state.overlayCursor = state.chapterIndex;
   } else if (chunk === "m") {
-    await executeCmd(`/mode ${state.renderMode === "code" ? "plain" : "code"}`);
+    const nextMode = state.renderMode === "plain" ? "typescript"
+      : state.codeLanguage === "typescript" ? "python"
+      : state.codeLanguage === "python" ? "rust"
+      : "plain";
+    await executeCmd(`/mode ${nextMode}`);
   } else if (chunk === "c") {
     await executeCmd("/colorscheme");
   } else if (chunk === "p") {
