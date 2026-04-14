@@ -5,8 +5,9 @@ import os from "node:os";
 import path from "node:path";
 import { executeCommand } from "../src/executor.js";
 import { handleInput } from "../src/input.js";
-import { computeChapterMaxOffset, getScrollbarMetrics, getViewportLayout } from "../src/screen.js";
+import { computeChapterMaxOffset, getScrollbarMetrics, getViewportLayout, stripAnsi } from "../src/screen.js";
 import { THEMES } from "../src/themes.js";
+import { renderOverlay } from "../src/tui.js";
 import type { AppState, CanonicalBook, FolderDiscovery, ThemePreset } from "../src/types.js";
 
 const theme: ThemePreset = {
@@ -85,11 +86,18 @@ const multiChapterScrollBook: CanonicalBook = {
   ]
 };
 
-function makeStorage() {
+const baseBook = { id: "book-1", title: "Alpha", author: "Anon", sourcePath: "/tmp/alpha.epub", importHash: "hash", lastOpenedAt: 0, renderMode: "plain" as const };
+
+function makeStorage(overrides: Partial<ReturnType<typeof makeStorageBase>> = {}) {
+  return { ...makeStorageBase(), ...overrides } as AppState["storage"];
+}
+
+function makeStorageBase() {
   return {
     getPosition: () => null,
     saveBook: () => {},
-    listBooks: () => [{ id: "book-1", title: "Alpha", author: "Anon", sourcePath: "/tmp/alpha.epub", importHash: "hash", lastOpenedAt: 0, renderMode: "plain" }],
+    listBooks: () => [baseBook],
+    listBooksWithProgress: () => [{ ...baseBook, chapterIndex: null, chapterTitle: null, bookProgress: null }],
     getBook: () => currentBook,
     removeBook: () => {},
     getLatestBookId: () => null,
@@ -101,7 +109,7 @@ function makeStorage() {
       progressVisibility: "book",
       renderMode: "plain"
     })
-  } as AppState["storage"];
+  };
 }
 
 function makeState(overrides: Partial<AppState> = {}): AppState {
@@ -446,4 +454,30 @@ test("themes overlay arrow keys move selection and enter applies the theme", asy
   await handleInput("\r", state, redraw, noop, () => {}, noop);
   assert.equal(state.overlay, "none");
   assert.equal(state.theme.id, THEMES[1].id);
+});
+
+test("books overlay shows [not started] for a book with no saved position", () => {
+  const state = makeState({ overlay: "books", overlayCursor: 0 });
+  const lines = renderOverlay(state, 60, 10).map(stripAnsi);
+  assert.ok(lines.some((line) => line.includes("[not started]")));
+});
+
+test("books overlay shows chapter and progress for a book with a saved position", () => {
+  const storage = makeStorage({
+    listBooksWithProgress: () => [{ ...baseBook, chapterIndex: 4, chapterTitle: "Act Two", bookProgress: 0.42 }]
+  });
+  const state = makeState({ overlay: "books", overlayCursor: 0, storage });
+  const lines = renderOverlay(state, 60, 10).map(stripAnsi);
+  assert.ok(lines.some((line) => line.includes("[Ch.5 · 42%]")));
+});
+
+test("books overlay restores saved chapter and scroll offset when opening a book", async () => {
+  const storage = makeStorage({
+    getPosition: () => ({ bookId: "book-1", chapterIndex: 3, chapterProgress: 0.5, bookProgress: 0.3, blockOffset: 17 })
+  });
+  const state = makeState({ overlay: "books", overlayCursor: 0, storage });
+  await handleInput("\r", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "none");
+  assert.equal(state.chapterIndex, 3);
+  assert.equal(state.blockOffset, 17);
 });

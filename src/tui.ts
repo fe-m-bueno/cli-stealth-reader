@@ -63,7 +63,7 @@ function chapterTransitionLine(state: AppState, width: number): string | null {
   return bg(state.theme.accent, fg(state.theme.background, padded.padEnd(width, " ")));
 }
 
-function renderOverlay(state: AppState, width: number, height: number): string[] {
+export function renderOverlay(state: AppState, width: number, height: number): string[] {
   switch (state.overlay) {
     case "chapters":
       if (!state.currentBook) {
@@ -77,11 +77,18 @@ function renderOverlay(state: AppState, width: number, height: number): string[]
           const marker = chapter.index === state.overlayCursor ? ">" : " ";
           return `${marker} ${String(chapter.index + 1).padStart(2, "0")} ${truncate(chapter.title, width - 6)}`;
         });
-    case "books":
-      return state.storage.listBooks().map((book, index) => {
+    case "books": {
+      const books = state.storage.listBooksWithProgress();
+      return books.map((book, index) => {
         const marker = index === state.overlayCursor ? ">" : " ";
-        return `${marker} ${truncate(`${book.title}  ${book.author}`, width - 2)}`;
+        const progressTag = book.bookProgress !== null
+          ? `[Ch.${(book.chapterIndex ?? 0) + 1} · ${Math.round(book.bookProgress * 100)}%]`
+          : "[not started]";
+        const right = `  ${progressTag}`;
+        const titleAuthor = truncate(`${book.title}  —  ${book.author}`, Math.max(1, width - 2 - right.length));
+        return `${marker} ${titleAuthor}${right}`;
       });
+    }
     case "themes":
       return THEMES.map((theme, index) => {
         const marker = index === state.overlayCursor ? ">" : " ";
@@ -173,7 +180,7 @@ function syncPosition(state: AppState): void {
 }
 
 
-export async function runTui(): Promise<void> {
+export async function runTui(options?: { resume?: boolean }): Promise<void> {
   const storage = new Storage();
   const settings = storage.getSettings();
   const state: AppState = {
@@ -202,11 +209,20 @@ export async function runTui(): Promise<void> {
     layoutMetrics: null,
   };
 
-  const latest = storage.getLatestBookId();
-  if (latest) {
-    const latestBook = storage.getBook(latest);
-    if (latestBook) {
-      await openBook(state, latestBook);
+  if (options?.resume) {
+    const latest = storage.getLatestBookId();
+    if (latest) {
+      const latestBook = storage.getBook(latest);
+      if (latestBook) {
+        await openBook(state, latestBook);
+      }
+    }
+  } else {
+    const books = storage.listBooks();
+    if (books.length > 0) {
+      state.overlay = "books";
+      state.overlayCursor = 0;
+      state.status = "Select a book to open. Press Enter to open, Esc to dismiss.";
     }
   }
 

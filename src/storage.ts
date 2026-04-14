@@ -7,6 +7,7 @@ import type {
   CanonicalChapter,
   ImportDiagnostic,
   LibraryEntry,
+  LibraryEntryWithProgress,
   ProgressVisibility,
   ReadingPosition,
   RenderMode
@@ -224,6 +225,27 @@ export class Storage {
     `).all() as unknown as LibraryEntry[];
   }
 
+  listBooksWithProgress(): LibraryEntryWithProgress[] {
+    return this.db.prepare(`
+      SELECT
+        b.id,
+        b.title,
+        b.author,
+        b.source_path AS sourcePath,
+        b.import_hash AS importHash,
+        b.parser_version AS parserVersion,
+        b.last_opened_at AS lastOpenedAt,
+        b.render_mode AS renderMode,
+        p.chapter_index AS chapterIndex,
+        p.book_progress AS bookProgress,
+        c.title AS chapterTitle
+      FROM books b
+      LEFT JOIN positions p ON p.book_id = b.id
+      LEFT JOIN chapters c ON c.book_id = b.id AND c.chapter_index = p.chapter_index
+      ORDER BY b.last_opened_at DESC
+    `).all() as unknown as LibraryEntryWithProgress[];
+  }
+
   removeBook(bookId: string): void {
     this.db.exec("BEGIN");
     try {
@@ -253,7 +275,15 @@ export class Storage {
   }
 
   getPosition(bookId: string): ReadingPosition | null {
-    return (this.db.prepare("SELECT * FROM positions WHERE book_id = ?").get(bookId) as ReadingPosition | undefined) ?? null;
+    return (this.db.prepare(`
+      SELECT
+        book_id AS bookId,
+        chapter_index AS chapterIndex,
+        chapter_progress AS chapterProgress,
+        book_progress AS bookProgress,
+        block_offset AS blockOffset
+      FROM positions WHERE book_id = ?
+    `).get(bookId) as ReadingPosition | undefined) ?? null;
   }
 
   getLatestBookId(): string | null {

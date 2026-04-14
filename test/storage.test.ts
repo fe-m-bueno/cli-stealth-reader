@@ -1,0 +1,66 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { Storage } from "../src/storage.js";
+
+function makeTempStorage(): { storage: Storage; cleanup: () => void } {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "stealth-reader-storage-test-"));
+  process.env.XDG_DATA_HOME = dir;
+  process.env.XDG_CACHE_HOME = dir;
+  const storage = new Storage();
+  return {
+    storage,
+    cleanup: () => {
+      storage.db.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  };
+}
+
+test("getPosition returns camelCase fields matching ReadingPosition interface", () => {
+  const { storage, cleanup } = makeTempStorage();
+  try {
+    storage.savePosition({
+      bookId: "test-book",
+      chapterIndex: 7,
+      chapterProgress: 0.6,
+      bookProgress: 0.45,
+      blockOffset: 33
+    });
+
+    const pos = storage.getPosition("test-book");
+    assert.ok(pos !== null, "position should exist");
+    assert.equal(pos.bookId, "test-book");
+    assert.equal(pos.chapterIndex, 7);
+    assert.equal(pos.blockOffset, 33);
+    assert.ok(Math.abs(pos.bookProgress - 0.45) < 0.001);
+  } finally {
+    cleanup();
+  }
+});
+
+test("getPosition returns null for a book with no saved position", () => {
+  const { storage, cleanup } = makeTempStorage();
+  try {
+    const pos = storage.getPosition("nonexistent-book");
+    assert.equal(pos, null);
+  } finally {
+    cleanup();
+  }
+});
+
+test("savePosition overwrites the previous position for the same book", () => {
+  const { storage, cleanup } = makeTempStorage();
+  try {
+    storage.savePosition({ bookId: "b1", chapterIndex: 2, chapterProgress: 0.3, bookProgress: 0.2, blockOffset: 10 });
+    storage.savePosition({ bookId: "b1", chapterIndex: 5, chapterProgress: 0.8, bookProgress: 0.6, blockOffset: 42 });
+
+    const pos = storage.getPosition("b1");
+    assert.equal(pos?.chapterIndex, 5);
+    assert.equal(pos?.blockOffset, 42);
+  } finally {
+    cleanup();
+  }
+});

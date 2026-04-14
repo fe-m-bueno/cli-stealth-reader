@@ -67,6 +67,12 @@ export interface LibraryEntry {
   renderMode: RenderMode;
 }
 
+export interface LibraryEntryWithProgress extends LibraryEntry {
+  chapterIndex: number | null;
+  chapterTitle: string | null;
+  bookProgress: number | null;
+}
+
 export interface ThemePreset {
   id: string;
   label: string;

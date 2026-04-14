@@ -1,4 +1,7 @@
 #!/usr/bin/env node
 import { runTui } from "./tui.js";
 
-await runTui();
+const args = process.argv.slice(2);
+const resume = args.includes("--resume");
+
+await runTui({ resume });
