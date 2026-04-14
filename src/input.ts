@@ -1,5 +1,22 @@
+import { applyCommandAutocomplete, listCommandSuggestions } from "./commands.js";
 import { clearScreen, clamp, MIN_PAGE_LINES } from "./screen.js";
 import type { AppState } from "./types.js";
+
+function moveChapter(state: AppState, delta: number): void {
+  if (!state.currentBook) {
+    return;
+  }
+  state.chapterIndex = clamp(state.chapterIndex + delta, 0, state.currentBook.chapters.length - 1);
+  state.blockOffset = 0;
+}
+
+function isMouseWheelDown(chunk: string): boolean {
+  return /\x1b\[<65;\d+;\d+[mM]/.test(chunk);
+}
+
+function isMouseWheelUp(chunk: string): boolean {
+  return /\x1b\[<64;\d+;\d+[mM]/.test(chunk);
+}
 
 export async function handleInput(
   chunk: string,
@@ -14,6 +31,7 @@ export async function handleInput(
   }
   if (state.shouldQuit) {
     process.stdin.setRawMode?.(false);
+    process.stdout.write("\x1b[?1000l\x1b[?1006l");
     clearScreen();
     process.exit(0);
   }
@@ -23,13 +41,40 @@ export async function handleInput(
       const raw = `/${state.commandBuffer}`;
       state.commandBuffer = "";
       state.commandMode = false;
+      state.commandSuggestionIndex = 0;
       await executeCmd(raw);
     } else if (chunk === "\u001b") {
       state.commandMode = false;
+      state.commandSuggestionIndex = 0;
     } else if (chunk === "\u007f") {
       state.commandBuffer = state.commandBuffer.slice(0, -1);
+      state.commandSuggestionIndex = 0;
+    } else if (chunk === "\t") {
+      const suggestions = listCommandSuggestions(state.commandBuffer);
+      if (suggestions.length > 0) {
+        const nextIndex = state.commandSuggestionIndex >= suggestions.length - 1
+          ? 0
+          : state.commandSuggestionIndex + 1;
+        const appliedIndex = state.commandBuffer.trim().length === 0
+          ? state.commandSuggestionIndex
+          : nextIndex;
+        const suggestion = suggestions[clamp(appliedIndex, 0, suggestions.length - 1)];
+        state.commandBuffer = applyCommandAutocomplete(state.commandBuffer, suggestion);
+        state.commandSuggestionIndex = appliedIndex;
+      }
+    } else if (chunk === "\u001b[B") {
+      const suggestions = listCommandSuggestions(state.commandBuffer);
+      if (suggestions.length > 0) {
+        state.commandSuggestionIndex = clamp(state.commandSuggestionIndex + 1, 0, suggestions.length - 1);
+      }
+    } else if (chunk === "\u001b[A") {
+      const suggestions = listCommandSuggestions(state.commandBuffer);
+      if (suggestions.length > 0) {
+        state.commandSuggestionIndex = clamp(state.commandSuggestionIndex - 1, 0, suggestions.length - 1);
+      }
     } else {
       state.commandBuffer += chunk;
+      state.commandSuggestionIndex = 0;
     }
     redraw();
     return;
@@ -38,6 +83,7 @@ export async function handleInput(
   if (chunk === "/") {
     state.commandMode = true;
     state.commandBuffer = "";
+    state.commandSuggestionIndex = 0;
     redraw();
     return;
   }
@@ -91,18 +137,22 @@ export async function handleInput(
 
   // Navigation
   const pageSize = Math.max(MIN_PAGE_LINES, (process.stdout.rows || 40) - 8);
-  if (chunk === "j" || chunk === "\u001b[B") {
+  if (chunk === "j" || chunk === "\u001b[B" || isMouseWheelDown(chunk)) {
     state.blockOffset += 1;
-  } else if (chunk === "k" || chunk === "\u001b[A") {
+  } else if (chunk === "k" || chunk === "\u001b[A" || isMouseWheelUp(chunk)) {
     state.blockOffset = clamp(state.blockOffset - 1, 0, Infinity);
-  } else if (chunk === " ") {
+  } else if (chunk === " " || chunk === "\u001b[6~") {
     state.blockOffset += pageSize;
-  } else if (chunk === "b") {
+  } else if (chunk === "b" || chunk === "\u001b[5~") {
     state.blockOffset = clamp(state.blockOffset - pageSize, 0, Infinity);
   } else if (chunk === "g") {
     state.blockOffset = 0;
   } else if (chunk === "G") {
     state.blockOffset += pageSize * 100;
+  } else if (chunk === "\u001b[C") {
+    moveChapter(state, 1);
+  } else if (chunk === "\u001b[D") {
+    moveChapter(state, -1);
   } else if (chunk === "?") {
     state.overlay = "keys";
   } else if (chunk === "q") {

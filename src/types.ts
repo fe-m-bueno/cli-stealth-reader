@@ -112,6 +112,14 @@ export interface ParsedCommandResult {
   flags: Record<string, string | boolean>;
 }
 
+export interface CommandSuggestion {
+  name: string;
+  usage: string;
+  description: string;
+  aliases: string[];
+  matchedAlias?: string;
+}
+
 export interface FolderDiscovery {
   path: string;
   fileName: string;
@@ -130,6 +138,7 @@ export interface AppState {
   blockOffset: number;
   commandBuffer: string;
   commandMode: boolean;
+  commandSuggestionIndex: number;
   status: string;
   overlay: OverlayKind;
   discoveries: FolderDiscovery[];

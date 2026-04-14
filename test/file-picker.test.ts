@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { executeCommand } from "../src/executor.js";
 import { handleInput } from "../src/input.js";
-import type { AppState, FolderDiscovery, ThemePreset } from "../src/types.js";
+import type { AppState, CanonicalBook, FolderDiscovery, ThemePreset } from "../src/types.js";
 
 const theme: ThemePreset = {
   id: "codex",
@@ -24,6 +24,20 @@ const discoveries: FolderDiscovery[] = [
   { path: "/tmp/beta.epub", fileName: "beta.epub" },
   { path: "/tmp/gamma.epub", fileName: "gamma.epub" }
 ];
+
+const currentBook: CanonicalBook = {
+  id: "book-1",
+  title: "Alpha",
+  author: "Anon",
+  sourcePath: "/tmp/alpha.epub",
+  importHash: "hash",
+  diagnostics: [],
+  chapters: [
+    { id: "ch-1", index: 0, title: "One", href: "one", depth: 0, blocks: [{ id: "b1", type: "paragraph", text: "one" }], wordCount: 1 },
+    { id: "ch-2", index: 1, title: "Two", href: "two", depth: 0, blocks: [{ id: "b2", type: "paragraph", text: "two" }], wordCount: 1 },
+    { id: "ch-3", index: 2, title: "Three", href: "three", depth: 0, blocks: [{ id: "b3", type: "paragraph", text: "three" }], wordCount: 1 }
+  ]
+};
 
 function makeStorage() {
   return {
@@ -56,6 +70,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     blockOffset: 0,
     commandBuffer: "",
     commandMode: false,
+    commandSuggestionIndex: 0,
     status: "",
     overlay: "file-picker",
     discoveries,
@@ -169,4 +184,33 @@ test("add query with no matches opens an empty picker state", async () => {
   assert.equal(state.overlay, "file-picker");
   assert.deepEqual(state.filePickerItems, []);
   assert.match(state.status, /No EPUBs matched "zeta"\./);
+});
+
+test("slash opens command mode and tab autocompletes commands", async () => {
+  const state = makeState({ overlay: "none" });
+  await handleInput("/", state, redraw, noop, () => {}, noop);
+  assert.equal(state.commandMode, true);
+
+  await handleInput("m", state, redraw, noop, () => {}, noop);
+  await handleInput("\t", state, redraw, noop, () => {}, noop);
+  assert.equal(state.commandBuffer, "mode");
+});
+
+test("page up and page down scroll the current chapter", async () => {
+  const state = makeState({ overlay: "none", currentBook, blockOffset: 10 });
+  await handleInput("\u001b[5~", state, redraw, noop, () => {}, noop);
+  assert.equal(state.blockOffset, 0);
+
+  await handleInput("\u001b[6~", state, redraw, noop, () => {}, noop);
+  assert.ok(state.blockOffset > 0);
+});
+
+test("left and right arrows move between chapters", async () => {
+  const state = makeState({ overlay: "none", currentBook, chapterIndex: 1, blockOffset: 5 });
+  await handleInput("\u001b[C", state, redraw, noop, () => {}, noop);
+  assert.equal(state.chapterIndex, 2);
+  assert.equal(state.blockOffset, 0);
+
+  await handleInput("\u001b[D", state, redraw, noop, () => {}, noop);
+  assert.equal(state.chapterIndex, 1);
 });

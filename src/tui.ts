@@ -6,7 +6,7 @@ import { discoverEpubs } from "./discovery.js";
 import { KEYBOARD_SHORTCUTS } from "./help.js";
 import { renderBlocks } from "./renderers.js";
 import {
-  BODY_OVERHEAD,
+  clamp,
   MIN_MAIN_WIDTH,
   OVERLAY_MAX_WIDTH,
   clearScreen,
@@ -53,7 +53,7 @@ function renderOverlay(state: AppState, width: number, height: number): string[]
         return ["No book open."];
       }
       return state.currentBook.chapters.slice(0, Math.max(1, height - 2)).map((chapter, index) => {
-        const marker = index === state.chapterIndex ? "›" : " ";
+        const marker = index === state.chapterIndex ? ">" : " ";
         return `${marker} ${String(index + 1).padStart(2, "0")} ${truncate(chapter.title, width - 6)}`;
       });
     case "books":
@@ -66,7 +66,7 @@ function renderOverlay(state: AppState, width: number, height: number): string[]
         ...state.discoveries.map((item) => item.fileName)
       ];
     case "themes":
-      return THEMES.map((theme) => `${theme.id === state.theme.id ? "›" : " "} ${theme.label} (${theme.id})`);
+      return THEMES.map((theme) => `${theme.id === state.theme.id ? ">" : " "} ${theme.label} (${theme.id})`);
     case "help":
       return commandHelp().slice(0, Math.max(1, height));
     case "keys":
@@ -82,13 +82,11 @@ function renderOverlay(state: AppState, width: number, height: number): string[]
       const lines: string[] = [];
       for (let index = 0; index < state.filePickerItems.length; index += 1) {
         const item = state.filePickerItems[index];
-        const cursor = index === state.filePickerCursor ? fg(state.theme.accent, "›") : " ";
-        const check = state.filePickerSelected.has(index) ? fg(state.theme.accent, "[x]") : fg(state.theme.dim, "[ ]");
-        const label = truncate(item.fileName, Math.max(1, width - 7));
-        const name = index === state.filePickerCursor
-          ? fg(state.theme.accent, label)
-          : fg(state.theme.dim, label);
-        lines.push(`${cursor} ${check} ${name}`);
+        const cursor = index === state.filePickerCursor ? ">" : " ";
+        const check = state.filePickerSelected.has(index) ? "[x]" : "[ ]";
+        const label = truncate(item.fileName, Math.max(1, width - 6));
+        const row = `${cursor} ${check} ${label}`;
+        lines.push(index === state.filePickerCursor ? fg(state.theme.accent, row) : fg(state.theme.dim, row));
       }
       return lines;
     }
@@ -102,15 +100,19 @@ function draw(state: AppState): void {
   const height = process.stdout.rows || 40;
   clearScreen();
 
-  const bodyHeight = height - BODY_OVERHEAD;
+  const footerLines = renderFooter(state, width);
+  const bodyHeight = Math.max(1, height - footerLines.length - 2);
   const overlayWidth = state.overlay === "none" ? 0 : Math.min(OVERLAY_MAX_WIDTH, Math.floor(width * 0.32));
   const mainWidth = Math.max(MIN_MAIN_WIDTH, width - overlayWidth - (overlayWidth ? 3 : 0));
-  const mainLines = currentLines(state, mainWidth - 2, bodyHeight);
+  const allMainLines = currentLines(state, mainWidth - 2, bodyHeight);
+  const maxOffset = Math.max(0, allMainLines.length - bodyHeight);
+  state.blockOffset = clamp(state.blockOffset, 0, maxOffset);
+  const mainLines = allMainLines.slice(state.blockOffset, state.blockOffset + bodyHeight);
   const overlayLines = overlayWidth ? renderOverlay(state, overlayWidth - 2, bodyHeight) : [];
 
   process.stdout.write(renderStatusBar(state, width) + "\n");
   process.stdout.write(renderBody(mainLines, overlayLines, bodyHeight, mainWidth, overlayWidth, state.theme));
-  process.stdout.write(renderFooter(state, width) + "\n");
+  process.stdout.write(footerLines.join("\n") + "\n");
 }
 
 function syncPosition(state: AppState): void {
@@ -142,6 +144,7 @@ export async function runTui(): Promise<void> {
     blockOffset: 0,
     commandBuffer: "",
     commandMode: false,
+    commandSuggestionIndex: 0,
     status: "Ready",
     overlay: "none",
     discoveries: await discoverEpubs(process.cwd()),
@@ -163,6 +166,7 @@ export async function runTui(): Promise<void> {
   process.stdin.setRawMode?.(true);
   process.stdin.resume();
   process.stdin.setEncoding("utf8");
+  process.stdout.write("\x1b[?1000h\x1b[?1006h");
 
   const redraw = () => draw(state);
   redraw();

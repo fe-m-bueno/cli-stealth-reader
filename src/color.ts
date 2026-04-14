@@ -23,3 +23,7 @@ export function fg(hex: string, text: string): string {
 export function bold(text: string): string {
   return wrap("1", text);
 }
+
+export function inverse(text: string): string {
+  return wrap("7", text);
+}

@@ -1,4 +1,4 @@
-import type { CommandDefinition, ParsedCommandResult } from "./types.js";
+import type { CommandDefinition, CommandSuggestion, ParsedCommandResult } from "./types.js";
 
 export const COMMANDS: CommandDefinition[] = [
   { name: "prev", description: "Go to previous chapter.", args: [{ name: "count" }], usage: "/prev [count]" },
@@ -178,4 +178,49 @@ export function commandHelp(commandName?: string): string[] {
     lines.push(`Aliases: ${command.aliases.join(", ")}`);
   }
   return lines;
+}
+
+function matchesPrefix(command: CommandDefinition, prefix: string): string | undefined {
+  if (!prefix) {
+    return command.name;
+  }
+  if (command.name.startsWith(prefix)) {
+    return command.name;
+  }
+  return command.aliases?.find((alias) => alias.startsWith(prefix));
+}
+
+export function listCommandSuggestions(buffer: string): CommandSuggestion[] {
+  const trimmed = buffer.trimStart();
+  const [rawCommand, ...rest] = trimmed.split(/\s+/).filter(Boolean);
+  const prefix = rest.length > 0 || trimmed.endsWith(" ")
+    ? rawCommand ?? ""
+    : rawCommand ?? "";
+  const suggestions: CommandSuggestion[] = [];
+
+  for (const command of COMMANDS) {
+    const matchedAlias = matchesPrefix(command, prefix);
+    if (!matchedAlias) {
+      continue;
+    }
+    suggestions.push({
+      name: command.name,
+      usage: command.usage,
+      description: command.description,
+      aliases: command.aliases ?? [],
+      matchedAlias: matchedAlias === command.name ? undefined : matchedAlias
+    });
+  }
+
+  return suggestions.sort((left, right) => left.name.localeCompare(right.name));
+}
+
+export function applyCommandAutocomplete(buffer: string, suggestion: CommandSuggestion): string {
+  const trimmedStart = buffer.match(/^\s*/)?.[0] ?? "";
+  const trimmed = buffer.trimStart();
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) {
+    return `${trimmedStart}${suggestion.name}`;
+  }
+  return `${trimmedStart}${suggestion.name} ${parts.slice(1).join(" ")}`;
 }

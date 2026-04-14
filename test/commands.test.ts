@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseSlashCommand } from "../src/commands.js";
+import { applyCommandAutocomplete, listCommandSuggestions, parseSlashCommand } from "../src/commands.js";
 
 test("parses args and flags", () => {
   const parsed = parseSlashCommand('/colorscheme amber --preview --list');
@@ -19,4 +19,24 @@ test("supports quoted args", () => {
 
 test("fails on unknown flags", () => {
   assert.throws(() => parseSlashCommand("/next --bogus"), /Unknown flag/);
+});
+
+test("lists all commands when the slash buffer is empty", () => {
+  const suggestions = listCommandSuggestions("");
+  assert.ok(suggestions.length > 5);
+  assert.equal(suggestions[0]?.name, "add");
+});
+
+test("filters command suggestions by prefix and aliases", () => {
+  const byName = listCommandSuggestions("mo");
+  assert.deepEqual(byName.map((item) => item.name), ["mode"]);
+
+  const byAlias = listCommandSuggestions("theme");
+  assert.deepEqual(byAlias.map((item) => item.name), ["colorscheme"]);
+});
+
+test("applies autocomplete to the command token only", () => {
+  const suggestion = listCommandSuggestions("re")[0];
+  assert.equal(applyCommandAutocomplete("re", suggestion), "remove");
+  assert.equal(applyCommandAutocomplete("re current-book", suggestion), "remove current-book");
 });
