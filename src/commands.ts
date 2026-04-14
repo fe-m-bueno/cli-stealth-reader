@@ -66,6 +66,12 @@ export const COMMANDS: CommandDefinition[] = [
     usage: "/mode [plain|typescript|python|rust]"
   },
   {
+    name: "highlight",
+    description: "Toggle plain-mode dialogue highlight (required flag).",
+    flags: [{ name: "on" }, { name: "off" }],
+    usage: "/highlight --on|--off"
+  },
+  {
     name: "help",
     description: "Show help for commands.",
     args: [{ name: "command" }],

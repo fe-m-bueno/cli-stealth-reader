@@ -107,7 +107,10 @@ function makeStorageBase() {
     getSettings: () => ({
       themeId: "codex",
       progressVisibility: "book",
-      renderMode: "plain"
+      renderMode: "plain",
+      codeLanguage: "typescript",
+      codeDensity: 3,
+      plainHighlight: true
     })
   };
 }
@@ -119,6 +122,8 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     theme,
     renderMode: "plain",
     codeLanguage: "typescript",
+    codeDensity: 3,
+    plainHighlight: true,
     progressVisibility: "book",
     currentBook: null,
     chapterIndex: 0,
@@ -547,4 +552,22 @@ test("p key wraps progress visibility back to book after hidden", async () => {
   const state = makeState({ overlay: "none", progressVisibility: "hidden" });
   await handleInput("p", state, redraw, async (cmd) => { await executeCommand(state, cmd); }, () => {}, noop);
   assert.equal(state.progressVisibility, "book");
+});
+
+test("/highlight requires an explicit flag", async () => {
+  const state = makeState({ overlay: "none", plainHighlight: true });
+  await executeCommand(state, "/highlight");
+  assert.equal(state.plainHighlight, true);
+  assert.equal(state.status, "Use /highlight --on|--off");
+});
+
+test("/highlight --off and --on toggle plain dialogue highlight", async () => {
+  const state = makeState({ overlay: "none", plainHighlight: true });
+  await executeCommand(state, "/highlight --off");
+  assert.equal(state.plainHighlight, false);
+  assert.equal(state.status, "Dialogue highlight: off");
+
+  await executeCommand(state, "/highlight --on");
+  assert.equal(state.plainHighlight, true);
+  assert.equal(state.status, "Dialogue highlight: on");
 });

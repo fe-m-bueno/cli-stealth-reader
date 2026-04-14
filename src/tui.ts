@@ -53,7 +53,8 @@ function currentLines(state: AppState, width: number, height: number): string[] 
     state.theme,
     state.codeLanguage,
     state.codeDensity,
-    state.searchState?.query
+    state.searchState?.query,
+    state.plainHighlight
   );
 }
 
@@ -232,6 +233,7 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     renderMode: settings.renderMode,
     codeLanguage: settings.codeLanguage,
     codeDensity: settings.codeDensity,
+    plainHighlight: settings.plainHighlight,
     progressVisibility: settings.progressVisibility,
     currentBook: null,
     chapterIndex: 0,

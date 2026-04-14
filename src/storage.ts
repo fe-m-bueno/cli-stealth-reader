@@ -25,7 +25,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   progressVisibility: "both",
   renderMode: "code",
   codeLanguage: "typescript",
-  codeDensity: 3
+  codeDensity: 3,
+  plainHighlight: true
 };
 
 export class Storage {
@@ -114,6 +115,8 @@ export class Storage {
         if ([1, 2, 3, 4, 5].includes(parsed)) {
           settings.codeDensity = parsed as CodeDensity;
         }
+      } else if (row.key === "plainHighlight") {
+        settings.plainHighlight = row.value !== "false";
       } else if (row.key in settings) {
         (settings as Record<string, unknown>)[row.key] = row.value;
       }

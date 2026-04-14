@@ -107,6 +107,7 @@ export interface AppSettings {
   renderMode: RenderMode;
   codeLanguage: CodeLanguage;
   codeDensity: CodeDensity;
+  plainHighlight: boolean;
 }
 
 export interface CommandArgSpec {
@@ -175,6 +176,7 @@ export interface AppState {
   renderMode: RenderMode;
   codeLanguage: CodeLanguage;
   codeDensity: CodeDensity;
+  plainHighlight: boolean;
   progressVisibility: ProgressVisibility;
   currentBook: CanonicalBook | null;
   chapterIndex: number;

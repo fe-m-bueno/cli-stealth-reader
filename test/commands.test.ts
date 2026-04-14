@@ -35,6 +35,13 @@ test("parses /goto percentage and chapter flag", () => {
   assert.equal(parsed.flags.chapter, true);
 });
 
+test("parses /highlight with required toggles as flags", () => {
+  const parsed = parseSlashCommand("/highlight --off");
+  assert.equal(parsed.name, "highlight");
+  assert.equal(parsed.flags.off, true);
+  assert.deepEqual(parsed.args, []);
+});
+
 test("parses bookmark commands", () => {
   const mark = parseSlashCommand('/mark "Ponto importante"');
   assert.equal(mark.name, "mark");

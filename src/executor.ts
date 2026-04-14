@@ -122,7 +122,16 @@ function firstLineOfBlock(
 ): number {
   const chapter = state.currentBook!.chapters[chapterIndex]!;
   const prefix = chapter.blocks.slice(0, blockIndex);
-  return renderBlocks(prefix, state.renderMode, contentWidth, state.theme, state.codeLanguage, state.codeDensity).length;
+  return renderBlocks(
+    prefix,
+    state.renderMode,
+    contentWidth,
+    state.theme,
+    state.codeLanguage,
+    state.codeDensity,
+    undefined,
+    state.plainHighlight
+  ).length;
 }
 
 export function applySearchHit(state: AppState, hit: SearchHit): void {
@@ -415,6 +424,17 @@ const handlers: Record<string, CommandHandler> = {
     } else {
       throw new Error("Mode must be plain, typescript, python, or rust");
     }
+  },
+
+  highlight: async (state, parsed) => {
+    const hasOn = Boolean(parsed.flags.on);
+    const hasOff = Boolean(parsed.flags.off);
+    if (parsed.args.length > 0 || hasOn === hasOff) {
+      throw new Error("Use /highlight --on|--off");
+    }
+    state.plainHighlight = hasOn;
+    state.storage.setSetting("plainHighlight", hasOn);
+    state.status = `Dialogue highlight: ${hasOn ? "on" : "off"}`;
   },
 
   help: async (state, parsed) => {
