@@ -325,6 +325,13 @@ test("left and right arrows move between chapters", async () => {
   assert.equal(state.chapterIndex, 1);
 });
 
+test("T opens the table of contents", async () => {
+  const state = makeState({ overlay: "none", currentBook, chapterIndex: 2, blockOffset: 5 });
+  await handleInput("T", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "chapters");
+  assert.equal(state.overlayCursor, 2);
+});
+
 test("extra downward wheel at chapter end moves to the next chapter and shows a banner", async () => {
   const state = makeState({ overlay: "none", currentBook: multiChapterScrollBook });
   const layout = getViewportLayout(state, 120, 40);

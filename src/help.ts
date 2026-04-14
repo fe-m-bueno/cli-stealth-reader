@@ -6,6 +6,7 @@ export const KEYBOARD_SHORTCUTS: Array<{ category: string; key: string; descript
   { category: "navigation", key: "Home", description: "Jump to chapter start" },
   { category: "navigation", key: "End", description: "Jump to chapter end" },
   { category: "navigation", key: "← / →", description: "Previous / next chapter" },
+  { category: "navigation", key: "T", description: "Open table of contents" },
   { category: "navigation", key: "wheel", description: "Scroll the page" },
   { category: "navigation", key: "g", description: "Jump to top" },
   { category: "navigation", key: "G", description: "Jump to bottom" },

@@ -430,6 +430,10 @@ export async function handleInput(
   } else if (chunk === "\u001b[D") {
     cancelChapterTransition();
     moveChapter(state, -1);
+  } else if (chunk === "T") {
+    cancelChapterTransition();
+    state.overlay = "chapters";
+    state.overlayCursor = state.chapterIndex;
   } else if (chunk === "?") {
     state.overlay = "keys";
   } else if (chunk === "q") {
