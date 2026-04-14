@@ -21,8 +21,6 @@ import { Storage } from "./storage.js";
 import { DEFAULT_THEME, THEMES } from "./themes.js";
 import type { AppState } from "./types.js";
 
-export type { AppState };
-
 function currentLines(state: AppState, width: number, height: number): string[] {
   if (!state.currentBook) {
     const lines = [
