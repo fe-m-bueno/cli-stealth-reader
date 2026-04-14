@@ -17,6 +17,8 @@ export const KEYBOARD_SHORTCUTS: Array<{ category: string; key: string; descript
   { category: "commands", key: "Enter", description: "Run command / confirm picker" },
   { category: "commands", key: "Esc", description: "Close overlay or blur command input" },
   { category: "commands", key: "d", description: "Delete selected bookmark (inside bookmark overlay)" },
+  { category: "commands", key: "s (books)", description: "Cycle sort key in book library" },
+  { category: "commands", key: "r (books)", description: "Reverse sort direction in book library" },
   { category: "commands", key: "?", description: "Open keyboard shortcuts" },
   { category: "view", key: "m", description: "Cycle render mode (plain → typescript → python → rust)" },
   { category: "view", key: "f", description: "Toggle focus mode (single block centered)" },

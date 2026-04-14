@@ -393,14 +393,8 @@ export async function handleInput(
             : `Jumped to bookmark Ch.${selected.chapterIndex + 1} §${selected.blockOffset}.`;
         }
       }
-      if (state.overlay === "books") {
-        state.librarySortDir = "desc";
-      }
       state.overlay = "none";
     } else if (chunk === "\u001b") {
-      if (state.overlay === "books") {
-        state.librarySortDir = "desc";
-      }
       state.overlay = "none";
     } else if (chunk === "s" && state.overlay === "books") {
       const cycle: LibrarySortKey[] = ["lastOpened", "title", "author", "progress"];
@@ -409,6 +403,7 @@ export async function handleInput(
       state.overlayCursor = 0;
     } else if (chunk === "r" && state.overlay === "books") {
       state.librarySortDir = state.librarySortDir === "asc" ? "desc" : "asc";
+      state.overlayCursor = 0;
     } else if (chunk === "d" && state.overlay === "bookmarks" && state.currentBook) {
       const bookmarks = state.storage.listBookmarks(state.currentBook.id);
       const selected = bookmarks[state.overlayCursor];
