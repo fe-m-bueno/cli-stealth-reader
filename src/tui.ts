@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { COMMANDS, commandHelp, parseSlashCommand } from "./commands.js";
+import { handleInput } from "./input.js";
 import { bold, fg } from "./color.js";
 import { discoverEpubs } from "./discovery.js";
 import { KEYBOARD_SHORTCUTS } from "./help.js";
@@ -9,10 +10,8 @@ import { renderBlocks } from "./renderers.js";
 import {
   BODY_OVERHEAD,
   MIN_MAIN_WIDTH,
-  MIN_PAGE_LINES,
   OVERLAY_MAX_WIDTH,
   clearScreen,
-  clamp,
   computeBookProgress,
   computeChapterProgress,
   renderBody,
@@ -302,27 +301,6 @@ async function executeCommand(state: AppState, raw: string): Promise<void> {
   }
 }
 
-function handleNavigation(state: AppState, key: string): void {
-  const pageSize = Math.max(MIN_PAGE_LINES, (process.stdout.rows || 40) - 8);
-  if (key === "j" || key === "\u001b[B") {
-    state.blockOffset += 1;
-  } else if (key === "k" || key === "\u001b[A") {
-    state.blockOffset = clamp(state.blockOffset - 1, 0, Infinity);
-  } else if (key === " ") {
-    state.blockOffset += pageSize;
-  } else if (key === "b") {
-    state.blockOffset = clamp(state.blockOffset - pageSize, 0, Infinity);
-  } else if (key === "g") {
-    state.blockOffset = 0;
-  } else if (key === "G") {
-    state.blockOffset += pageSize * 100;
-  } else if (key === "?") {
-    state.overlay = "keys";
-  } else if (key === "q") {
-    state.shouldQuit = true;
-  }
-  syncPosition(state);
-}
 
 export async function runTui(): Promise<void> {
   const storage = new Storage();
@@ -360,42 +338,6 @@ export async function runTui(): Promise<void> {
   redraw();
 
   process.stdin.on("data", async (chunk: string) => {
-    if (chunk === "\u0003") {
-      state.shouldQuit = true;
-    }
-    if (state.shouldQuit) {
-      process.stdin.setRawMode?.(false);
-      clearScreen();
-      process.exit(0);
-    }
-    if (state.commandMode) {
-      if (chunk === "\r") {
-        const raw = `/${state.commandBuffer}`;
-        state.commandBuffer = "";
-        state.commandMode = false;
-        await executeCommand(state, raw);
-      } else if (chunk === "\u001b") {
-        state.commandMode = false;
-      } else if (chunk === "\u007f") {
-        state.commandBuffer = state.commandBuffer.slice(0, -1);
-      } else {
-        state.commandBuffer += chunk;
-      }
-      redraw();
-      return;
-    }
-    if (chunk === "/") {
-      state.commandMode = true;
-      state.commandBuffer = "";
-      redraw();
-      return;
-    }
-    if (chunk === "\u001b") {
-      state.overlay = "none";
-      redraw();
-      return;
-    }
-    handleNavigation(state, chunk);
-    redraw();
+    await handleInput(chunk, state, redraw, (cmd) => executeCommand(state, cmd), syncPosition);
   });
 }
