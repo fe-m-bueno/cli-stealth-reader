@@ -276,6 +276,15 @@ test("slash opens command mode and tab autocompletes commands", async () => {
   assert.equal(state.commandBuffer, "mode");
 });
 
+test("down arrow cycles command suggestions and keeps the selection visible", async () => {
+  const state = makeState({ overlay: "none" });
+  await handleInput("/", state, redraw, noop, () => {}, noop);
+  for (let index = 0; index < 8; index += 1) {
+    await handleInput("\u001b[B", state, redraw, noop, () => {}, noop);
+  }
+  assert.ok(state.commandSuggestionIndex >= 7);
+});
+
 test("page up and page down scroll the current chapter", async () => {
   const state = makeState({ overlay: "none", currentBook, blockOffset: 10 });
   await handleInput("\u001b[5~", state, redraw, noop, () => {}, noop);

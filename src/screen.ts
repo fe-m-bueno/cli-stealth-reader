@@ -244,9 +244,11 @@ function renderBottomRight(text: string, width: number, theme: ThemePreset): str
 
 function renderCommandSuggestions(suggestions: CommandSuggestion[], width: number, theme: ThemePreset, selectedIndex: number): string[] {
   const limit = Math.max(1, Math.min(7, suggestions.length));
-  return suggestions.slice(0, limit).map((suggestion, index) => {
-    const marker = index === selectedIndex ? fg(theme.accent, ">") : " ";
-    const usage = index === selectedIndex
+  const start = clamp(selectedIndex - Math.floor(limit / 2), 0, Math.max(0, suggestions.length - limit));
+  return suggestions.slice(start, start + limit).map((suggestion, index) => {
+    const actualIndex = start + index;
+    const marker = actualIndex === selectedIndex ? fg(theme.accent, ">") : " ";
+    const usage = actualIndex === selectedIndex
       ? fg(theme.accent, suggestion.usage)
       : suggestion.usage;
     return `${marker} ${padAnsi(truncate(usage, Math.max(1, width - 26)), Math.max(1, width - 26))} ${fg(theme.dim, truncate(suggestion.description, 22))}`;
