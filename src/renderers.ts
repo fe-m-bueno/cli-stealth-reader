@@ -117,26 +117,31 @@ export function renderBlocks(
   codeLanguage: CodeLanguage = "typescript",
   codeDensity: CodeDensity = 3,
   searchQuery?: string | null,
-  plainHighlight = true
+  plainHighlight = true,
+  blockIndexOffset = 0,
+  includeTrailingSpacing = true
 ): string[] {
   const lines: string[] = [];
   blocks.forEach((block, index) => {
+    const absoluteIndex = blockIndexOffset + index;
     const rendered = mode === "plain"
       ? renderPlain(block, width, theme, plainHighlight)
-      : renderCode(block, width, theme, index, codeLanguage, codeDensity);
+      : renderCode(block, width, theme, absoluteIndex, codeLanguage, codeDensity);
     lines.push(...rendered);
 
-    if (mode === "code") {
-      // Vary blank lines: 70% → 1 blank, 20% → 0 blanks, 10% → 2 blanks
-      const r = lineHash(index, 999) % 10;
-      if (r < 7) {
+    if (includeTrailingSpacing || index < blocks.length - 1) {
+      if (mode === "code") {
+        // Vary blank lines: 70% → 1 blank, 20% → 0 blanks, 10% → 2 blanks
+        const r = lineHash(absoluteIndex, 999) % 10;
+        if (r < 7) {
+          lines.push("");
+        } else if (r >= 9) {
+          lines.push("", "");
+        }
+        // r === 7 or 8: no blank line (20%)
+      } else {
         lines.push("");
-      } else if (r >= 9) {
-        lines.push("", "");
       }
-      // r === 7 or 8: no blank line (20%)
-    } else {
-      lines.push("");
     }
   });
   if (searchQuery) {

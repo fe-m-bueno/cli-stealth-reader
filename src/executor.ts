@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { commandHelp, parseSlashCommand } from "./commands.js";
 import { discoverEpubs } from "./discovery.js";
+import { mapBlockOffsetToFocusIndex, mapFocusIndexToBlockOffset } from "./focus.js";
 import { EPUB_PARSER_VERSION, importEpub } from "./parser/epub.js";
 import { renderBlocks } from "./renderers.js";
 import { computeChapterMaxOffset, getViewportLayout } from "./screen.js";
@@ -51,6 +52,8 @@ export async function openBook(state: AppState, book: CanonicalBook): Promise<vo
   const existing = state.storage.getPosition(book.id);
   state.chapterIndex = existing?.chapterIndex ?? 0;
   state.blockOffset = existing?.blockOffset ?? 0;
+  state.focusMode = false;
+  state.focusBlockIndex = 0;
   state.searchState = null;
   state.navHistory = [];
   state.navHistoryCursor = -1;
@@ -140,6 +143,9 @@ export function applySearchHit(state: AppState, hit: SearchHit): void {
   const lineStart = firstLineOfBlock(state, hit.chapterIndex, hit.blockIndex, contentWidth);
   const maxOff = computeChapterMaxOffset(state, contentWidth, bodyHeight);
   state.blockOffset = Math.min(lineStart, maxOff);
+  if (state.focusMode) {
+    state.focusBlockIndex = hit.blockIndex;
+  }
 }
 
 function collectSearchHits(state: AppState, query: string, global: boolean): SearchHit[] {
@@ -595,7 +601,13 @@ const handlers: Record<string, CommandHandler> = {
 };
 
 export async function executeCommand(state: AppState, raw: string): Promise<void> {
+  let focusOriginalOffset: number | null = null;
   try {
+    if (state.focusMode && state.currentBook) {
+      const { contentWidth } = viewportForCommand(state);
+      focusOriginalOffset = state.blockOffset;
+      state.blockOffset = mapFocusIndexToBlockOffset(state, contentWidth, state.focusBlockIndex);
+    }
     const parsed = parseSlashCommand(raw);
     state.storage.saveCommandHistory(raw, parsed.name);
     const handler = handlers[parsed.name];
@@ -604,7 +616,15 @@ export async function executeCommand(state: AppState, raw: string): Promise<void
       return;
     }
     await handler(state, parsed);
+    if (state.focusMode && state.currentBook) {
+      const { contentWidth } = viewportForCommand(state);
+      state.focusBlockIndex = mapBlockOffsetToFocusIndex(state, contentWidth, state.blockOffset);
+    }
   } catch (error) {
     state.status = error instanceof Error ? error.message : "Command failed";
+  } finally {
+    if (focusOriginalOffset !== null) {
+      state.blockOffset = focusOriginalOffset;
+    }
   }
 }

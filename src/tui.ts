@@ -1,5 +1,6 @@
 import { commandHelp } from "./commands.js";
 import { executeCommand, importAndOpen, openBook } from "./executor.js";
+import { clampFocusBlockIndex, mapFocusIndexToBlockOffset, renderFocusBlock } from "./focus.js";
 import { handleInput } from "./input.js";
 import { bg, bold, fg } from "./color.js";
 import { discoverEpubs } from "./discovery.js";
@@ -43,6 +44,17 @@ function currentLines(state: AppState, width: number, height: number): string[] 
       lines.push("Press Enter to open the file picker.");
     }
     return lines;
+  }
+
+  if (state.focusMode) {
+    const chapter = state.currentBook.chapters[state.chapterIndex];
+    if (!chapter || chapter.blocks.length === 0) {
+      return [fg(state.theme.dim, "This chapter has no readable blocks.")];
+    }
+    state.focusBlockIndex = clampFocusBlockIndex(state, state.focusBlockIndex);
+    const focusedBlockLines = renderFocusBlock(state, width);
+    const topPadding = Math.max(0, Math.floor((height - focusedBlockLines.length) / 2));
+    return [...Array.from({ length: topPadding }, () => ""), ...focusedBlockLines];
   }
 
   const chapter = state.currentBook.chapters[state.chapterIndex];
@@ -171,9 +183,15 @@ function draw(state: AppState): void {
 
   const layout = getViewportLayout(state, width, height);
   const allMainLines = currentLines(state, layout.contentWidth, layout.bodyHeight);
-  const maxOffset = computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
-  state.blockOffset = clamp(state.blockOffset, 0, maxOffset);
-  const mainLines = allMainLines.slice(state.blockOffset, state.blockOffset + layout.bodyHeight);
+  const maxOffset = state.focusMode
+    ? 0
+    : computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
+  if (!state.focusMode) {
+    state.blockOffset = clamp(state.blockOffset, 0, maxOffset);
+  }
+  const mainLines = state.focusMode
+    ? allMainLines.slice(0, layout.bodyHeight)
+    : allMainLines.slice(state.blockOffset, state.blockOffset + layout.bodyHeight);
   const transitionLine = chapterTransitionLine(state, layout.contentWidth);
   if (transitionLine) {
     const transitionRow = Math.min(mainLines.length, layout.bodyHeight - 1);
@@ -185,10 +203,22 @@ function draw(state: AppState): void {
     mainLines.splice(0, mainLines.length, ...nextLines.slice(0, layout.bodyHeight));
   }
   const overlayLines = layout.overlayWidth ? renderOverlay(state, layout.overlayWidth - 2, layout.bodyHeight) : [];
+  const effectiveOffset = state.focusMode
+    ? mapFocusIndexToBlockOffset(state, layout.contentWidth, state.focusBlockIndex)
+    : state.blockOffset;
   const scrollbar = state.currentBook
-    ? renderScrollbar(allMainLines.length, layout.bodyHeight, state.blockOffset, state.theme)
+    ? renderScrollbar(allMainLines.length, layout.bodyHeight, effectiveOffset, state.theme, state.focusMode)
     : [];
-  const footerLines = renderFooter(state, width, formatProgress(state, layout.contentWidth, layout.bodyHeight));
+  const originalOffset = state.blockOffset;
+  state.blockOffset = effectiveOffset;
+  const progress = formatProgress(state, layout.contentWidth, layout.bodyHeight);
+  state.blockOffset = originalOffset;
+  const chapterBlockCount = state.currentBook?.chapters[state.chapterIndex]?.blocks.length ?? 0;
+  const focusProgress = state.focusMode && chapterBlockCount > 0
+    ? `§ ${state.focusBlockIndex + 1} / ${chapterBlockCount}`
+    : "";
+  const footerProgress = [progress, focusProgress].filter(Boolean).join(` ${fg(state.theme.border, "·")} `);
+  const footerLines = renderFooter(state, width, footerProgress);
   const body = renderBody(
     mainLines,
     overlayLines,
@@ -213,6 +243,11 @@ function syncPosition(state: AppState): void {
   const width = process.stdout.columns || 120;
   const height = process.stdout.rows || 40;
   const layout = getViewportLayout(state, width, height);
+  const originalOffset = state.blockOffset;
+  if (state.focusMode) {
+    state.focusBlockIndex = clampFocusBlockIndex(state, state.focusBlockIndex);
+    state.blockOffset = mapFocusIndexToBlockOffset(state, layout.contentWidth, state.focusBlockIndex);
+  }
   state.storage.savePosition({
     bookId: state.currentBook.id,
     chapterIndex: state.chapterIndex,
@@ -220,6 +255,9 @@ function syncPosition(state: AppState): void {
     bookProgress: computeBookProgress(state, layout.contentWidth, layout.bodyHeight),
     blockOffset: state.blockOffset
   });
+  if (state.focusMode) {
+    state.blockOffset = originalOffset;
+  }
 }
 
 
@@ -238,6 +276,8 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     currentBook: null,
     chapterIndex: 0,
     blockOffset: 0,
+    focusMode: false,
+    focusBlockIndex: 0,
     commandBuffer: "",
     commandMode: false,
     commandSuggestionIndex: 0,

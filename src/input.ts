@@ -1,5 +1,6 @@
 import { applyCommandAutocomplete, listCommandSuggestions } from "./commands.js";
 import { applySearchHit, pushNavHistory } from "./executor.js";
+import { clampFocusBlockIndex, getChapterBlockCount, mapBlockOffsetToFocusIndex, mapFocusIndexToBlockOffset } from "./focus.js";
 import {
   clamp,
   computeChapterMaxOffset,
@@ -18,6 +19,7 @@ function moveChapter(state: AppState, delta: number): void {
   pushNavHistory(state);
   state.chapterIndex = clamp(state.chapterIndex + delta, 0, state.currentBook.chapters.length - 1);
   state.blockOffset = 0;
+  state.focusBlockIndex = 0;
   pushNavHistory(state);
 }
 
@@ -51,6 +53,7 @@ function showChapterTransition(
     pushNavHistory(state);
     state.chapterIndex = targetChapterIndex;
     state.blockOffset = 0;
+    state.focusBlockIndex = 0;
     pushNavHistory(state);
     state.chapterTransition = null;
     state.status = `Moved to chapter ${state.chapterIndex + 1}`;
@@ -148,7 +151,7 @@ function exitTui(): never {
 }
 
 function applyScrollbarPointer(state: AppState, mouse: ParsedMouseEvent): boolean {
-  if (!state.currentBook) {
+  if (!state.currentBook || state.focusMode) {
     return false;
   }
 
@@ -211,6 +214,20 @@ function applyScrollbarPointer(state: AppState, mouse: ParsedMouseEvent): boolea
   }
 
   return false;
+}
+
+function enterFocusMode(state: AppState, contentWidth: number): void {
+  state.focusBlockIndex = mapBlockOffsetToFocusIndex(state, contentWidth, state.blockOffset);
+  state.focusMode = true;
+  state.status = "Focus mode enabled";
+}
+
+function exitFocusMode(state: AppState, contentWidth: number): void {
+  state.focusBlockIndex = clampFocusBlockIndex(state, state.focusBlockIndex);
+  state.blockOffset = mapFocusIndexToBlockOffset(state, contentWidth, state.focusBlockIndex);
+  state.focusMode = false;
+  clearChapterTransition(state);
+  state.status = "Focus mode disabled";
 }
 
 export async function handleInput(
@@ -403,6 +420,10 @@ export async function handleInput(
     state.mouseDrag = null;
     state.overlay = "none";
     state.searchState = null;
+    if (state.focusMode && state.currentBook) {
+      const escLayout = getViewportLayout(state, process.stdout.columns || 120, process.stdout.rows || 40);
+      exitFocusMode(state, escLayout.contentWidth);
+    }
     redraw();
     return;
   }
@@ -463,6 +484,98 @@ export async function handleInput(
     redraw();
     return;
   }
+  if (chunk === "f") {
+    if (!state.currentBook) {
+      state.status = "No book open.";
+    } else if (state.focusMode) {
+      exitFocusMode(state, layout.contentWidth);
+    } else {
+      enterFocusMode(state, layout.contentWidth);
+    }
+    syncPos(state);
+    redraw();
+    return;
+  }
+
+  if (state.focusMode && state.currentBook) {
+    const blockCount = getChapterBlockCount(state);
+    if (blockCount <= 0) {
+      state.status = "This chapter has no readable blocks.";
+      syncPos(state);
+      redraw();
+      return;
+    }
+
+    const atFocusEnd = state.focusBlockIndex >= blockCount - 1;
+    const focusForwardIntent =
+      chunk === "j"
+      || chunk === " "
+      || chunk === "\u001b[B"
+      || chunk === "\u001b[6~"
+      || isMouseWheelDown(chunk);
+
+    if (atFocusEnd && focusForwardIntent) {
+      const nextChapter = state.currentBook.chapters[state.chapterIndex + 1];
+      if (!nextChapter) {
+        state.status = "End of book";
+        redraw();
+        return;
+      }
+      if (!state.chapterTransition || state.chapterTransition.targetChapterIndex !== nextChapter.index) {
+        showChapterTransition(state, redraw, syncPos, `Chapter ${nextChapter.index + 1}: ${nextChapter.title}`, nextChapter.index);
+        return;
+      }
+      showChapterTransition(state, redraw, syncPos, state.chapterTransition.message, state.chapterTransition.targetChapterIndex);
+      return;
+    }
+
+    clearChapterTransition(state);
+    if (focusForwardIntent) {
+      state.focusBlockIndex = clampFocusBlockIndex(state, state.focusBlockIndex + 1);
+    } else if (chunk === "k" || chunk === "\u001b[A" || isMouseWheelUp(chunk)) {
+      state.focusBlockIndex = clampFocusBlockIndex(state, state.focusBlockIndex - 1);
+    } else if (chunk === "g" || isHomeKey(chunk)) {
+      state.focusBlockIndex = 0;
+    } else if (chunk === "G" || isEndKey(chunk)) {
+      state.focusBlockIndex = blockCount - 1;
+    } else if (chunk === "\u001b[C") {
+      moveChapter(state, 1);
+    } else if (chunk === "\u001b[D") {
+      moveChapter(state, -1);
+    } else if (chunk === "T") {
+      state.overlay = "chapters";
+      state.overlayCursor = state.chapterIndex;
+    } else if (chunk === "B") {
+      const bookmarks = state.storage.listBookmarks(state.currentBook.id);
+      state.overlay = "bookmarks";
+      state.overlayCursor = 0;
+      state.status = bookmarks.length > 0 ? "Opened bookmarks." : "No bookmarks in this book yet.";
+    } else if (chunk === "m") {
+      const nextMode = state.renderMode === "plain" ? "typescript"
+        : state.codeLanguage === "typescript" ? "python"
+        : state.codeLanguage === "python" ? "rust"
+        : "plain";
+      await executeCmd(`/mode ${nextMode}`);
+    } else if (chunk === "d" && state.renderMode === "code") {
+      const cycle = [1, 3, 5] as const;
+      const current = cycle.indexOf(state.codeDensity as 1 | 3 | 5);
+      const next = cycle[current < 0 ? 0 : (current + 1) % cycle.length];
+      await executeCmd(`/density ${next}`);
+    } else if (chunk === "c") {
+      await executeCmd("/colorscheme");
+    } else if (chunk === "p") {
+      await executeCmd("/toggleprogress");
+    } else if (chunk === "?") {
+      state.overlay = "keys";
+    } else if (chunk === "q") {
+      state.shouldQuit = true;
+      exitTui();
+    }
+    syncPos(state);
+    redraw();
+    return;
+  }
+
   const atChapterEnd = state.currentBook && state.blockOffset >= chapterMaxOffset;
   const cancelChapterTransition = () => {
     if (state.chapterTransition) {

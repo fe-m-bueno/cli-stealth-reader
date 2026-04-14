@@ -19,6 +19,7 @@ export const KEYBOARD_SHORTCUTS: Array<{ category: string; key: string; descript
   { category: "commands", key: "d", description: "Delete selected bookmark (inside bookmark overlay)" },
   { category: "commands", key: "?", description: "Open keyboard shortcuts" },
   { category: "view", key: "m", description: "Cycle render mode (plain → typescript → python → rust)" },
+  { category: "view", key: "f", description: "Toggle focus mode (single block centered)" },
   { category: "view", key: "c", description: "Open colorscheme picker" },
   { category: "view", key: "p", description: "Cycle progress bar visibility" },
   { category: "view", key: "Tab", description: "Autocomplete or cycle command suggestions" },

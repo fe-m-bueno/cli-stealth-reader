@@ -194,7 +194,8 @@ export function renderStatusBar(state: AppState, width: number): string {
   // Right content
   const modeLabel = state.renderMode === "plain" ? "plain" : state.codeLanguage;
   const densityLabel = state.renderMode === "code" ? ` · density:${state.codeDensity}` : "";
-  const right = `${modeLabel}${densityLabel} · ${theme.label}`;
+  const focusLabel = state.focusMode ? " [FOCUS]" : "";
+  const right = `${modeLabel}${densityLabel}${focusLabel} · ${theme.label}`;
 
   // Calculate plain text lengths (strip ANSI for width calculation)
   const prefix = "╭─ ";
@@ -368,9 +369,10 @@ export function renderScrollbar(
   totalLines: number,
   bodyHeight: number,
   blockOffset: number,
-  theme: ThemePreset
+  theme: ThemePreset,
+  focusMode = false
 ): string[] {
-  if (bodyHeight <= 0) {
+  if (focusMode || bodyHeight <= 0) {
     return [];
   }
 

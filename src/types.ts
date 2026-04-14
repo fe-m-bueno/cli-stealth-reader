@@ -181,6 +181,8 @@ export interface AppState {
   currentBook: CanonicalBook | null;
   chapterIndex: number;
   blockOffset: number;
+  focusMode: boolean;
+  focusBlockIndex: number;
   commandBuffer: string;
   commandMode: boolean;
   commandSuggestionIndex: number;
