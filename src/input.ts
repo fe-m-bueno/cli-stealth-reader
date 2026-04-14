@@ -10,7 +10,7 @@ import {
   scrollbarOffsetFromThumb
 } from "./screen.js";
 import { THEMES } from "./themes.js";
-import type { AppState } from "./types.js";
+import type { AppState, LibrarySortKey } from "./types.js";
 
 function moveChapter(state: AppState, delta: number): void {
   if (!state.currentBook) {
@@ -134,7 +134,7 @@ function interactiveOverlayLength(state: AppState): number {
     case "chapters":
       return state.currentBook?.chapters.length ?? 0;
     case "books":
-      return state.storage.listBooks().length;
+      return state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir).length;
     case "bookmarks":
       return state.currentBook ? state.storage.listBookmarks(state.currentBook.id).length : 0;
     case "themes":
@@ -360,7 +360,7 @@ export async function handleInput(
         pushNavHistory(state);
         state.status = `Moved to chapter ${state.chapterIndex + 1}`;
       } else if (state.overlay === "books") {
-        const books = state.storage.listBooks();
+        const books = state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir);
         const selected = books[state.overlayCursor];
         if (selected) {
           const book = state.storage.getBook(selected.id);
@@ -393,9 +393,22 @@ export async function handleInput(
             : `Jumped to bookmark Ch.${selected.chapterIndex + 1} §${selected.blockOffset}.`;
         }
       }
+      if (state.overlay === "books") {
+        state.librarySortDir = "desc";
+      }
       state.overlay = "none";
     } else if (chunk === "\u001b") {
+      if (state.overlay === "books") {
+        state.librarySortDir = "desc";
+      }
       state.overlay = "none";
+    } else if (chunk === "s" && state.overlay === "books") {
+      const cycle: LibrarySortKey[] = ["lastOpened", "title", "author", "progress"];
+      const current = cycle.indexOf(state.librarySortKey);
+      state.librarySortKey = cycle[(current + 1) % cycle.length]!;
+      state.overlayCursor = 0;
+    } else if (chunk === "r" && state.overlay === "books") {
+      state.librarySortDir = state.librarySortDir === "asc" ? "desc" : "asc";
     } else if (chunk === "d" && state.overlay === "bookmarks" && state.currentBook) {
       const bookmarks = state.storage.listBookmarks(state.currentBook.id);
       const selected = bookmarks[state.overlayCursor];

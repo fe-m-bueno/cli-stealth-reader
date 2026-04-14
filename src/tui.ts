@@ -119,16 +119,30 @@ export function renderOverlay(state: AppState, width: number, height: number): s
           return `${marker} ${String(chapter.index + 1).padStart(2, "0")} ${truncate(chapter.title, width - 6)}`;
         });
     case "books": {
-      const books = state.storage.listBooksWithProgress();
-      return books.map((book, index) => {
-        const marker = index === state.overlayCursor ? ">" : " ";
-        const progressTag = book.bookProgress !== null
-          ? `[Ch.${(book.chapterIndex ?? 0) + 1} · ${Math.round(book.bookProgress * 100)}%]`
-          : "[not started]";
-        const right = `  ${progressTag}`;
-        const titleAuthor = truncate(`${book.title}  —  ${book.author}`, Math.max(1, width - 2 - right.length));
-        return `${marker} ${titleAuthor}${right}`;
-      });
+      const books = state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir);
+      const sortKeyLabels: Record<string, string> = {
+        lastOpened: "Last Opened",
+        title: "Title",
+        author: "Author",
+        progress: "Progress"
+      };
+      const dirArrow = state.librarySortDir === "asc" ? "↑" : "↓";
+      const header = truncate(
+        `  Sort: ${sortKeyLabels[state.librarySortKey]} ${dirArrow}   (Press s to change, r to reverse)`,
+        width
+      );
+      return [
+        header,
+        ...books.map((book, index) => {
+          const marker = index === state.overlayCursor ? ">" : " ";
+          const progressTag = book.bookProgress !== null
+            ? `[Ch.${(book.chapterIndex ?? 0) + 1} · ${Math.round(book.bookProgress * 100)}%]`
+            : "[not started]";
+          const right = `  ${progressTag}`;
+          const titleAuthor = truncate(`${book.title}  —  ${book.author}`, Math.max(1, width - 2 - right.length));
+          return `${marker} ${titleAuthor}${right}`;
+        })
+      ];
     }
     case "bookmarks": {
       if (!state.currentBook) {
@@ -295,7 +309,9 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     layoutMetrics: null,
     searchState: null,
     navHistory: [],
-    navHistoryCursor: -1
+    navHistoryCursor: -1,
+    librarySortKey: "lastOpened",
+    librarySortDir: "desc"
   };
 
   if (options?.resume) {

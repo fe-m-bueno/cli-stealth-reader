@@ -15,8 +15,8 @@ export const COMMANDS: CommandDefinition[] = [
     aliases: ["book"],
     description: "Switch books from the library or current folder.",
     args: [{ name: "query" }],
-    flags: [{ name: "recent" }, { name: "cwd" }],
-    usage: "/changebook [query] [--recent] [--cwd]"
+    flags: [{ name: "recent" }, { name: "cwd" }, { name: "sort", takesValue: true }],
+    usage: "/changebook [query] [--recent] [--cwd] [--sort lastOpened|title|author|progress]"
   },
   {
     name: "colorscheme",

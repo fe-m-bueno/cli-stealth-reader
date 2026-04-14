@@ -6,6 +6,9 @@ export type CodeDensity = 1 | 2 | 3 | 4 | 5;
 
 export type ProgressVisibility = "book" | "both" | "chapter" | "hidden";
 
+export type LibrarySortKey = "lastOpened" | "title" | "author" | "progress";
+export type SortDirection = "asc" | "desc";
+
 export type BlockType =
   | "heading"
   | "paragraph"
@@ -223,4 +226,6 @@ export interface AppState {
   searchState: SearchState | null;
   navHistory: NavHistoryEntry[];
   navHistoryCursor: number;
+  librarySortKey: LibrarySortKey;
+  librarySortDir: SortDirection;
 }

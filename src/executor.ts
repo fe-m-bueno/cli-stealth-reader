@@ -15,6 +15,7 @@ import type {
   CodeLanguage,
   FolderDiscovery,
   LibraryEntry,
+  LibrarySortKey,
   ParsedCommandResult,
   ProgressVisibility,
   SearchHit
@@ -269,6 +270,15 @@ const handlers: Record<string, CommandHandler> = {
   },
 
   changebook: async (state, parsed) => {
+    const validSortKeys: LibrarySortKey[] = ["lastOpened", "title", "author", "progress"];
+    const sortFlag = parsed.flags.sort as string | undefined;
+    if (sortFlag) {
+      if (validSortKeys.includes(sortFlag as LibrarySortKey)) {
+        state.librarySortKey = sortFlag as LibrarySortKey;
+      } else {
+        throw new Error(`Invalid sort key "${sortFlag}". Use: lastOpened, title, author, progress`);
+      }
+    }
     const query = parsed.args.join(" ");
     const books = state.storage.listBooks();
     if (!query.trim()) {

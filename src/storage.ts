@@ -11,9 +11,11 @@ import type {
   ImportDiagnostic,
   LibraryEntry,
   LibraryEntryWithProgress,
+  LibrarySortKey,
   ProgressVisibility,
   ReadingPosition,
-  RenderMode
+  RenderMode,
+  SortDirection
 } from "./types.js";
 import { getAppPaths } from "./paths.js";
 import { EPUB_PARSER_VERSION } from "./parser/epub.js";
@@ -246,8 +248,16 @@ export class Storage {
     `).all() as unknown as LibraryEntry[];
   }
 
-  listBooksWithProgress(): LibraryEntryWithProgress[] {
-    return this.db.prepare(`
+  listBooksWithProgress(sort: LibrarySortKey = "lastOpened", dir: SortDirection = "desc"): LibraryEntryWithProgress[] {
+    let orderClause: string;
+    if (sort === "title") {
+      orderClause = `LOWER(b.title) ${dir === "asc" ? "ASC" : "DESC"}`;
+    } else if (sort === "author") {
+      orderClause = `LOWER(b.author) ${dir === "asc" ? "ASC" : "DESC"}`;
+    } else {
+      orderClause = `b.last_opened_at ${dir === "asc" ? "ASC" : "DESC"}`;
+    }
+    const rows = this.db.prepare(`
       SELECT
         b.id,
         b.title,
@@ -263,8 +273,20 @@ export class Storage {
       FROM books b
       LEFT JOIN positions p ON p.book_id = b.id
       LEFT JOIN chapters c ON c.book_id = b.id AND c.chapter_index = p.chapter_index
-      ORDER BY b.last_opened_at DESC
+      ORDER BY ${orderClause}
     `).all() as unknown as LibraryEntryWithProgress[];
+    if (sort === "progress") {
+      const multiplier = dir === "asc" ? 1 : -1;
+      return rows.sort((a, b) => {
+        const ap = a.bookProgress;
+        const bp = b.bookProgress;
+        if (ap === null && bp === null) return 0;
+        if (ap === null) return 1;
+        if (bp === null) return -1;
+        return (ap - bp) * multiplier;
+      });
+    }
+    return rows;
   }
 
   removeBook(bookId: string): void {
