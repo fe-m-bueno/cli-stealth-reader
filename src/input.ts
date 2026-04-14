@@ -230,6 +230,11 @@ export async function handleInput(
 
   if (state.commandMode) {
     if (chunk === "\r") {
+      const suggestions = listCommandSuggestions(state.commandBuffer);
+      if (suggestions.length > 0) {
+        const suggestion = suggestions[clamp(state.commandSuggestionIndex, 0, suggestions.length - 1)];
+        state.commandBuffer = applyCommandAutocomplete(state.commandBuffer, suggestion);
+      }
       const raw = `/${state.commandBuffer}`;
       state.commandBuffer = "";
       state.commandMode = false;
