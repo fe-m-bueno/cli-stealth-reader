@@ -6,6 +6,20 @@ import { discoverEpubs } from "./discovery.js";
 import { KEYBOARD_SHORTCUTS } from "./help.js";
 import { importEpub } from "./parser/epub.js";
 import { renderBlocks } from "./renderers.js";
+import {
+  BODY_OVERHEAD,
+  MIN_MAIN_WIDTH,
+  MIN_PAGE_LINES,
+  OVERLAY_MAX_WIDTH,
+  clearScreen,
+  clamp,
+  computeBookProgress,
+  computeChapterProgress,
+  renderBody,
+  renderFooter,
+  renderStatusBar,
+  truncate
+} from "./screen.js";
 import { Storage } from "./storage.js";
 import { DEFAULT_THEME, THEMES } from "./themes.js";
 import type {
@@ -18,7 +32,7 @@ import type {
 
 type OverlayKind = "none" | "chapters" | "books" | "themes" | "help" | "keys" | "diagnostics";
 
-interface AppState {
+export interface AppState {
   storage: Storage;
   cwd: string;
   theme: ThemePreset;
@@ -33,21 +47,6 @@ interface AppState {
   overlay: OverlayKind;
   discoveries: FolderDiscovery[];
   shouldQuit: boolean;
-}
-
-function clearScreen(): void {
-  process.stdout.write("\x1b[2J\x1b[H");
-}
-
-function truncate(text: string, width: number): string {
-  return text.length <= width ? text : `${text.slice(0, Math.max(0, width - 1))}…`;
-}
-
-function progressBar(value: number, width: number, theme: ThemePreset): string {
-  const clamped = Math.max(0, Math.min(1, value));
-  const filled = Math.round(clamped * width);
-  const empty = Math.max(0, width - filled);
-  return fg(theme.accent, "█".repeat(filled)) + fg(theme.border, "░".repeat(empty));
 }
 
 function currentLines(state: AppState, width: number, height: number): string[] {
@@ -71,24 +70,6 @@ function currentLines(state: AppState, width: number, height: number): string[] 
 
   const chapter = state.currentBook.chapters[state.chapterIndex];
   return renderBlocks(chapter.blocks, state.renderMode, width, state.theme);
-}
-
-function computeBookProgress(state: AppState): number {
-  if (!state.currentBook) {
-    return 0;
-  }
-  if (state.currentBook.chapters.length <= 1) {
-    return state.blockOffset > 0 ? Math.min(1, state.blockOffset / Math.max(1, state.currentBook.chapters[0].blocks.length)) : 0;
-  }
-  return (state.chapterIndex + (state.blockOffset > 0 ? state.blockOffset / Math.max(1, state.currentBook.chapters[state.chapterIndex].blocks.length) : 0)) / state.currentBook.chapters.length;
-}
-
-function computeChapterProgress(state: AppState): number {
-  if (!state.currentBook) {
-    return 0;
-  }
-  const chapter = state.currentBook.chapters[state.chapterIndex];
-  return Math.min(1, state.blockOffset / Math.max(1, chapter.blocks.length));
 }
 
 function renderOverlay(state: AppState, width: number, height: number): string[] {
@@ -130,47 +111,15 @@ function draw(state: AppState): void {
   const height = process.stdout.rows || 40;
   clearScreen();
 
-  const top = [
-    bold(fg(state.theme.accent, "stealth-reader")),
-    fg(state.theme.dim, state.currentBook ? `${state.currentBook.title} · ${state.currentBook.author}` : "idle"),
-    fg(state.theme.dim, `mode:${state.renderMode}`),
-    fg(state.theme.dim, `theme:${state.theme.id}`)
-  ].join(fg(state.theme.border, "  │  "));
-
-  process.stdout.write(`${top}\n`);
-  process.stdout.write(`${fg(state.theme.border, "─".repeat(width))}\n`);
-
-  const bodyHeight = height - 6;
-  const overlayWidth = state.overlay === "none" ? 0 : Math.min(42, Math.floor(width * 0.32));
-  const mainWidth = Math.max(24, width - overlayWidth - (overlayWidth ? 3 : 0));
-  const lines = currentLines(state, mainWidth - 2, bodyHeight);
-  const visibleLines = lines.slice(state.blockOffset, state.blockOffset + bodyHeight);
+  const bodyHeight = height - BODY_OVERHEAD;
+  const overlayWidth = state.overlay === "none" ? 0 : Math.min(OVERLAY_MAX_WIDTH, Math.floor(width * 0.32));
+  const mainWidth = Math.max(MIN_MAIN_WIDTH, width - overlayWidth - (overlayWidth ? 3 : 0));
+  const mainLines = currentLines(state, mainWidth - 2, bodyHeight);
   const overlayLines = overlayWidth ? renderOverlay(state, overlayWidth - 2, bodyHeight) : [];
 
-  for (let row = 0; row < bodyHeight; row += 1) {
-    const left = truncate(visibleLines[row] ?? "", mainWidth - 1).padEnd(mainWidth, " ");
-    if (overlayWidth) {
-      const right = truncate(overlayLines[row] ?? "", overlayWidth - 1).padEnd(overlayWidth, " ");
-      process.stdout.write(`${left} ${fg(state.theme.border, "│")} ${right}\n`);
-    } else {
-      process.stdout.write(`${left}\n`);
-    }
-  }
-
-  const bookProgress = computeBookProgress(state);
-  const chapterProgress = computeChapterProgress(state);
-  const progressParts: string[] = [];
-  if (state.progressVisibility === "book" || state.progressVisibility === "both") {
-    progressParts.push(`book ${Math.round(bookProgress * 100)}% ${progressBar(bookProgress, 12, state.theme)}`);
-  }
-  if (state.progressVisibility === "chapter" || state.progressVisibility === "both") {
-    progressParts.push(`chapter ${Math.round(chapterProgress * 100)}% ${progressBar(chapterProgress, 12, state.theme)}`);
-  }
-  process.stdout.write(`${fg(state.theme.border, "─".repeat(width))}\n`);
-  process.stdout.write(`${truncate(progressParts.join("  "), width)}\n`);
-  const prompt = state.commandMode ? `${fg(state.theme.accent, "/")}${state.commandBuffer}` : fg(state.theme.dim, "Press / for commands, ? for shortcuts, q to quit");
-  const status = state.status ? `  ${fg(state.theme.dim, state.status)}` : "";
-  process.stdout.write(`${truncate(prompt + status, width)}\n`);
+  process.stdout.write(renderStatusBar(state, width) + "\n");
+  process.stdout.write(renderBody(mainLines, overlayLines, bodyHeight, mainWidth, overlayWidth, state.theme));
+  process.stdout.write(renderFooter(state, width) + "\n");
 }
 
 async function openBook(state: AppState, book: CanonicalBook): Promise<void> {
@@ -195,11 +144,12 @@ function syncPosition(state: AppState): void {
   if (!state.currentBook) {
     return;
   }
+  const chapter = state.currentBook.chapters[state.chapterIndex];
   state.storage.savePosition({
     bookId: state.currentBook.id,
     chapterIndex: state.chapterIndex,
-    chapterProgress: computeChapterProgress(state),
-    bookProgress: computeBookProgress(state),
+    chapterProgress: computeChapterProgress(chapter, state.blockOffset),
+    bookProgress: computeBookProgress(state.currentBook, state.chapterIndex, state.blockOffset),
     blockOffset: state.blockOffset
   });
 }
@@ -368,15 +318,15 @@ async function executeCommand(state: AppState, raw: string): Promise<void> {
 }
 
 function handleNavigation(state: AppState, key: string): void {
-  const pageSize = Math.max(5, (process.stdout.rows || 40) - 8);
+  const pageSize = Math.max(MIN_PAGE_LINES, (process.stdout.rows || 40) - 8);
   if (key === "j" || key === "\u001b[B") {
     state.blockOffset += 1;
   } else if (key === "k" || key === "\u001b[A") {
-    state.blockOffset = Math.max(0, state.blockOffset - 1);
+    state.blockOffset = clamp(state.blockOffset - 1, 0, Infinity);
   } else if (key === " ") {
     state.blockOffset += pageSize;
   } else if (key === "b") {
-    state.blockOffset = Math.max(0, state.blockOffset - pageSize);
+    state.blockOffset = clamp(state.blockOffset - pageSize, 0, Infinity);
   } else if (key === "g") {
     state.blockOffset = 0;
   } else if (key === "G") {
