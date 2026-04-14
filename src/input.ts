@@ -1,5 +1,6 @@
 import { applyCommandAutocomplete, listCommandSuggestions } from "./commands.js";
 import { clearScreen, clamp, MIN_PAGE_LINES } from "./screen.js";
+import { THEMES } from "./themes.js";
 import type { AppState } from "./types.js";
 
 function moveChapter(state: AppState, delta: number): void {
@@ -16,6 +17,19 @@ function isMouseWheelDown(chunk: string): boolean {
 
 function isMouseWheelUp(chunk: string): boolean {
   return /\x1b\[<64;\d+;\d+[mM]/.test(chunk);
+}
+
+function interactiveOverlayLength(state: AppState): number {
+  switch (state.overlay) {
+    case "chapters":
+      return state.currentBook?.chapters.length ?? 0;
+    case "books":
+      return state.storage.listBooks().length;
+    case "themes":
+      return THEMES.length;
+    default:
+      return 0;
+  }
 }
 
 export async function handleInput(
@@ -116,6 +130,47 @@ export async function handleInput(
       } else {
         state.overlay = "none";
       }
+    } else if (chunk === "\u001b") {
+      state.overlay = "none";
+    }
+    redraw();
+    return;
+  }
+
+  const overlayLength = interactiveOverlayLength(state);
+  if (overlayLength > 0) {
+    const maxIndex = Math.max(0, overlayLength - 1);
+    if (chunk === "\u001b[B" || chunk === "j") {
+      state.overlayCursor = clamp(state.overlayCursor + 1, 0, maxIndex);
+    } else if (chunk === "\u001b[A" || chunk === "k") {
+      state.overlayCursor = clamp(state.overlayCursor - 1, 0, maxIndex);
+    } else if (chunk === "\r") {
+      if (state.overlay === "chapters" && state.currentBook) {
+        state.chapterIndex = clamp(state.overlayCursor, 0, state.currentBook.chapters.length - 1);
+        state.blockOffset = 0;
+        state.status = `Moved to chapter ${state.chapterIndex + 1}`;
+      } else if (state.overlay === "books") {
+        const books = state.storage.listBooks();
+        const selected = books[state.overlayCursor];
+        if (selected) {
+          const book = state.storage.getBook(selected.id);
+          if (book) {
+            state.currentBook = book;
+            const existing = state.storage.getPosition(book.id);
+            state.chapterIndex = existing?.chapterIndex ?? 0;
+            state.blockOffset = existing?.blockOffset ?? 0;
+            state.status = `Opened ${book.title}`;
+          }
+        }
+      } else if (state.overlay === "themes") {
+        const theme = THEMES[state.overlayCursor];
+        if (theme) {
+          state.theme = theme;
+          state.storage.setSetting("themeId", theme.id);
+          state.status = `Theme set to ${theme.label}`;
+        }
+      }
+      state.overlay = "none";
     } else if (chunk === "\u001b") {
       state.overlay = "none";
     }

@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { commandHelp, parseSlashCommand } from "./commands.js";
-import { importEpub } from "./parser/epub.js";
+import { discoverEpubs } from "./discovery.js";
+import { EPUB_PARSER_VERSION, importEpub } from "./parser/epub.js";
 import { THEMES } from "./themes.js";
 import type {
   AppState,
@@ -18,6 +19,11 @@ function findBookByQuery(books: LibraryEntry[], query: string): LibraryEntry | u
 }
 
 export async function openBook(state: AppState, book: CanonicalBook): Promise<void> {
+  if ((book.parserVersion ?? 1) < EPUB_PARSER_VERSION && fs.existsSync(book.sourcePath)) {
+    const refreshed = await importEpub(book.sourcePath);
+    state.storage.saveBook(refreshed, state.renderMode);
+    book = refreshed;
+  }
   state.currentBook = book;
   const existing = state.storage.getPosition(book.id);
   state.chapterIndex = existing?.chapterIndex ?? 0;
@@ -33,6 +39,11 @@ export async function importAndOpen(state: AppState, epubPath: string, force = f
   const book = await importEpub(epubPath);
   state.storage.saveBook(book, state.renderMode);
   await openBook(state, book);
+}
+
+async function refreshDiscoveries(state: AppState): Promise<void> {
+  state.cwd = process.cwd();
+  state.discoveries = await discoverEpubs(state.cwd);
 }
 
 function filterDiscoveries(discoveries: FolderDiscovery[], query: string): FolderDiscovery[] {
@@ -52,6 +63,7 @@ export function openFilePicker(
   }
 ): void {
   state.overlay = "file-picker";
+  state.overlayCursor = 0;
   state.filePickerItems = items;
   state.filePickerCursor = 0;
   state.filePickerSelected = new Set();
@@ -82,12 +94,19 @@ const handlers: Record<string, CommandHandler> = {
 
   chapters: async (state) => {
     state.overlay = "chapters";
+    state.overlayCursor = state.chapterIndex;
     state.status = "Opened table of contents";
   },
 
   changebook: async (state, parsed) => {
     const query = parsed.args.join(" ");
     const books = state.storage.listBooks();
+    if (!query.trim()) {
+      state.overlay = "books";
+      state.overlayCursor = 0;
+      state.status = books.length > 0 ? "Opened library picker." : "No books in the library yet.";
+      return;
+    }
     const selected = findBookByQuery(books, query);
     if (selected) {
       const book = state.storage.getBook(selected.id);
@@ -96,6 +115,7 @@ const handlers: Record<string, CommandHandler> = {
       }
     } else {
       state.overlay = "books";
+      state.overlayCursor = 0;
       state.status = "No exact match. Opened library picker.";
     }
   },
@@ -103,6 +123,7 @@ const handlers: Record<string, CommandHandler> = {
   colorscheme: async (state, parsed) => {
     if (parsed.flags.list || parsed.args.length === 0) {
       state.overlay = "themes";
+      state.overlayCursor = Math.max(0, THEMES.findIndex((item) => item.id === state.theme.id));
       state.status = "Opened colorscheme picker";
       return;
     }
@@ -140,6 +161,7 @@ const handlers: Record<string, CommandHandler> = {
   },
 
   add: async (state, parsed) => {
+    await refreshDiscoveries(state);
     const force = Boolean(parsed.flags.force);
     if (parsed.flags.cwd || parsed.args.length === 0) {
       openFilePicker(state, state.discoveries, {

@@ -12,6 +12,8 @@ import {
   clearScreen,
   computeBookProgress,
   computeChapterProgress,
+  footerHeight,
+  formatProgress,
   renderBody,
   renderFooter,
   renderStatusBar,
@@ -53,20 +55,19 @@ function renderOverlay(state: AppState, width: number, height: number): string[]
         return ["No book open."];
       }
       return state.currentBook.chapters.slice(0, Math.max(1, height - 2)).map((chapter, index) => {
-        const marker = index === state.chapterIndex ? ">" : " ";
+        const marker = index === state.overlayCursor ? ">" : " ";
         return `${marker} ${String(index + 1).padStart(2, "0")} ${truncate(chapter.title, width - 6)}`;
       });
     case "books":
-      return [
-        "Library",
-        "",
-        ...state.storage.listBooks().map((book) => `${book.title}  ${fg(state.theme.dim, book.author)}`),
-        "",
-        "Current folder",
-        ...state.discoveries.map((item) => item.fileName)
-      ];
+      return state.storage.listBooks().map((book, index) => {
+        const marker = index === state.overlayCursor ? ">" : " ";
+        return `${marker} ${truncate(`${book.title}  ${book.author}`, width - 2)}`;
+      });
     case "themes":
-      return THEMES.map((theme) => `${theme.id === state.theme.id ? ">" : " "} ${theme.label} (${theme.id})`);
+      return THEMES.map((theme, index) => {
+        const marker = index === state.overlayCursor ? ">" : " ";
+        return `${marker} ${theme.label} (${theme.id})`;
+      });
     case "help":
       return commandHelp().slice(0, Math.max(1, height));
     case "keys":
@@ -100,8 +101,8 @@ function draw(state: AppState): void {
   const height = process.stdout.rows || 40;
   clearScreen();
 
-  const footerLines = renderFooter(state, width);
-  const bodyHeight = Math.max(1, height - footerLines.length - 2);
+  const reservedFooterHeight = footerHeight(state, width);
+  const bodyHeight = Math.max(1, height - reservedFooterHeight - 2);
   const overlayWidth = state.overlay === "none" ? 0 : Math.min(OVERLAY_MAX_WIDTH, Math.floor(width * 0.32));
   const mainWidth = Math.max(MIN_MAIN_WIDTH, width - overlayWidth - (overlayWidth ? 3 : 0));
   const allMainLines = currentLines(state, mainWidth - 2, bodyHeight);
@@ -109,6 +110,7 @@ function draw(state: AppState): void {
   state.blockOffset = clamp(state.blockOffset, 0, maxOffset);
   const mainLines = allMainLines.slice(state.blockOffset, state.blockOffset + bodyHeight);
   const overlayLines = overlayWidth ? renderOverlay(state, overlayWidth - 2, bodyHeight) : [];
+  const footerLines = renderFooter(state, width, formatProgress(state, mainWidth - 2, bodyHeight));
 
   process.stdout.write(renderStatusBar(state, width) + "\n");
   process.stdout.write(renderBody(mainLines, overlayLines, bodyHeight, mainWidth, overlayWidth, state.theme));
@@ -119,12 +121,17 @@ function syncPosition(state: AppState): void {
   if (!state.currentBook) {
     return;
   }
-  const chapter = state.currentBook.chapters[state.chapterIndex];
+  const width = process.stdout.columns || 120;
+  const height = process.stdout.rows || 40;
+  const reservedFooterHeight = footerHeight(state, width);
+  const bodyHeight = Math.max(1, height - reservedFooterHeight - 2);
+  const overlayWidth = state.overlay === "none" ? 0 : Math.min(OVERLAY_MAX_WIDTH, Math.floor(width * 0.32));
+  const mainWidth = Math.max(MIN_MAIN_WIDTH, width - overlayWidth - (overlayWidth ? 3 : 0));
   state.storage.savePosition({
     bookId: state.currentBook.id,
     chapterIndex: state.chapterIndex,
-    chapterProgress: computeChapterProgress(chapter, state.blockOffset),
-    bookProgress: computeBookProgress(state.currentBook, state.chapterIndex, state.blockOffset),
+    chapterProgress: computeChapterProgress(state, mainWidth - 2, bodyHeight),
+    bookProgress: computeBookProgress(state, mainWidth - 2, bodyHeight),
     blockOffset: state.blockOffset
   });
 }
@@ -147,12 +154,14 @@ export async function runTui(): Promise<void> {
     commandSuggestionIndex: 0,
     status: "Ready",
     overlay: "none",
+    overlayCursor: 0,
     discoveries: await discoverEpubs(process.cwd()),
     shouldQuit: false,
     filePickerCursor: 0,
     filePickerItems: [],
     filePickerSelected: new Set(),
     filePickerForce: false,
+    layoutMetrics: null,
   };
 
   const latest = storage.getLatestBookId();

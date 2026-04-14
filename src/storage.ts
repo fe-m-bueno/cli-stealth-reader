@@ -12,6 +12,7 @@ import type {
   RenderMode
 } from "./types.js";
 import { getAppPaths } from "./paths.js";
+import { EPUB_PARSER_VERSION } from "./parser/epub.js";
 
 export type { AppSettings };
 
@@ -38,6 +39,7 @@ export class Storage {
         author TEXT NOT NULL,
         source_path TEXT NOT NULL,
         import_hash TEXT NOT NULL,
+        parser_version INTEGER NOT NULL DEFAULT 1,
         last_opened_at INTEGER NOT NULL,
         render_mode TEXT NOT NULL
       );
@@ -75,6 +77,10 @@ export class Storage {
         created_at INTEGER NOT NULL
       );
     `);
+    const columns = this.db.prepare("PRAGMA table_info(books)").all() as Array<{ name: string }>;
+    if (!columns.some((column) => column.name === "parser_version")) {
+      this.db.exec("ALTER TABLE books ADD COLUMN parser_version INTEGER NOT NULL DEFAULT 1");
+    }
     this.seedSettings();
   }
 
@@ -105,16 +111,17 @@ export class Storage {
     this.db.exec("BEGIN");
     try {
       this.db.prepare(`
-        INSERT INTO books (id, title, author, source_path, import_hash, last_opened_at, render_mode)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO books (id, title, author, source_path, import_hash, parser_version, last_opened_at, render_mode)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           title = excluded.title,
           author = excluded.author,
           source_path = excluded.source_path,
           import_hash = excluded.import_hash,
+          parser_version = excluded.parser_version,
           last_opened_at = excluded.last_opened_at,
           render_mode = excluded.render_mode
-      `).run(book.id, book.title, book.author, book.sourcePath, book.importHash, now, renderMode);
+      `).run(book.id, book.title, book.author, book.sourcePath, book.importHash, book.parserVersion ?? EPUB_PARSER_VERSION, now, renderMode);
 
       this.db.prepare("DELETE FROM chapters WHERE book_id = ?").run(book.id);
       this.db.prepare("DELETE FROM diagnostics WHERE book_id = ?").run(book.id);
@@ -162,6 +169,7 @@ export class Storage {
           author: string;
           source_path: string;
           import_hash: string;
+          parser_version?: number;
         }
       | undefined;
     if (!bookRow) {
@@ -194,6 +202,7 @@ export class Storage {
       author: bookRow.author,
       sourcePath: bookRow.source_path,
       importHash: bookRow.import_hash,
+      parserVersion: bookRow.parser_version,
       chapters,
       diagnostics
     };
@@ -207,6 +216,7 @@ export class Storage {
         author,
         source_path AS sourcePath,
         import_hash AS importHash,
+        parser_version AS parserVersion,
         last_opened_at AS lastOpenedAt,
         render_mode AS renderMode
       FROM books
@@ -249,6 +259,11 @@ export class Storage {
   getLatestBookId(): string | null {
     const row = this.db.prepare("SELECT id FROM books ORDER BY last_opened_at DESC LIMIT 1").get() as { id: string } | undefined;
     return row?.id ?? null;
+  }
+
+  needsReimport(bookId: string): boolean {
+    const row = this.db.prepare("SELECT parser_version FROM books WHERE id = ?").get(bookId) as { parser_version?: number } | undefined;
+    return (row?.parser_version ?? 1) < EPUB_PARSER_VERSION;
   }
 
   saveCommandHistory(rawCommand: string, normalizedName: string): void {

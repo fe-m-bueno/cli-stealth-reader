@@ -20,17 +20,36 @@ function collectText(node: TreeNode): string {
   if (node.tagName && SKIP_TEXT_TAGS.has(node.tagName)) {
     return "";
   }
+  if (node.tagName === "br") {
+    return "\n";
+  }
   if ("value" in node) {
     return node.value ?? "";
   }
   if (!node.childNodes) {
     return "";
   }
-  return node.childNodes.map((child) => collectText(child)).join(" ");
+  return node.childNodes.map((child) => collectText(child)).join("");
 }
 
 function normalizeText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+function isDecorativeText(text: string): boolean {
+  const normalized = normalizeText(text);
+  if (!normalized) {
+    return true;
+  }
+  return /^[\p{P}\p{S}\uE000-\uF8FF]+$/u.test(normalized);
+}
+
+function isDecorativeImageAlt(text: string): boolean {
+  const normalized = normalizeText(text);
+  if (!normalized) {
+    return true;
+  }
+  return /^(image|cover|img\d*|.+\.(?:png|jpe?g|gif|svg|webp))$/i.test(normalized);
 }
 
 function pushAnchorIfPresent(blocks: CanonicalBlock[], element: TreeNode, prefix: string, counter: { value: number }): void {
@@ -44,6 +63,13 @@ function pushAnchorIfPresent(blocks: CanonicalBlock[], element: TreeNode, prefix
     text: "",
     anchorId: id
   });
+}
+
+function pushDescendantAnchors(blocks: CanonicalBlock[], node: TreeNode, prefix: string, counter: { value: number }): void {
+  for (const child of node.childNodes ?? []) {
+    pushAnchorIfPresent(blocks, child, prefix, counter);
+    pushDescendantAnchors(blocks, child, prefix, counter);
+  }
 }
 
 function visitNode(
@@ -63,11 +89,16 @@ function visitNode(
   pushAnchorIfPresent(blocks, element, prefix, counter);
 
   if (BLOCK_NAMES.has(tagName)) {
+    pushDescendantAnchors(blocks, element, prefix, counter);
     if (tagName === "img") {
+      const alt = normalizeText(getAttr(element, "alt") ?? "");
+      if (isDecorativeImageAlt(alt)) {
+        return;
+      }
       blocks.push({
         id: `${prefix}-block-${counter.value++}`,
         type: "image",
-        text: normalizeText(getAttr(element, "alt") ?? "Image"),
+        text: alt,
         imageSource: getAttr(element, "src")
       });
       return;
@@ -81,7 +112,7 @@ function visitNode(
       return;
     }
     const text = normalizeText(collectText(element));
-    if (!text) {
+    if (isDecorativeText(text)) {
       return;
     }
     const type =

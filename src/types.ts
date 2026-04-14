@@ -36,6 +36,7 @@ export interface CanonicalBook {
   author: string;
   sourcePath: string;
   importHash: string;
+  parserVersion?: number;
   diagnostics: ImportDiagnostic[];
   chapters: CanonicalChapter[];
   coverPath?: string;
@@ -61,6 +62,7 @@ export interface LibraryEntry {
   author: string;
   sourcePath: string;
   importHash: string;
+  parserVersion?: number;
   lastOpenedAt: number;
   renderMode: RenderMode;
 }
@@ -141,10 +143,21 @@ export interface AppState {
   commandSuggestionIndex: number;
   status: string;
   overlay: OverlayKind;
+  overlayCursor: number;
   discoveries: FolderDiscovery[];
   shouldQuit: boolean;
   filePickerCursor: number;
   filePickerItems: FolderDiscovery[];
   filePickerSelected: Set<number>;
   filePickerForce: boolean;
+  layoutMetrics:
+    | {
+        bookId: string;
+        renderMode: RenderMode;
+        width: number;
+        bodyHeight: number;
+        chapterLineCounts: number[];
+        chapterViewCounts: number[];
+      }
+    | null;
 }

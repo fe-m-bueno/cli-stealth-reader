@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { executeCommand } from "../src/executor.js";
 import { handleInput } from "../src/input.js";
+import { THEMES } from "../src/themes.js";
 import type { AppState, CanonicalBook, FolderDiscovery, ThemePreset } from "../src/types.js";
 
 const theme: ThemePreset = {
@@ -43,8 +47,8 @@ function makeStorage() {
   return {
     getPosition: () => null,
     saveBook: () => {},
-    listBooks: () => [],
-    getBook: () => null,
+    listBooks: () => [{ id: "book-1", title: "Alpha", author: "Anon", sourcePath: "/tmp/alpha.epub", importHash: "hash", lastOpenedAt: 0, renderMode: "plain" }],
+    getBook: () => currentBook,
     removeBook: () => {},
     getLatestBookId: () => null,
     setSetting: () => {},
@@ -73,6 +77,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     commandSuggestionIndex: 0,
     status: "",
     overlay: "file-picker",
+    overlayCursor: 0,
     discoveries,
     shouldQuit: false,
     filePickerCursor: 0,
@@ -81,6 +86,21 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     filePickerForce: false,
     ...overrides
   };
+}
+
+async function withTempEpubDir<T>(files: string[], run: (dir: string) => Promise<T>): Promise<T> {
+  const previousCwd = process.cwd();
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "stealth-reader-picker-"));
+  for (const file of files) {
+    await fs.writeFile(path.join(dir, file), "");
+  }
+  process.chdir(dir);
+  try {
+    return await run(dir);
+  } finally {
+    process.chdir(previousCwd);
+    await fs.rm(dir, { recursive: true, force: true });
+  }
 }
 
 const redraw = () => {};
@@ -156,34 +176,49 @@ test("enter on the empty startup screen opens add flow when discoveries exist", 
 });
 
 test("add with no args opens the file picker instead of importing the first item", async () => {
-  const state = makeState({ overlay: "none", status: "Ready" });
-  await executeCommand(state, "/add");
-  assert.equal(state.overlay, "file-picker");
-  assert.deepEqual(state.filePickerItems, discoveries);
-  assert.equal(state.filePickerCursor, 0);
-  assert.equal(state.filePickerSelected.size, 0);
+  await withTempEpubDir(["alpha.epub", "beta.epub"], async (dir) => {
+    const state = makeState({ overlay: "none", status: "Ready", cwd: "/stale", discoveries: [] });
+    await executeCommand(state, "/add");
+    assert.equal(state.overlay, "file-picker");
+    assert.deepEqual(state.filePickerItems.map((item) => item.path), [
+      path.join(dir, "alpha.epub"),
+      path.join(dir, "beta.epub")
+    ]);
+    assert.equal(state.filePickerCursor, 0);
+    assert.equal(state.filePickerSelected.size, 0);
+    assert.equal(state.cwd, dir);
+  });
 });
 
 test("add query with multiple matches opens a filtered picker", async () => {
-  const state = makeState({
-    overlay: "none",
-    discoveries: [
-      { path: "/tmp/alpine.epub", fileName: "alpine.epub" },
-      { path: "/tmp/alpha.epub", fileName: "alpha.epub" },
-      { path: "/tmp/beta.epub", fileName: "beta.epub" }
-    ]
+  await withTempEpubDir(["alpine.epub", "alpha.epub", "beta.epub"], async () => {
+    const state = makeState({
+      overlay: "none",
+      cwd: "/stale",
+      discoveries: []
+    });
+    await executeCommand(state, "/add alp");
+    assert.equal(state.overlay, "file-picker");
+    assert.deepEqual(state.filePickerItems.map((item) => item.fileName), ["alpha.epub", "alpine.epub"]);
   });
-  await executeCommand(state, "/add alp");
-  assert.equal(state.overlay, "file-picker");
-  assert.deepEqual(state.filePickerItems.map((item) => item.fileName), ["alpine.epub", "alpha.epub"]);
 });
 
 test("add query with no matches opens an empty picker state", async () => {
-  const state = makeState({ overlay: "none" });
-  await executeCommand(state, "/add zeta");
-  assert.equal(state.overlay, "file-picker");
-  assert.deepEqual(state.filePickerItems, []);
-  assert.match(state.status, /No EPUBs matched "zeta"\./);
+  await withTempEpubDir(["alpha.epub"], async () => {
+    const state = makeState({ overlay: "none", cwd: "/stale", discoveries: [] });
+    await executeCommand(state, "/add zeta");
+    assert.equal(state.overlay, "file-picker");
+    assert.deepEqual(state.filePickerItems, []);
+    assert.match(state.status, /No EPUBs matched "zeta"\./);
+  });
+});
+
+test("changebook with no query opens the library picker instead of auto-opening the first book", async () => {
+  const state = makeState({ overlay: "none", currentBook: null, status: "Ready" });
+  await executeCommand(state, "/changebook");
+  assert.equal(state.overlay, "books");
+  assert.equal(state.currentBook, null);
+  assert.equal(state.overlayCursor, 0);
 });
 
 test("slash opens command mode and tab autocompletes commands", async () => {
@@ -213,4 +248,41 @@ test("left and right arrows move between chapters", async () => {
 
   await handleInput("\u001b[D", state, redraw, noop, () => {}, noop);
   assert.equal(state.chapterIndex, 1);
+});
+
+test("chapters overlay arrow keys move selection and enter opens the selected chapter", async () => {
+  const state = makeState({ overlay: "none", currentBook, chapterIndex: 0, blockOffset: 5 });
+  await executeCommand(state, "/chapters");
+  assert.equal(state.overlay, "chapters");
+  assert.equal(state.overlayCursor, 0);
+
+  await handleInput("\u001b[B", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlayCursor, 1);
+  assert.equal(state.chapterIndex, 0);
+
+  await handleInput("\r", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "none");
+  assert.equal(state.chapterIndex, 1);
+  assert.equal(state.blockOffset, 0);
+});
+
+test("books overlay arrow keys move selection and enter opens the selected book", async () => {
+  const state = makeState({ overlay: "books", currentBook: null, overlayCursor: 0 });
+  await handleInput("\r", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "none");
+  assert.equal(state.currentBook?.id, "book-1");
+});
+
+test("themes overlay arrow keys move selection and enter applies the theme", async () => {
+  const state = makeState({ overlay: "none" });
+  await executeCommand(state, "/colorscheme");
+  assert.equal(state.overlay, "themes");
+  assert.equal(state.overlayCursor, Math.max(0, THEMES.findIndex((item) => item.id === state.theme.id)));
+
+  await handleInput("\u001b[B", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlayCursor, 1);
+
+  await handleInput("\r", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "none");
+  assert.equal(state.theme.id, THEMES[1].id);
 });

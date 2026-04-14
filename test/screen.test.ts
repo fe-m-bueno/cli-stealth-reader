@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fg } from "../src/color.js";
-import { renderFooter, stripAnsi, truncate } from "../src/screen.js";
+import { computeBookProgress, computeChapterProgress, renderFooter, stripAnsi, truncate } from "../src/screen.js";
 import type { AppState, ThemePreset } from "../src/types.js";
 
 test("truncate preserves visible colored text instead of cutting it at ansi boundaries", () => {
@@ -38,7 +38,7 @@ test("command footer renders a boxed prompt with command suggestions", () => {
     blockOffset: 0
   } as AppState;
 
-  const footer = renderFooter(state, 80).map(stripAnsi);
+  const footer = renderFooter(state, 80, "book ███ 50%").map(stripAnsi);
   assert.match(footer[0], /╭/);
   assert.match(footer[1], /\/mo/);
   assert.ok(footer.some((line) => line.includes("/mode")));
@@ -68,9 +68,49 @@ test("normal footer keeps progress on a separate bottom-right line", () => {
     blockOffset: 0
   } as AppState;
 
-  const footer = renderFooter(state, 80).map(stripAnsi);
+  const footer = renderFooter(state, 80, "book ███ 50%").map(stripAnsi);
   assert.equal(footer.length, 2);
   assert.match(footer[0], /Opened Book/);
   assert.match(footer[1], /book/);
   assert.ok(footer[1].startsWith(" "));
+});
+
+test("progress uses rendered viewport lines instead of raw block count", () => {
+  const longParagraph = Array.from({ length: 120 }, (_, index) => `word${index}`).join(" ");
+  const state = {
+    theme,
+    renderMode: "plain",
+    commandMode: false,
+    commandBuffer: "",
+    commandSuggestionIndex: 0,
+    progressVisibility: "both",
+    status: "Reading",
+    chapterIndex: 0,
+    blockOffset: 4,
+    layoutMetrics: null,
+    currentBook: {
+      id: "book",
+      title: "Book",
+      author: "Anon",
+      sourcePath: "/tmp/book.epub",
+      importHash: "hash",
+      diagnostics: [],
+      chapters: [
+        { id: "ch-1", index: 0, title: "One", href: "one", depth: 0, blocks: [{ id: "b1", type: "paragraph", text: longParagraph }], wordCount: 120 },
+        { id: "ch-2", index: 1, title: "Two", href: "two", depth: 0, blocks: [{ id: "b2", type: "paragraph", text: "short text" }], wordCount: 2 }
+      ]
+    }
+  } as AppState;
+
+  const chapterProgress = computeChapterProgress(state, 20, 6);
+  const bookProgressNearChapterEnd = computeBookProgress(state, 20, 6);
+
+  assert.ok(chapterProgress > 0);
+  assert.ok(chapterProgress < 1);
+
+  state.chapterIndex = 1;
+  state.blockOffset = 0;
+  const bookProgressNextChapterStart = computeBookProgress(state, 20, 6);
+
+  assert.ok(bookProgressNextChapterStart >= bookProgressNearChapterEnd);
 });

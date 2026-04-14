@@ -1,6 +1,7 @@
 import { fg, inverse } from "./color.js";
 import { listCommandSuggestions } from "./commands.js";
-import type { AppState, CanonicalBook, CanonicalChapter, CommandSuggestion, ThemePreset } from "./types.js";
+import { renderBlocks } from "./renderers.js";
+import type { AppState, CommandSuggestion, ThemePreset } from "./types.js";
 
 // Layout constants
 export const OVERLAY_MAX_WIDTH = 42;
@@ -56,16 +57,68 @@ export function clearScreen(): void {
   process.stdout.write("\x1b[2J\x1b[H");
 }
 
-// Progress computation
-export function computeBookProgress(book: CanonicalBook, chapterIndex: number, blockOffset: number): number {
-  if (book.chapters.length <= 1) {
-    return blockOffset > 0 ? clamp(blockOffset / Math.max(1, book.chapters[0].blocks.length), 0, 1) : 0;
+function ensureLayoutMetrics(state: AppState, mainWidth: number, bodyHeight: number) {
+  if (!state.currentBook) {
+    return null;
   }
-  return (chapterIndex + (blockOffset > 0 ? blockOffset / Math.max(1, book.chapters[chapterIndex].blocks.length) : 0)) / book.chapters.length;
+  const cached = state.layoutMetrics;
+  if (
+    cached
+    && cached.bookId === state.currentBook.id
+    && cached.renderMode === state.renderMode
+    && cached.width === mainWidth
+    && cached.bodyHeight === bodyHeight
+  ) {
+    return cached;
+  }
+
+  const chapterLineCounts = state.currentBook.chapters.map((chapter) => (
+    renderBlocks(chapter.blocks, state.renderMode, mainWidth, state.theme).length
+  ));
+  const chapterViewCounts = chapterLineCounts.map((lineCount) => Math.max(1, Math.max(0, lineCount - bodyHeight) + 1));
+  state.layoutMetrics = {
+    bookId: state.currentBook.id,
+    renderMode: state.renderMode,
+    width: mainWidth,
+    bodyHeight,
+    chapterLineCounts,
+    chapterViewCounts
+  };
+  return state.layoutMetrics;
 }
 
-export function computeChapterProgress(chapter: CanonicalChapter, blockOffset: number): number {
-  return clamp(blockOffset / Math.max(1, chapter.blocks.length), 0, 1);
+export function computeBookProgress(state: AppState, mainWidth: number, bodyHeight: number): number {
+  const metrics = ensureLayoutMetrics(state, mainWidth, bodyHeight);
+  if (!state.currentBook || !metrics) {
+    return 0;
+  }
+
+  const totalViews = metrics.chapterViewCounts.reduce((sum, count) => sum + count, 0);
+  if (totalViews <= 1) {
+    return 0;
+  }
+
+  const previousViews = metrics.chapterViewCounts
+    .slice(0, state.chapterIndex)
+    .reduce((sum, count) => sum + count, 0);
+  const chapterLineCount = metrics.chapterLineCounts[state.chapterIndex] ?? 0;
+  const chapterMaxOffset = Math.max(0, chapterLineCount - bodyHeight);
+  const offset = clamp(state.blockOffset, 0, chapterMaxOffset);
+  return clamp((previousViews + offset) / (totalViews - 1), 0, 1);
+}
+
+export function computeChapterProgress(state: AppState, mainWidth: number, bodyHeight: number): number {
+  const metrics = ensureLayoutMetrics(state, mainWidth, bodyHeight);
+  if (!state.currentBook || !metrics) {
+    return 0;
+  }
+
+  const chapterLineCount = metrics.chapterLineCounts[state.chapterIndex] ?? 0;
+  const chapterMaxOffset = Math.max(0, chapterLineCount - bodyHeight);
+  if (chapterMaxOffset === 0) {
+    return 0;
+  }
+  return clamp(state.blockOffset / chapterMaxOffset, 0, 1);
 }
 
 export function progressBar(value: number, width: number, theme: ThemePreset): string {
@@ -125,19 +178,18 @@ export function renderStatusBar(state: AppState, width: number): string {
   );
 }
 
-function formatProgress(state: AppState): string {
+export function formatProgress(state: AppState, mainWidth: number, bodyHeight: number): string {
   if (!state.currentBook || state.progressVisibility === "hidden") {
     return "";
   }
 
   const parts: string[] = [];
   if (state.progressVisibility === "book" || state.progressVisibility === "both") {
-    const bookProg = computeBookProgress(state.currentBook, state.chapterIndex, state.blockOffset);
+    const bookProg = computeBookProgress(state, mainWidth, bodyHeight);
     parts.push(`book ${progressBar(bookProg, PROGRESS_BAR_WIDTH, state.theme)} ${Math.round(bookProg * 100)}%`);
   }
   if (state.progressVisibility === "chapter" || state.progressVisibility === "both") {
-    const chapter = state.currentBook.chapters[state.chapterIndex];
-    const chapterProg = computeChapterProgress(chapter, state.blockOffset);
+    const chapterProg = computeChapterProgress(state, mainWidth, bodyHeight);
     parts.push(`ch ${progressBar(chapterProg, PROGRESS_BAR_WIDTH, state.theme)} ${Math.round(chapterProg * 100)}%`);
   }
   return parts.join(` ${fg(state.theme.border, "·")} `);
@@ -181,13 +233,12 @@ function renderCommandBox(state: AppState, width: number): string[] {
 }
 
 // Footer rendering
-export function renderFooter(state: AppState, width: number): string[] {
+export function renderFooter(state: AppState, width: number, progress = ""): string[] {
   const theme = state.theme;
   const border = (s: string) => fg(theme.border, s);
   const prefix = "╰─ ";
   const suffix = " ─╯";
   const minFill = 3;
-  const progress = formatProgress(state);
 
   if (state.commandMode) {
     const lines = renderCommandBox(state, width);
@@ -214,7 +265,9 @@ export function renderFooter(state: AppState, width: number): string[] {
 }
 
 export function footerHeight(state: AppState, width: number): number {
-  return renderFooter(state, width).length;
+  const baseHeight = state.commandMode ? renderCommandBox(state, width).length + 1 : 1;
+  const hasProgress = Boolean(state.currentBook) && state.progressVisibility !== "hidden";
+  return baseHeight + (hasProgress ? 1 : 0);
 }
 
 // Body rendering
