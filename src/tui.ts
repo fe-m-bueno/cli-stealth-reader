@@ -7,15 +7,15 @@ import { KEYBOARD_SHORTCUTS } from "./help.js";
 import { renderBlocks } from "./renderers.js";
 import {
   clamp,
-  MIN_MAIN_WIDTH,
-  OVERLAY_MAX_WIDTH,
-  clearScreen,
+  computeChapterMaxOffset,
   computeBookProgress,
   computeChapterProgress,
-  footerHeight,
   formatProgress,
+  getViewportLayout,
+  renderFrame,
   renderBody,
   renderFooter,
+  renderScrollbar,
   renderStatusBar,
   truncate
 } from "./screen.js";
@@ -99,22 +99,32 @@ function renderOverlay(state: AppState, width: number, height: number): string[]
 function draw(state: AppState): void {
   const width = process.stdout.columns || 120;
   const height = process.stdout.rows || 40;
-  clearScreen();
 
-  const reservedFooterHeight = footerHeight(state, width);
-  const bodyHeight = Math.max(1, height - reservedFooterHeight - 2);
-  const overlayWidth = state.overlay === "none" ? 0 : Math.min(OVERLAY_MAX_WIDTH, Math.floor(width * 0.32));
-  const mainWidth = Math.max(MIN_MAIN_WIDTH, width - overlayWidth - (overlayWidth ? 3 : 0));
-  const allMainLines = currentLines(state, mainWidth - 2, bodyHeight);
-  const maxOffset = Math.max(0, allMainLines.length - bodyHeight);
+  const layout = getViewportLayout(state, width, height);
+  const allMainLines = currentLines(state, layout.contentWidth, layout.bodyHeight);
+  const maxOffset = computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
   state.blockOffset = clamp(state.blockOffset, 0, maxOffset);
-  const mainLines = allMainLines.slice(state.blockOffset, state.blockOffset + bodyHeight);
-  const overlayLines = overlayWidth ? renderOverlay(state, overlayWidth - 2, bodyHeight) : [];
-  const footerLines = renderFooter(state, width, formatProgress(state, mainWidth - 2, bodyHeight));
-
-  process.stdout.write(renderStatusBar(state, width) + "\n");
-  process.stdout.write(renderBody(mainLines, overlayLines, bodyHeight, mainWidth, overlayWidth, state.theme));
-  process.stdout.write(footerLines.join("\n") + "\n");
+  const mainLines = allMainLines.slice(state.blockOffset, state.blockOffset + layout.bodyHeight);
+  const overlayLines = layout.overlayWidth ? renderOverlay(state, layout.overlayWidth - 2, layout.bodyHeight) : [];
+  const scrollbar = state.currentBook
+    ? renderScrollbar(allMainLines.length, layout.bodyHeight, state.blockOffset, state.theme)
+    : [];
+  const footerLines = renderFooter(state, width, formatProgress(state, layout.contentWidth, layout.bodyHeight));
+  const body = renderBody(
+    mainLines,
+    overlayLines,
+    layout.bodyHeight,
+    layout.mainWidth,
+    layout.overlayWidth,
+    state.theme,
+    scrollbar
+  );
+  const frameLines = [
+    renderStatusBar(state, width),
+    ...body.slice(0, -1).split("\n"),
+    ...footerLines
+  ];
+  process.stdout.write(renderFrame(frameLines, width, height));
 }
 
 function syncPosition(state: AppState): void {
@@ -123,15 +133,12 @@ function syncPosition(state: AppState): void {
   }
   const width = process.stdout.columns || 120;
   const height = process.stdout.rows || 40;
-  const reservedFooterHeight = footerHeight(state, width);
-  const bodyHeight = Math.max(1, height - reservedFooterHeight - 2);
-  const overlayWidth = state.overlay === "none" ? 0 : Math.min(OVERLAY_MAX_WIDTH, Math.floor(width * 0.32));
-  const mainWidth = Math.max(MIN_MAIN_WIDTH, width - overlayWidth - (overlayWidth ? 3 : 0));
+  const layout = getViewportLayout(state, width, height);
   state.storage.savePosition({
     bookId: state.currentBook.id,
     chapterIndex: state.chapterIndex,
-    chapterProgress: computeChapterProgress(state, mainWidth - 2, bodyHeight),
-    bookProgress: computeBookProgress(state, mainWidth - 2, bodyHeight),
+    chapterProgress: computeChapterProgress(state, layout.contentWidth, layout.bodyHeight),
+    bookProgress: computeBookProgress(state, layout.contentWidth, layout.bodyHeight),
     blockOffset: state.blockOffset
   });
 }
@@ -175,7 +182,7 @@ export async function runTui(): Promise<void> {
   process.stdin.setRawMode?.(true);
   process.stdin.resume();
   process.stdin.setEncoding("utf8");
-  process.stdout.write("\x1b[?1000h\x1b[?1006h");
+  process.stdout.write("\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1006h");
 
   const redraw = () => draw(state);
   redraw();

@@ -43,6 +43,25 @@ const currentBook: CanonicalBook = {
   ]
 };
 
+const longChapterBook: CanonicalBook = {
+  ...currentBook,
+  chapters: [
+    {
+      id: "ch-long",
+      index: 0,
+      title: "Long",
+      href: "long",
+      depth: 0,
+      blocks: [{
+        id: "b-long",
+        type: "paragraph",
+        text: Array.from({ length: 1200 }, (_, index) => `word${index}`).join(" ")
+      }],
+      wordCount: 1200
+    }
+  ]
+};
+
 function makeStorage() {
   return {
     getPosition: () => null,
@@ -237,6 +256,15 @@ test("page up and page down scroll the current chapter", async () => {
   assert.equal(state.blockOffset, 0);
 
   await handleInput("\u001b[6~", state, redraw, noop, () => {}, noop);
+  assert.ok(state.blockOffset > 0);
+});
+
+test("home and end jump to the chapter boundaries", async () => {
+  const state = makeState({ overlay: "none", currentBook: longChapterBook, blockOffset: 12 });
+  await handleInput("\u001b[H", state, redraw, noop, () => {}, noop);
+  assert.equal(state.blockOffset, 0);
+
+  await handleInput("\u001b[F", state, redraw, noop, () => {}, noop);
   assert.ok(state.blockOffset > 0);
 });
 

@@ -1,5 +1,5 @@
 import { applyCommandAutocomplete, listCommandSuggestions } from "./commands.js";
-import { clearScreen, clamp, MIN_PAGE_LINES } from "./screen.js";
+import { clamp, computeChapterMaxOffset, getViewportLayout, MIN_PAGE_LINES } from "./screen.js";
 import { THEMES } from "./themes.js";
 import type { AppState } from "./types.js";
 
@@ -19,6 +19,14 @@ function isMouseWheelUp(chunk: string): boolean {
   return /\x1b\[<64;\d+;\d+[mM]/.test(chunk);
 }
 
+function isHomeKey(chunk: string): boolean {
+  return chunk === "\u001b[H" || chunk === "\u001b[1~" || chunk === "\u001bOH";
+}
+
+function isEndKey(chunk: string): boolean {
+  return chunk === "\u001b[F" || chunk === "\u001b[4~" || chunk === "\u001bOF";
+}
+
 function interactiveOverlayLength(state: AppState): number {
   switch (state.overlay) {
     case "chapters":
@@ -30,6 +38,12 @@ function interactiveOverlayLength(state: AppState): number {
     default:
       return 0;
   }
+}
+
+function exitTui(): never {
+  process.stdin.setRawMode?.(false);
+  process.stdout.write("\x1b[?1000l\x1b[?1006l\x1b[?25h\x1b[?1049l");
+  process.exit(0);
 }
 
 export async function handleInput(
@@ -44,10 +58,7 @@ export async function handleInput(
     state.shouldQuit = true;
   }
   if (state.shouldQuit) {
-    process.stdin.setRawMode?.(false);
-    process.stdout.write("\x1b[?1000l\x1b[?1006l");
-    clearScreen();
-    process.exit(0);
+    exitTui();
   }
 
   if (state.commandMode) {
@@ -191,7 +202,8 @@ export async function handleInput(
   }
 
   // Navigation
-  const pageSize = Math.max(MIN_PAGE_LINES, (process.stdout.rows || 40) - 8);
+  const layout = getViewportLayout(state, process.stdout.columns || 120, process.stdout.rows || 40);
+  const pageSize = Math.max(MIN_PAGE_LINES, layout.bodyHeight);
   if (chunk === "j" || chunk === "\u001b[B" || isMouseWheelDown(chunk)) {
     state.blockOffset += 1;
   } else if (chunk === "k" || chunk === "\u001b[A" || isMouseWheelUp(chunk)) {
@@ -204,6 +216,10 @@ export async function handleInput(
     state.blockOffset = 0;
   } else if (chunk === "G") {
     state.blockOffset += pageSize * 100;
+  } else if (isHomeKey(chunk)) {
+    state.blockOffset = 0;
+  } else if (isEndKey(chunk)) {
+    state.blockOffset = computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
   } else if (chunk === "\u001b[C") {
     moveChapter(state, 1);
   } else if (chunk === "\u001b[D") {
@@ -212,6 +228,7 @@ export async function handleInput(
     state.overlay = "keys";
   } else if (chunk === "q") {
     state.shouldQuit = true;
+    exitTui();
   }
   syncPos(state);
   redraw();

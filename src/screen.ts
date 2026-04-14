@@ -53,8 +53,37 @@ function padAnsi(text: string, width: number): string {
   return text + " ".repeat(padding);
 }
 
+export function padFrameLine(text: string, width: number): string {
+  return padAnsi(truncate(text, width), width);
+}
+
 export function clearScreen(): void {
-  process.stdout.write("\x1b[2J\x1b[H");
+  process.stdout.write(screenResetSequence(true));
+}
+
+export function screenResetSequence(fullClear = false): string {
+  return fullClear ? "\x1b[2J\x1b[H" : "\x1b[H";
+}
+
+export function resetViewport(): void {
+  process.stdout.write(screenResetSequence(false));
+}
+
+export function getViewportLayout(state: AppState, width: number, height: number) {
+  const reservedFooterHeight = footerHeight(state, width);
+  const bodyHeight = Math.max(1, height - reservedFooterHeight - 2);
+  const overlayWidth = state.overlay === "none" ? 0 : Math.min(OVERLAY_MAX_WIDTH, Math.floor(width * 0.32));
+  const mainWidth = Math.max(MIN_MAIN_WIDTH, width - overlayWidth - (overlayWidth ? 3 : 0));
+  const scrollbarWidth = state.currentBook ? 1 : 0;
+  const contentWidth = Math.max(1, mainWidth - 2 - scrollbarWidth);
+  return {
+    reservedFooterHeight,
+    bodyHeight,
+    overlayWidth,
+    mainWidth,
+    scrollbarWidth,
+    contentWidth
+  };
 }
 
 function ensureLayoutMetrics(state: AppState, mainWidth: number, bodyHeight: number) {
@@ -87,6 +116,15 @@ function ensureLayoutMetrics(state: AppState, mainWidth: number, bodyHeight: num
   return state.layoutMetrics;
 }
 
+export function computeChapterMaxOffset(state: AppState, mainWidth: number, bodyHeight: number): number {
+  const metrics = ensureLayoutMetrics(state, mainWidth, bodyHeight);
+  if (!state.currentBook || !metrics) {
+    return 0;
+  }
+  const chapterLineCount = metrics.chapterLineCounts[state.chapterIndex] ?? 0;
+  return Math.max(0, chapterLineCount - bodyHeight);
+}
+
 export function computeBookProgress(state: AppState, mainWidth: number, bodyHeight: number): number {
   const metrics = ensureLayoutMetrics(state, mainWidth, bodyHeight);
   if (!state.currentBook || !metrics) {
@@ -101,20 +139,13 @@ export function computeBookProgress(state: AppState, mainWidth: number, bodyHeig
   const previousViews = metrics.chapterViewCounts
     .slice(0, state.chapterIndex)
     .reduce((sum, count) => sum + count, 0);
-  const chapterLineCount = metrics.chapterLineCounts[state.chapterIndex] ?? 0;
-  const chapterMaxOffset = Math.max(0, chapterLineCount - bodyHeight);
+  const chapterMaxOffset = computeChapterMaxOffset(state, mainWidth, bodyHeight);
   const offset = clamp(state.blockOffset, 0, chapterMaxOffset);
   return clamp((previousViews + offset) / (totalViews - 1), 0, 1);
 }
 
 export function computeChapterProgress(state: AppState, mainWidth: number, bodyHeight: number): number {
-  const metrics = ensureLayoutMetrics(state, mainWidth, bodyHeight);
-  if (!state.currentBook || !metrics) {
-    return 0;
-  }
-
-  const chapterLineCount = metrics.chapterLineCounts[state.chapterIndex] ?? 0;
-  const chapterMaxOffset = Math.max(0, chapterLineCount - bodyHeight);
+  const chapterMaxOffset = computeChapterMaxOffset(state, mainWidth, bodyHeight);
   if (chapterMaxOffset === 0) {
     return 0;
   }
@@ -270,6 +301,33 @@ export function footerHeight(state: AppState, width: number): number {
   return baseHeight + (hasProgress ? 1 : 0);
 }
 
+export function renderScrollbar(
+  totalLines: number,
+  bodyHeight: number,
+  blockOffset: number,
+  theme: ThemePreset
+): string[] {
+  if (bodyHeight <= 0) {
+    return [];
+  }
+
+  const thumb = fg(theme.accentMuted, "█");
+  if (totalLines <= bodyHeight) {
+    return Array.from({ length: bodyHeight }, () => thumb);
+  }
+
+  const maxOffset = Math.max(0, totalLines - bodyHeight);
+  const thumbHeight = clamp(Math.round((bodyHeight * bodyHeight) / totalLines), 1, bodyHeight);
+  const thumbOffset = maxOffset === 0
+    ? 0
+    : Math.round((clamp(blockOffset, 0, maxOffset) / maxOffset) * (bodyHeight - thumbHeight));
+  const track = fg(theme.border, "│");
+
+  return Array.from({ length: bodyHeight }, (_, row) => (
+    row >= thumbOffset && row < thumbOffset + thumbHeight ? thumb : track
+  ));
+}
+
 // Body rendering
 export function renderBody(
   mainLines: string[],
@@ -277,17 +335,25 @@ export function renderBody(
   bodyHeight: number,
   mainWidth: number,
   overlayWidth: number,
-  theme: ThemePreset
+  theme: ThemePreset,
+  scrollbar: string[] = []
 ): string {
+  const textWidth = Math.max(1, mainWidth - (scrollbar.length > 0 ? 1 : 0));
   let output = "";
   for (let row = 0; row < bodyHeight; row += 1) {
-    const left = padAnsi(truncate(mainLines[row] ?? "", mainWidth - 1), mainWidth);
+    const left = padAnsi(truncate(mainLines[row] ?? "", textWidth - 1), textWidth);
+    const scrollbarCell = scrollbar[row] ?? "";
     if (overlayWidth) {
       const right = padAnsi(truncate(overlayLines[row] ?? "", overlayWidth - 1), overlayWidth);
-      output += `${left} ${fg(theme.border, "│")} ${right}\n`;
+      output += `${left}${scrollbarCell} ${fg(theme.border, "│")} ${right}\n`;
     } else {
-      output += `${left}\n`;
+      output += `${left}${scrollbarCell}\n`;
     }
   }
   return output;
+}
+
+export function renderFrame(lines: string[], width: number, height: number): string {
+  const frameLines = Array.from({ length: height }, (_, index) => padFrameLine(lines[index] ?? "", width));
+  return `${screenResetSequence(false)}${frameLines.join("\n")}`;
 }

@@ -1,13 +1,45 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fg } from "../src/color.js";
-import { computeBookProgress, computeChapterProgress, renderFooter, stripAnsi, truncate } from "../src/screen.js";
+import {
+  computeBookProgress,
+  computeChapterProgress,
+  renderFooter,
+  renderFrame,
+  renderScrollbar,
+  screenResetSequence,
+  stripAnsi,
+  truncate
+} from "../src/screen.js";
 import type { AppState, ThemePreset } from "../src/types.js";
 
 test("truncate preserves visible colored text instead of cutting it at ansi boundaries", () => {
   const colored = `${fg("#88ccff", "›")} ${fg("#8b949e", "[ ]")} ${fg("#88ccff", "alpha.epub")}`;
   const truncated = truncate(colored, 18);
   assert.match(truncated, /alpha/);
+});
+
+test("incremental redraws avoid full screen clears", () => {
+  assert.equal(screenResetSequence(false), "\x1b[H");
+  assert.equal(screenResetSequence(true), "\x1b[2J\x1b[H");
+});
+
+test("full frame rendering pads lines without erase sequences", () => {
+  const frame = renderFrame(["abc", "x"], 4, 3);
+  assert.equal(frame, "\x1b[Habc \nx   \n    ");
+});
+
+test("scrollbar uses a full-height thumb when the chapter fits", () => {
+  const scrollbar = renderScrollbar(5, 5, 0, theme).map(stripAnsi);
+  assert.deepEqual(scrollbar, ["█", "█", "█", "█", "█"]);
+});
+
+test("scrollbar thumb moves to reflect chapter position", () => {
+  const top = renderScrollbar(20, 5, 0, theme).map(stripAnsi);
+  const bottom = renderScrollbar(20, 5, 15, theme).map(stripAnsi);
+
+  assert.deepEqual(top, ["█", "│", "│", "│", "│"]);
+  assert.deepEqual(bottom, ["│", "│", "│", "│", "█"]);
 });
 
 const theme: ThemePreset = {

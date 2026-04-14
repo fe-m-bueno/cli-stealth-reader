@@ -3,6 +3,8 @@ export const KEYBOARD_SHORTCUTS: Array<{ category: string; key: string; descript
   { category: "navigation", key: "k / ↑", description: "Scroll up" },
   { category: "navigation", key: "space / PgDn", description: "Page down / toggle picker selection" },
   { category: "navigation", key: "b / PgUp", description: "Page up" },
+  { category: "navigation", key: "Home", description: "Jump to chapter start" },
+  { category: "navigation", key: "End", description: "Jump to chapter end" },
   { category: "navigation", key: "← / →", description: "Previous / next chapter" },
   { category: "navigation", key: "wheel", description: "Scroll the page" },
   { category: "navigation", key: "g", description: "Jump to top" },

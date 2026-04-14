@@ -6,7 +6,7 @@ import { ensureArray, parseXml } from "./xml.js";
 import { extractBlocksFromHtml, findFirstChapterAnchor, sliceBlocksByAnchors, parseNavToc } from "./html.js";
 import type { CanonicalBook, CanonicalChapter, CanonicalBlock, ImportDiagnostic } from "../types.js";
 
-export const EPUB_PARSER_VERSION = 2;
+export const EPUB_PARSER_VERSION = 3;
 
 interface ContainerXml {
   container: {
