@@ -14,6 +14,9 @@ export const KEYBOARD_SHORTCUTS: Array<{ category: string; key: string; descript
   { category: "commands", key: "Enter", description: "Run command / confirm picker" },
   { category: "commands", key: "Esc", description: "Close overlay or blur command input" },
   { category: "commands", key: "?", description: "Open keyboard shortcuts" },
+  { category: "view", key: "m", description: "Toggle render mode (plain / code)" },
+  { category: "view", key: "c", description: "Open colorscheme picker" },
+  { category: "view", key: "p", description: "Cycle progress bar visibility" },
   { category: "view", key: "Tab", description: "Autocomplete or cycle command suggestions" },
   { category: "view", key: "q", description: "Quit the reader" }
 ];

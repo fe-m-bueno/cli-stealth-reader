@@ -143,6 +143,9 @@ livro', pensou Alice, 'sem figuras ou conversas?'
 
 | Tecla | Ação |
 |-------|------|
+| `m` | Alternar modo de renderização (plain ↔ code) |
+| `c` | Abrir picker de colorscheme |
+| `p` | Avançar visibilidade da barra de progresso |
 | `?` | Ver atalhos de teclado |
 | `q` | Sair do leitor |
 

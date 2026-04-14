@@ -439,6 +439,12 @@ export async function handleInput(
     cancelChapterTransition();
     state.overlay = "chapters";
     state.overlayCursor = state.chapterIndex;
+  } else if (chunk === "m") {
+    await executeCmd(`/mode ${state.renderMode === "code" ? "plain" : "code"}`);
+  } else if (chunk === "c") {
+    await executeCmd("/colorscheme");
+  } else if (chunk === "p") {
+    await executeCmd("/toggleprogress");
   } else if (chunk === "?") {
     state.overlay = "keys";
   } else if (chunk === "q") {

@@ -481,3 +481,33 @@ test("books overlay restores saved chapter and scroll offset when opening a book
   assert.equal(state.chapterIndex, 3);
   assert.equal(state.blockOffset, 17);
 });
+
+test("m key toggles render mode from plain to code", async () => {
+  const state = makeState({ overlay: "none", renderMode: "plain" });
+  await handleInput("m", state, redraw, async (cmd) => { await executeCommand(state, cmd); }, () => {}, noop);
+  assert.equal(state.renderMode, "code");
+});
+
+test("m key toggles render mode from code to plain", async () => {
+  const state = makeState({ overlay: "none", renderMode: "code" });
+  await handleInput("m", state, redraw, async (cmd) => { await executeCommand(state, cmd); }, () => {}, noop);
+  assert.equal(state.renderMode, "plain");
+});
+
+test("c key opens the colorscheme picker", async () => {
+  const state = makeState({ overlay: "none" });
+  await handleInput("c", state, redraw, async (cmd) => { await executeCommand(state, cmd); }, () => {}, noop);
+  assert.equal(state.overlay, "themes");
+});
+
+test("p key cycles progress visibility to the next value", async () => {
+  const state = makeState({ overlay: "none", progressVisibility: "book" });
+  await handleInput("p", state, redraw, async (cmd) => { await executeCommand(state, cmd); }, () => {}, noop);
+  assert.equal(state.progressVisibility, "both");
+});
+
+test("p key wraps progress visibility back to book after hidden", async () => {
+  const state = makeState({ overlay: "none", progressVisibility: "hidden" });
+  await handleInput("p", state, redraw, async (cmd) => { await executeCommand(state, cmd); }, () => {}, noop);
+  assert.equal(state.progressVisibility, "book");
+});
