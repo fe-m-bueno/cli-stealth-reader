@@ -150,6 +150,13 @@ export interface AppState {
   filePickerItems: FolderDiscovery[];
   filePickerSelected: Set<number>;
   filePickerForce: boolean;
+  chapterTransition:
+    | {
+        message: string;
+        targetChapterIndex: number;
+        stage: number;
+      }
+    | null;
   mouseDrag:
     | {
         kind: "scrollbar";

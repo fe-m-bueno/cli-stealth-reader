@@ -27,3 +27,8 @@ export function bold(text: string): string {
 export function inverse(text: string): string {
   return wrap("7", text);
 }
+
+export function bg(hex: string, text: string): string {
+  const { r, g, b } = hexToRgb(hex);
+  return wrap(`48;2;${r};${g};${b}`, text);
+}

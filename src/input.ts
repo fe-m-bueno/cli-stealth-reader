@@ -18,6 +18,60 @@ function moveChapter(state: AppState, delta: number): void {
   state.blockOffset = 0;
 }
 
+function moveToNextChapterFromScroll(state: AppState, redraw: () => void, syncPos: (state: AppState) => void): boolean {
+  if (!state.currentBook) {
+    return false;
+  }
+
+  const nextChapter = state.currentBook.chapters[state.chapterIndex + 1];
+  if (!nextChapter) {
+    state.status = "End of book";
+    return false;
+  }
+
+  showChapterTransition(state, redraw, syncPos, `Chapter ${nextChapter.index + 1}: ${nextChapter.title}`, nextChapter.index);
+  return true;
+}
+
+function showChapterTransition(
+  state: AppState,
+  redraw: () => void,
+  syncPos: (state: AppState) => void,
+  message: string,
+  targetChapterIndex: number
+): void {
+  const previousStage = state.chapterTransition?.targetChapterIndex === targetChapterIndex
+    ? state.chapterTransition.stage
+    : 0;
+  const stage = Math.min(3, previousStage + 1);
+  if (stage === 3) {
+    state.chapterIndex = targetChapterIndex;
+    state.blockOffset = 0;
+    state.chapterTransition = null;
+    state.status = `Moved to chapter ${state.chapterIndex + 1}`;
+    syncPos(state);
+    redraw();
+    return;
+  }
+
+  state.chapterTransition = {
+    message,
+    targetChapterIndex,
+    stage
+  };
+  state.status = stage === 1
+    ? `Scroll again for ${message}`
+    : `One more scroll to confirm ${message}`;
+  redraw();
+}
+
+function clearChapterTransition(state: AppState): void {
+  state.chapterTransition = null;
+  if (state.status.startsWith("Scroll again for") || state.status.startsWith("One more scroll to confirm")) {
+    state.status = "Ready";
+  }
+}
+
 function isMouseWheelDown(chunk: string): boolean {
   return /\x1b\[<65;\d+;\d+[mM]/.test(chunk);
 }
@@ -319,31 +373,81 @@ export async function handleInput(
   // Navigation
   const layout = getViewportLayout(state, process.stdout.columns || 120, process.stdout.rows || 40);
   const pageSize = Math.max(MIN_PAGE_LINES, layout.bodyHeight);
-  if (chunk === "j" || chunk === "\u001b[B" || isMouseWheelDown(chunk)) {
+  const chapterMaxOffset = computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
+  const atChapterEnd = state.currentBook && state.blockOffset >= chapterMaxOffset;
+  const cancelChapterTransition = () => {
+    if (state.chapterTransition) {
+      clearChapterTransition(state);
+    }
+  };
+  const isForwardScrollIntent =
+    chunk === "j"
+    || chunk === "\u001b[B"
+    || isMouseWheelDown(chunk);
+
+  if (state.currentBook && atChapterEnd && isForwardScrollIntent) {
+    const nextChapter = state.currentBook.chapters[state.chapterIndex + 1];
+    if (!nextChapter) {
+      state.status = "End of book";
+      redraw();
+      return;
+    }
+
+    if (!state.chapterTransition || state.chapterTransition.targetChapterIndex !== nextChapter.index) {
+      showChapterTransition(state, redraw, syncPos, `Chapter ${nextChapter.index + 1}: ${nextChapter.title}`, nextChapter.index);
+      return;
+    }
+
+    showChapterTransition(state, redraw, syncPos, state.chapterTransition.message, state.chapterTransition.targetChapterIndex);
+    return;
+  } else if (chunk === "j" || chunk === "\u001b[B" || isMouseWheelDown(chunk)) {
+    cancelChapterTransition();
     state.blockOffset += 1;
   } else if (chunk === "k" || chunk === "\u001b[A" || isMouseWheelUp(chunk)) {
+    cancelChapterTransition();
     state.blockOffset = clamp(state.blockOffset - 1, 0, Infinity);
   } else if (chunk === " " || chunk === "\u001b[6~") {
+    cancelChapterTransition();
     state.blockOffset += pageSize;
   } else if (chunk === "b" || chunk === "\u001b[5~") {
+    cancelChapterTransition();
     state.blockOffset = clamp(state.blockOffset - pageSize, 0, Infinity);
   } else if (chunk === "g") {
+    cancelChapterTransition();
     state.blockOffset = 0;
   } else if (chunk === "G") {
+    cancelChapterTransition();
     state.blockOffset += pageSize * 100;
   } else if (isHomeKey(chunk)) {
+    cancelChapterTransition();
     state.blockOffset = 0;
   } else if (isEndKey(chunk)) {
+    cancelChapterTransition();
     state.blockOffset = computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
   } else if (chunk === "\u001b[C") {
+    cancelChapterTransition();
     moveChapter(state, 1);
   } else if (chunk === "\u001b[D") {
+    cancelChapterTransition();
     moveChapter(state, -1);
   } else if (chunk === "?") {
     state.overlay = "keys";
   } else if (chunk === "q") {
     state.shouldQuit = true;
     exitTui();
+  }
+  if (state.chapterTransition && state.currentBook && atChapterEnd && isForwardScrollIntent) {
+    const nextChapter = state.currentBook.chapters[state.chapterTransition.targetChapterIndex];
+    if (nextChapter && state.chapterTransition.stage < 3 && state.chapterTransition.targetChapterIndex === state.chapterIndex + 1) {
+      showChapterTransition(
+        state,
+        redraw,
+        syncPos,
+        `Chapter ${nextChapter.index + 1}: ${nextChapter.title}`,
+        nextChapter.index
+      );
+      return;
+    }
   }
   syncPos(state);
   redraw();

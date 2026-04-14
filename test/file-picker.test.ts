@@ -76,6 +76,15 @@ const longChapterBook: CanonicalBook = {
   ]
 };
 
+const multiChapterScrollBook: CanonicalBook = {
+  ...currentBook,
+  chapters: [
+    longChapterBook.chapters[0]!,
+    currentBook.chapters[1]!,
+    currentBook.chapters[2]!
+  ]
+};
+
 function makeStorage() {
   return {
     getPosition: () => null,
@@ -117,6 +126,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     filePickerItems: discoveries,
     filePickerSelected: new Set(),
     filePickerForce: false,
+    chapterTransition: null,
     mouseDrag: null,
     layoutMetrics: null,
     ...overrides
@@ -313,6 +323,67 @@ test("left and right arrows move between chapters", async () => {
 
   await handleInput("\u001b[D", state, redraw, noop, () => {}, noop);
   assert.equal(state.chapterIndex, 1);
+});
+
+test("extra downward wheel at chapter end moves to the next chapter and shows a banner", async () => {
+  const state = makeState({ overlay: "none", currentBook: multiChapterScrollBook });
+  const layout = getViewportLayout(state, 120, 40);
+  state.blockOffset = computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
+
+  await handleInput("\u001b[<65;10;10M", state, redraw, noop, () => {}, noop);
+  assert.equal(state.chapterIndex, 0);
+  assert.match(state.chapterTransition?.message ?? "", /Chapter 2: Two/);
+  assert.equal(state.chapterTransition?.stage, 1);
+
+  await handleInput("\u001b[<65;10;10M", state, redraw, noop, () => {}, noop);
+  assert.equal(state.chapterIndex, 0);
+  assert.equal(state.chapterTransition?.stage, 2);
+
+  await handleInput("\u001b[<65;10;10M", state, redraw, noop, () => {}, noop);
+  assert.equal(state.chapterIndex, 1);
+  assert.equal(state.blockOffset, 0);
+  assert.equal(state.chapterTransition, null);
+});
+
+test("extra down-arrow input at chapter end also moves to the next chapter", async () => {
+  const state = makeState({ overlay: "none", currentBook: multiChapterScrollBook });
+  const layout = getViewportLayout(state, 120, 40);
+  state.blockOffset = computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
+
+  await handleInput("\u001b[B", state, redraw, noop, () => {}, noop);
+  assert.equal(state.chapterIndex, 0);
+  assert.equal(state.chapterTransition?.stage, 1);
+
+  await handleInput("\u001b[B", state, redraw, noop, () => {}, noop);
+  assert.equal(state.chapterIndex, 0);
+  assert.equal(state.chapterTransition?.stage, 2);
+
+  await handleInput("\u001b[B", state, redraw, noop, () => {}, noop);
+  assert.equal(state.chapterIndex, 1);
+});
+
+test("scroll up cancels a pending chapter transition", async () => {
+  const state = makeState({ overlay: "none", currentBook: multiChapterScrollBook });
+  const layout = getViewportLayout(state, 120, 40);
+  state.blockOffset = computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
+
+  await handleInput("\u001b[<65;10;10M", state, redraw, noop, () => {}, noop);
+  assert.equal(state.chapterTransition?.stage, 1);
+
+  await handleInput("\u001b[<64;10;10M", state, redraw, noop, () => {}, noop);
+  assert.equal(state.chapterTransition, null);
+});
+
+test("page down cancels a pending chapter transition", async () => {
+  const state = makeState({ overlay: "none", currentBook: multiChapterScrollBook });
+  const layout = getViewportLayout(state, 120, 40);
+  state.blockOffset = computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
+
+  await handleInput("\u001b[<65;10;10M", state, redraw, noop, () => {}, noop);
+  assert.equal(state.chapterTransition?.stage, 1);
+
+  await handleInput("\u001b[6~", state, redraw, noop, () => {}, noop);
+  assert.equal(state.chapterTransition, null);
 });
 
 test("chapters overlay arrow keys move selection and enter opens the selected chapter", async () => {

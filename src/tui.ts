@@ -1,7 +1,7 @@
 import { commandHelp } from "./commands.js";
 import { executeCommand, importAndOpen, openBook } from "./executor.js";
 import { handleInput } from "./input.js";
-import { bold, fg } from "./color.js";
+import { bg, bold, fg } from "./color.js";
 import { discoverEpubs } from "./discovery.js";
 import { KEYBOARD_SHORTCUTS } from "./help.js";
 import { renderBlocks } from "./renderers.js";
@@ -47,6 +47,20 @@ function currentLines(state: AppState, width: number, height: number): string[] 
 
   const chapter = state.currentBook.chapters[state.chapterIndex];
   return renderBlocks(chapter.blocks, state.renderMode, width, state.theme);
+}
+
+function chapterTransitionLine(state: AppState, width: number): string | null {
+  if (!state.chapterTransition || !state.currentBook) {
+    return null;
+  }
+
+  if (state.chapterTransition.targetChapterIndex < 0 || state.chapterTransition.targetChapterIndex >= state.currentBook.chapters.length) {
+    return null;
+  }
+
+  const label = state.status || state.chapterTransition.message;
+  const padded = `  ${label}  `;
+  return bg(state.theme.accent, fg(state.theme.background, padded.padEnd(width, " ")));
 }
 
 function renderOverlay(state: AppState, width: number, height: number): string[] {
@@ -110,6 +124,16 @@ function draw(state: AppState): void {
   const maxOffset = computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
   state.blockOffset = clamp(state.blockOffset, 0, maxOffset);
   const mainLines = allMainLines.slice(state.blockOffset, state.blockOffset + layout.bodyHeight);
+  const transitionLine = chapterTransitionLine(state, layout.contentWidth);
+  if (transitionLine) {
+    const transitionRow = Math.min(mainLines.length, layout.bodyHeight - 1);
+    const nextLines = [...mainLines];
+    while (nextLines.length < transitionRow) {
+      nextLines.push("");
+    }
+    nextLines.splice(transitionRow, 0, transitionLine);
+    mainLines.splice(0, mainLines.length, ...nextLines.slice(0, layout.bodyHeight));
+  }
   const overlayLines = layout.overlayWidth ? renderOverlay(state, layout.overlayWidth - 2, layout.bodyHeight) : [];
   const scrollbar = state.currentBook
     ? renderScrollbar(allMainLines.length, layout.bodyHeight, state.blockOffset, state.theme)
@@ -173,6 +197,7 @@ export async function runTui(): Promise<void> {
     filePickerItems: [],
     filePickerSelected: new Set(),
     filePickerForce: false,
+    chapterTransition: null,
     mouseDrag: null,
     layoutMetrics: null,
   };
