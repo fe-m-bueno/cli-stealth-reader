@@ -4,9 +4,12 @@ import { fg } from "../src/color.js";
 import {
   computeBookProgress,
   computeChapterProgress,
+  computeWindowStart,
+  getScrollbarMetrics,
   renderFooter,
   renderFrame,
   renderScrollbar,
+  scrollbarOffsetFromThumb,
   screenResetSequence,
   stripAnsi,
   truncate
@@ -40,6 +43,18 @@ test("scrollbar thumb moves to reflect chapter position", () => {
 
   assert.deepEqual(top, ["█", "│", "│", "│", "│"]);
   assert.deepEqual(bottom, ["│", "│", "│", "│", "█"]);
+});
+
+test("overlay window keeps the cursor visible", () => {
+  assert.equal(computeWindowStart(50, 10, 0), 0);
+  assert.equal(computeWindowStart(50, 10, 25), 20);
+  assert.equal(computeWindowStart(50, 10, 49), 40);
+});
+
+test("scrollbar offset mapping follows thumb geometry", () => {
+  const metrics = getScrollbarMetrics(100, 10, 45);
+  const offset = scrollbarOffsetFromThumb(100, 10, metrics.thumbOffset);
+  assert.ok(Math.abs(offset - 45) <= 5);
 });
 
 const theme: ThemePreset = {

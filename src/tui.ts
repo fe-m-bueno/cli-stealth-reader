@@ -7,6 +7,7 @@ import { KEYBOARD_SHORTCUTS } from "./help.js";
 import { renderBlocks } from "./renderers.js";
 import {
   clamp,
+  computeWindowStart,
   computeChapterMaxOffset,
   computeBookProgress,
   computeChapterProgress,
@@ -54,10 +55,14 @@ function renderOverlay(state: AppState, width: number, height: number): string[]
       if (!state.currentBook) {
         return ["No book open."];
       }
-      return state.currentBook.chapters.slice(0, Math.max(1, height - 2)).map((chapter, index) => {
-        const marker = index === state.overlayCursor ? ">" : " ";
-        return `${marker} ${String(index + 1).padStart(2, "0")} ${truncate(chapter.title, width - 6)}`;
-      });
+      const visibleRows = Math.max(1, height - 2);
+      const start = computeWindowStart(state.currentBook.chapters.length, visibleRows, state.overlayCursor);
+      return state.currentBook.chapters
+        .slice(start, start + visibleRows)
+        .map((chapter) => {
+          const marker = chapter.index === state.overlayCursor ? ">" : " ";
+          return `${marker} ${String(chapter.index + 1).padStart(2, "0")} ${truncate(chapter.title, width - 6)}`;
+        });
     case "books":
       return state.storage.listBooks().map((book, index) => {
         const marker = index === state.overlayCursor ? ">" : " ";
@@ -168,6 +173,7 @@ export async function runTui(): Promise<void> {
     filePickerItems: [],
     filePickerSelected: new Set(),
     filePickerForce: false,
+    mouseDrag: null,
     layoutMetrics: null,
   };
 
@@ -182,7 +188,7 @@ export async function runTui(): Promise<void> {
   process.stdin.setRawMode?.(true);
   process.stdin.resume();
   process.stdin.setEncoding("utf8");
-  process.stdout.write("\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1006h");
+  process.stdout.write("\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1002h\x1b[?1006h");
 
   const redraw = () => draw(state);
   redraw();

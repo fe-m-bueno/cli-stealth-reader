@@ -150,6 +150,12 @@ export interface AppState {
   filePickerItems: FolderDiscovery[];
   filePickerSelected: Set<number>;
   filePickerForce: boolean;
+  mouseDrag:
+    | {
+        kind: "scrollbar";
+        thumbGrabOffset: number;
+      }
+    | null;
   layoutMetrics:
     | {
         bookId: string;

@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { executeCommand } from "../src/executor.js";
 import { handleInput } from "../src/input.js";
+import { computeChapterMaxOffset, getScrollbarMetrics, getViewportLayout } from "../src/screen.js";
 import { THEMES } from "../src/themes.js";
 import type { AppState, CanonicalBook, FolderDiscovery, ThemePreset } from "../src/types.js";
 
@@ -41,6 +42,19 @@ const currentBook: CanonicalBook = {
     { id: "ch-2", index: 1, title: "Two", href: "two", depth: 0, blocks: [{ id: "b2", type: "paragraph", text: "two" }], wordCount: 1 },
     { id: "ch-3", index: 2, title: "Three", href: "three", depth: 0, blocks: [{ id: "b3", type: "paragraph", text: "three" }], wordCount: 1 }
   ]
+};
+
+const manyChaptersBook: CanonicalBook = {
+  ...currentBook,
+  chapters: Array.from({ length: 60 }, (_, index) => ({
+    id: `ch-${index + 1}`,
+    index,
+    title: `Chapter ${index + 1}`,
+    href: `chapter-${index + 1}`,
+    depth: 0,
+    blocks: [{ id: `b-${index + 1}`, type: "paragraph", text: `chapter ${index + 1}` }],
+    wordCount: 2
+  }))
 };
 
 const longChapterBook: CanonicalBook = {
@@ -103,6 +117,8 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     filePickerItems: discoveries,
     filePickerSelected: new Set(),
     filePickerForce: false,
+    mouseDrag: null,
+    layoutMetrics: null,
     ...overrides
   };
 }
@@ -268,6 +284,27 @@ test("home and end jump to the chapter boundaries", async () => {
   assert.ok(state.blockOffset > 0);
 });
 
+test("clicking and dragging the reading scrollbar updates chapter offset", async () => {
+  const state = makeState({ overlay: "none", currentBook: longChapterBook, blockOffset: 0 });
+  const layout = getViewportLayout(state, 120, 40);
+  const scrollbarX = layout.mainWidth;
+  const bodyTop = 2;
+
+  await handleInput(`\u001b[<0;${scrollbarX};${bodyTop + 20}M`, state, redraw, noop, () => {}, noop);
+  const jumpedOffset = state.blockOffset;
+  assert.ok(jumpedOffset > 0);
+  assert.equal(state.mouseDrag?.kind, "scrollbar");
+
+  const chapterLineCount = computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight) + layout.bodyHeight;
+  const metrics = getScrollbarMetrics(chapterLineCount, layout.bodyHeight, jumpedOffset);
+  await handleInput(`\u001b[<0;${scrollbarX};${bodyTop + metrics.thumbOffset}M`, state, redraw, noop, () => {}, noop);
+  await handleInput(`\u001b[<32;${scrollbarX};${bodyTop + layout.bodyHeight - 1}M`, state, redraw, noop, () => {}, noop);
+  assert.ok(state.blockOffset > jumpedOffset);
+
+  await handleInput(`\u001b[<0;${scrollbarX};${bodyTop + layout.bodyHeight - 1}m`, state, redraw, noop, () => {}, noop);
+  assert.equal(state.mouseDrag, null);
+});
+
 test("left and right arrows move between chapters", async () => {
   const state = makeState({ overlay: "none", currentBook, chapterIndex: 1, blockOffset: 5 });
   await handleInput("\u001b[C", state, redraw, noop, () => {}, noop);
@@ -292,6 +329,15 @@ test("chapters overlay arrow keys move selection and enter opens the selected ch
   assert.equal(state.overlay, "none");
   assert.equal(state.chapterIndex, 1);
   assert.equal(state.blockOffset, 0);
+});
+
+test("chapter overlay keeps deep selections visible", async () => {
+  const state = makeState({ overlay: "none", currentBook: manyChaptersBook, chapterIndex: 0 });
+  await executeCommand(state, "/chapters");
+  for (let index = 0; index < 43; index += 1) {
+    await handleInput("\u001b[B", state, redraw, noop, () => {}, noop);
+  }
+  assert.equal(state.overlayCursor, 43);
 });
 
 test("books overlay arrow keys move selection and enter opens the selected book", async () => {

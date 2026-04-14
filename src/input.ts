@@ -1,5 +1,12 @@
 import { applyCommandAutocomplete, listCommandSuggestions } from "./commands.js";
-import { clamp, computeChapterMaxOffset, getViewportLayout, MIN_PAGE_LINES } from "./screen.js";
+import {
+  clamp,
+  computeChapterMaxOffset,
+  getScrollbarMetrics,
+  getViewportLayout,
+  MIN_PAGE_LINES,
+  scrollbarOffsetFromThumb
+} from "./screen.js";
 import { THEMES } from "./themes.js";
 import type { AppState } from "./types.js";
 
@@ -17,6 +24,39 @@ function isMouseWheelDown(chunk: string): boolean {
 
 function isMouseWheelUp(chunk: string): boolean {
   return /\x1b\[<64;\d+;\d+[mM]/.test(chunk);
+}
+
+type MouseEventKind = "press" | "release" | "drag";
+
+interface ParsedMouseEvent {
+  button: number;
+  x: number;
+  y: number;
+  kind: MouseEventKind;
+}
+
+function parseMouseEvent(chunk: string): ParsedMouseEvent | null {
+  const match = /^\x1b\[<(\d+);(\d+);(\d+)([mM])$/.exec(chunk);
+  if (!match) {
+    return null;
+  }
+
+  const code = Number(match[1]);
+  const x = Number(match[2]);
+  const y = Number(match[3]);
+  const suffix = match[4];
+  const kind = suffix === "m"
+    ? "release"
+    : (code & 32) !== 0
+      ? "drag"
+      : "press";
+
+  return {
+    button: code & 3,
+    x,
+    y,
+    kind
+  };
 }
 
 function isHomeKey(chunk: string): boolean {
@@ -42,8 +82,74 @@ function interactiveOverlayLength(state: AppState): number {
 
 function exitTui(): never {
   process.stdin.setRawMode?.(false);
-  process.stdout.write("\x1b[?1000l\x1b[?1006l\x1b[?25h\x1b[?1049l");
+  process.stdout.write("\x1b[?1000l\x1b[?1002l\x1b[?1006l\x1b[?25h\x1b[?1049l");
   process.exit(0);
+}
+
+function applyScrollbarPointer(state: AppState, mouse: ParsedMouseEvent): boolean {
+  if (!state.currentBook) {
+    return false;
+  }
+
+  const layout = getViewportLayout(state, process.stdout.columns || 120, process.stdout.rows || 40);
+  if (layout.bodyHeight <= 0) {
+    return false;
+  }
+
+  const bodyTop = 2;
+  const bodyBottom = bodyTop + layout.bodyHeight - 1;
+  const scrollbarColumn = layout.mainWidth;
+  if (mouse.x !== scrollbarColumn || mouse.y < bodyTop || mouse.y > bodyBottom) {
+    if (mouse.kind === "release") {
+      state.mouseDrag = null;
+    }
+    return false;
+  }
+
+  const chapterMaxOffset = computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
+  if (chapterMaxOffset === 0) {
+    if (mouse.kind === "release") {
+      state.mouseDrag = null;
+    }
+    return false;
+  }
+
+  const chapterLineCount = chapterMaxOffset + layout.bodyHeight;
+  const row = mouse.y - bodyTop;
+  const { thumbHeight, thumbOffset } = getScrollbarMetrics(chapterLineCount, layout.bodyHeight, state.blockOffset);
+
+  if (mouse.kind === "release") {
+    state.mouseDrag = null;
+    return true;
+  }
+
+  if (mouse.kind === "press" && mouse.button === 0) {
+    const insideThumb = row >= thumbOffset && row < thumbOffset + thumbHeight;
+    if (insideThumb) {
+      state.mouseDrag = {
+        kind: "scrollbar",
+        thumbGrabOffset: row - thumbOffset
+      };
+    } else {
+      state.blockOffset = scrollbarOffsetFromThumb(chapterLineCount, layout.bodyHeight, row - Math.floor(thumbHeight / 2));
+      state.mouseDrag = {
+        kind: "scrollbar",
+        thumbGrabOffset: Math.floor(thumbHeight / 2)
+      };
+    }
+    return true;
+  }
+
+  if (mouse.kind === "drag" && mouse.button === 0 && state.mouseDrag?.kind === "scrollbar") {
+    state.blockOffset = scrollbarOffsetFromThumb(
+      chapterLineCount,
+      layout.bodyHeight,
+      row - state.mouseDrag.thumbGrabOffset
+    );
+    return true;
+  }
+
+  return false;
 }
 
 export async function handleInput(
@@ -59,6 +165,13 @@ export async function handleInput(
   }
   if (state.shouldQuit) {
     exitTui();
+  }
+
+  const mouseEvent = parseMouseEvent(chunk);
+  if (mouseEvent && applyScrollbarPointer(state, mouseEvent)) {
+    syncPos(state);
+    redraw();
+    return;
   }
 
   if (state.commandMode) {
@@ -150,6 +263,7 @@ export async function handleInput(
 
   const overlayLength = interactiveOverlayLength(state);
   if (overlayLength > 0) {
+    state.mouseDrag = null;
     const maxIndex = Math.max(0, overlayLength - 1);
     if (chunk === "\u001b[B" || chunk === "j") {
       state.overlayCursor = clamp(state.overlayCursor + 1, 0, maxIndex);
@@ -190,6 +304,7 @@ export async function handleInput(
   }
 
   if (chunk === "\u001b") {
+    state.mouseDrag = null;
     state.overlay = "none";
     redraw();
     return;

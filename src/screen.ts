@@ -86,6 +86,16 @@ export function getViewportLayout(state: AppState, width: number, height: number
   };
 }
 
+export function computeWindowStart(length: number, visibleCount: number, cursor: number): number {
+  return Math.max(
+    0,
+    Math.min(
+      cursor - Math.floor(visibleCount / 2),
+      Math.max(0, length - visibleCount)
+    )
+  );
+}
+
 function ensureLayoutMetrics(state: AppState, mainWidth: number, bodyHeight: number) {
   if (!state.currentBook) {
     return null;
@@ -301,6 +311,48 @@ export function footerHeight(state: AppState, width: number): number {
   return baseHeight + (hasProgress ? 1 : 0);
 }
 
+export function getScrollbarMetrics(totalLines: number, bodyHeight: number, blockOffset: number) {
+  if (bodyHeight <= 0) {
+    return {
+      maxOffset: 0,
+      thumbHeight: 0,
+      thumbOffset: 0
+    };
+  }
+
+  const maxOffset = Math.max(0, totalLines - bodyHeight);
+  if (totalLines <= bodyHeight) {
+    return {
+      maxOffset,
+      thumbHeight: bodyHeight,
+      thumbOffset: 0
+    };
+  }
+
+  const thumbHeight = clamp(Math.round((bodyHeight * bodyHeight) / totalLines), 1, bodyHeight);
+  const thumbOffset = maxOffset === 0
+    ? 0
+    : Math.round((clamp(blockOffset, 0, maxOffset) / maxOffset) * (bodyHeight - thumbHeight));
+  return {
+    maxOffset,
+    thumbHeight,
+    thumbOffset
+  };
+}
+
+export function scrollbarOffsetFromThumb(
+  totalLines: number,
+  bodyHeight: number,
+  thumbTopRow: number
+): number {
+  const { maxOffset, thumbHeight } = getScrollbarMetrics(totalLines, bodyHeight, 0);
+  if (maxOffset === 0 || bodyHeight <= thumbHeight) {
+    return 0;
+  }
+  const clampedThumbTop = clamp(thumbTopRow, 0, bodyHeight - thumbHeight);
+  return Math.round((clampedThumbTop / (bodyHeight - thumbHeight)) * maxOffset);
+}
+
 export function renderScrollbar(
   totalLines: number,
   bodyHeight: number,
@@ -312,15 +364,11 @@ export function renderScrollbar(
   }
 
   const thumb = fg(theme.accentMuted, "█");
+  const { thumbHeight, thumbOffset } = getScrollbarMetrics(totalLines, bodyHeight, blockOffset);
   if (totalLines <= bodyHeight) {
     return Array.from({ length: bodyHeight }, () => thumb);
   }
 
-  const maxOffset = Math.max(0, totalLines - bodyHeight);
-  const thumbHeight = clamp(Math.round((bodyHeight * bodyHeight) / totalLines), 1, bodyHeight);
-  const thumbOffset = maxOffset === 0
-    ? 0
-    : Math.round((clamp(blockOffset, 0, maxOffset) / maxOffset) * (bodyHeight - thumbHeight));
   const track = fg(theme.border, "│");
 
   return Array.from({ length: bodyHeight }, (_, row) => (
