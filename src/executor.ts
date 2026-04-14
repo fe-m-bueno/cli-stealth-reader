@@ -4,6 +4,7 @@ import { commandHelp, parseSlashCommand } from "./commands.js";
 import { discoverEpubs } from "./discovery.js";
 import { mapBlockOffsetToFocusIndex, mapFocusIndexToBlockOffset } from "./focus.js";
 import { EPUB_PARSER_VERSION, importEpub } from "./parser/epub.js";
+import { importFile } from "./parser/index.js";
 import { renderBlocks } from "./renderers.js";
 import { computeChapterMaxOffset, getViewportLayout } from "./screen.js";
 import { THEMES } from "./themes.js";
@@ -13,6 +14,7 @@ import type {
   CanonicalChapter,
   CodeDensity,
   CodeLanguage,
+  ExportData,
   FolderDiscovery,
   LibraryEntry,
   LibrarySortKey,
@@ -61,12 +63,12 @@ export async function openBook(state: AppState, book: CanonicalBook): Promise<vo
   state.status = `Opened ${book.title}`;
 }
 
-export async function importAndOpen(state: AppState, epubPath: string, force = false): Promise<void> {
-  if (!force && !fs.existsSync(epubPath)) {
-    state.status = `File not found: ${epubPath}`;
+export async function importAndOpen(state: AppState, filePath: string, force = false): Promise<void> {
+  if (!force && !fs.existsSync(filePath)) {
+    state.status = `File not found: ${filePath}`;
     return;
   }
-  const book = await importEpub(epubPath);
+  const book = await importFile(filePath);
   state.storage.saveBook(book, state.renderMode);
   await openBook(state, book);
 }
@@ -98,7 +100,7 @@ export function openFilePicker(
   state.filePickerCursor = 0;
   state.filePickerSelected = new Set();
   state.filePickerForce = Boolean(options?.force);
-  state.status = options?.status ?? (items.length > 0 ? "Opened file picker." : "No EPUBs found in this folder.");
+  state.status = options?.status ?? (items.length > 0 ? "Opened file picker." : "No books found in this folder.");
 }
 
 type CommandHandler = (state: AppState, parsed: ParsedCommandResult) => Promise<void>;
@@ -371,7 +373,7 @@ const handlers: Record<string, CommandHandler> = {
         force,
         status: state.discoveries.length > 0
           ? "Opened file picker."
-          : "No EPUBs detected in the current directory."
+          : "No books detected in the current directory."
       });
       return;
     }
@@ -393,7 +395,7 @@ const handlers: Record<string, CommandHandler> = {
       force,
       status: matches.length > 0
         ? `Opened file picker for "${target}".`
-        : `No EPUBs matched "${target}".`
+        : `No books matched "${target}".`
     });
   },
 
@@ -697,6 +699,41 @@ const handlers: Record<string, CommandHandler> = {
       }
       const note = state.storage.addNote(state.currentBook.id, content, state.chapterIndex, state.blockOffset);
       state.status = `Note saved (${note.id.slice(0, 8)})`;
+    }
+  },
+
+  export: async (state, parsed) => {
+    const outPath = parsed.args[0]
+      ? path.resolve(state.cwd, parsed.args[0])
+      : path.join(state.cwd, "stealth-reader-export.json");
+    try {
+      const data = state.storage.exportAll();
+      fs.writeFileSync(outPath, JSON.stringify(data, null, 2), "utf8");
+      state.status = `Exported ${data.positions.length} book(s) to ${path.relative(state.cwd, outPath) || outPath}`;
+    } catch (err) {
+      state.status = err instanceof Error ? `Export failed: ${err.message}` : "Export failed.";
+    }
+  },
+
+  import: async (state, parsed) => {
+    const inPath = parsed.args[0]
+      ? path.resolve(state.cwd, parsed.args[0])
+      : path.join(state.cwd, "stealth-reader-export.json");
+    if (!fs.existsSync(inPath)) {
+      state.status = `File not found: ${inPath}`;
+      return;
+    }
+    try {
+      const raw = fs.readFileSync(inPath, "utf8");
+      const data = JSON.parse(raw) as ExportData;
+      if (data.version !== 1) {
+        state.status = "Unsupported export format version.";
+        return;
+      }
+      const result = state.storage.importMerge(data);
+      state.status = `Imported: ${result.positionsUpdated} position(s) updated, ${result.bookmarksAdded} bookmark(s) added, ${result.notesAdded} note(s) added, ${result.tagsAdded} tag(s) added`;
+    } catch (err) {
+      state.status = err instanceof Error ? `Import failed: ${err.message}` : "Import failed.";
     }
   }
 };

@@ -287,7 +287,7 @@ test("add query with no matches opens an empty picker state", async () => {
     await executeCommand(state, "/add zeta");
     assert.equal(state.overlay, "file-picker");
     assert.deepEqual(state.filePickerItems, []);
-    assert.match(state.status, /No EPUBs matched "zeta"\./);
+    assert.match(state.status, /No books matched "zeta"\./);
   });
 });
 

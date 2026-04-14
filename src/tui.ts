@@ -36,7 +36,7 @@ function currentLines(state: AppState, width: number, height: number): string[] 
       ""
     ];
     if (state.discoveries.length > 0) {
-      lines.push("EPUBs found in this folder:");
+      lines.push("Books found in this folder:");
       state.discoveries.slice(0, Math.max(3, height - 8)).forEach((item) => {
         lines.push(`  ${item.fileName}`);
       });
@@ -195,7 +195,7 @@ export function renderOverlay(state: AppState, width: number, height: number): s
         : ["No diagnostics for the current book."];
     case "file-picker": {
       if (state.filePickerItems.length === 0) {
-        return ["No EPUBs found in this folder."];
+        return ["No books found in this folder."];
       }
       const lines: string[] = [];
       for (let index = 0; index < state.filePickerItems.length; index += 1) {

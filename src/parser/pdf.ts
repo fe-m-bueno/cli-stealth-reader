@@ -1,0 +1,84 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import crypto from "node:crypto";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string; numpages: number; info: Record<string, string> }>;
+import type { CanonicalBlock, CanonicalBook, CanonicalChapter, ImportDiagnostic } from "../types.js";
+
+export async function importPdf(filePath: string): Promise<CanonicalBook> {
+  const buf = await fs.readFile(filePath);
+  const baseName = path.basename(filePath, path.extname(filePath));
+  const bookId = crypto.createHash("sha256").update(filePath).digest("hex").slice(0, 16);
+  const importHash = crypto.createHash("sha256").update(buf).digest("hex");
+
+  const diagnostics: ImportDiagnostic[] = [];
+  let parsed: { text: string; numpages: number; info: Record<string, string> };
+
+  try {
+    parsed = await pdfParse(buf);
+  } catch (err) {
+    diagnostics.push({
+      severity: "error",
+      message: `Failed to parse PDF: ${err instanceof Error ? err.message : String(err)}`
+    });
+    return {
+      id: bookId,
+      title: baseName,
+      author: "Unknown",
+      sourcePath: filePath,
+      importHash,
+      parserVersion: 1,
+      diagnostics,
+      chapters: []
+    };
+  }
+
+  const pageTexts = parsed.text.split(/\f/);
+  const totalPages = Math.max(pageTexts.length, parsed.numpages ?? 1);
+
+  const chapters: CanonicalChapter[] = [];
+  for (let i = 0; i < totalPages; i++) {
+    const rawText = (pageTexts[i] ?? "").trim();
+    const blocks: CanonicalBlock[] = [];
+
+    if (!rawText) {
+      diagnostics.push({ severity: "warning", message: `Page ${i + 1} has no extractable text (may be an image-only page).` });
+      blocks.push({
+        id: `${bookId}-p${i + 1}-empty`,
+        type: "paragraph",
+        text: `[Page ${i + 1}: no text content]`
+      });
+    } else {
+      const paragraphs = rawText.split(/\n{2,}/).map((p: string) => p.replace(/\n/g, " ").trim()).filter(Boolean);
+      for (let j = 0; j < paragraphs.length; j++) {
+        blocks.push({
+          id: `${bookId}-p${i + 1}-b${j}`,
+          type: "paragraph",
+          text: paragraphs[j]!
+        });
+      }
+    }
+
+    chapters.push({
+      id: `${bookId}-ch${i + 1}`,
+      index: i,
+      title: `Page ${i + 1}`,
+      href: `page-${i + 1}`,
+      depth: 0,
+      blocks,
+      wordCount: rawText.split(/\s+/).filter(Boolean).length
+    });
+  }
+
+  return {
+    id: bookId,
+    title: parsed.info?.Title || baseName,
+    author: parsed.info?.Author || "Unknown",
+    sourcePath: filePath,
+    importHash,
+    parserVersion: 1,
+    diagnostics,
+    chapters
+  };
+}

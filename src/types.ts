@@ -163,6 +163,54 @@ export interface FolderDiscovery {
 
 export type OverlayKind = "none" | "chapters" | "books" | "bookmarks" | "notes" | "themes" | "help" | "keys" | "diagnostics" | "file-picker";
 
+export interface ExportPosition {
+  bookImportHash: string;
+  bookTitle: string;
+  chapterIndex: number;
+  blockOffset: number;
+  bookProgress: number;
+}
+
+export interface ExportBookmark {
+  bookImportHash: string;
+  bookTitle: string;
+  chapterIndex: number;
+  blockOffset: number;
+  label: string | null;
+  createdAt: number;
+}
+
+export interface ExportNote {
+  bookImportHash: string;
+  bookTitle: string;
+  chapterIndex: number | null;
+  blockOffset: number | null;
+  content: string;
+  createdAt: number;
+}
+
+export interface ExportTag {
+  bookImportHash: string;
+  bookTitle: string;
+  tag: string;
+}
+
+export interface ExportData {
+  version: 1;
+  exportedAt: string;
+  positions: ExportPosition[];
+  bookmarks: ExportBookmark[];
+  notes: ExportNote[];
+  tags: ExportTag[];
+}
+
+export interface ImportResult {
+  positionsUpdated: number;
+  bookmarksAdded: number;
+  notesAdded: number;
+  tagsAdded: number;
+}
+
 export interface SearchHit {
   chapterIndex: number;
   blockIndex: number;

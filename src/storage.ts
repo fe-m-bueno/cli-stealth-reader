@@ -8,7 +8,9 @@ import type {
   CanonicalBook,
   CanonicalChapter,
   CodeDensity,
+  ExportData,
   ImportDiagnostic,
+  ImportResult,
   LibraryEntry,
   LibraryEntryWithProgress,
   LibrarySortKey,
@@ -466,5 +468,93 @@ export class Storage {
 
   deleteNote(id: string): void {
     this.db.prepare("DELETE FROM notes WHERE id = ?").run(id);
+  }
+
+  exportAll(): ExportData {
+    const exportedAt = new Date().toISOString();
+
+    const posRows = this.db.prepare(`
+      SELECT b.import_hash AS importHash, b.title, p.chapter_index AS chapterIndex,
+             p.block_offset AS blockOffset, p.book_progress AS bookProgress
+      FROM positions p
+      JOIN books b ON b.id = p.book_id
+    `).all() as Array<{ importHash: string; title: string; chapterIndex: number; blockOffset: number; bookProgress: number }>;
+
+    const bmRows = this.db.prepare(`
+      SELECT b.import_hash AS importHash, b.title,
+             bm.chapter_index AS chapterIndex, bm.block_offset AS blockOffset,
+             bm.label, bm.created_at AS createdAt
+      FROM bookmarks bm
+      JOIN books b ON b.id = bm.book_id
+    `).all() as Array<{ importHash: string; title: string; chapterIndex: number; blockOffset: number; label: string | null; createdAt: number }>;
+
+    const noteRows = this.db.prepare(`
+      SELECT b.import_hash AS importHash, b.title,
+             n.chapter_index AS chapterIndex, n.block_offset AS blockOffset,
+             n.content, n.created_at AS createdAt
+      FROM notes n
+      JOIN books b ON b.id = n.book_id
+    `).all() as Array<{ importHash: string; title: string; chapterIndex: number | null; blockOffset: number | null; content: string; createdAt: number }>;
+
+    const tagRows = this.db.prepare(`
+      SELECT b.import_hash AS importHash, b.title, bt.tag
+      FROM book_tags bt
+      JOIN books b ON b.id = bt.book_id
+    `).all() as Array<{ importHash: string; title: string; tag: string }>;
+
+    return {
+      version: 1,
+      exportedAt,
+      positions: posRows.map((r) => ({ bookImportHash: r.importHash, bookTitle: r.title, chapterIndex: r.chapterIndex, blockOffset: r.blockOffset, bookProgress: r.bookProgress })),
+      bookmarks: bmRows.map((r) => ({ bookImportHash: r.importHash, bookTitle: r.title, chapterIndex: r.chapterIndex, blockOffset: r.blockOffset, label: r.label, createdAt: r.createdAt })),
+      notes: noteRows.map((r) => ({ bookImportHash: r.importHash, bookTitle: r.title, chapterIndex: r.chapterIndex, blockOffset: r.blockOffset, content: r.content, createdAt: r.createdAt })),
+      tags: tagRows.map((r) => ({ bookImportHash: r.importHash, bookTitle: r.title, tag: r.tag }))
+    };
+  }
+
+  importMerge(data: ExportData): ImportResult {
+    const exportedAtMs = new Date(data.exportedAt).getTime();
+    let positionsUpdated = 0;
+    let bookmarksAdded = 0;
+    let notesAdded = 0;
+    let tagsAdded = 0;
+
+    for (const pos of data.positions) {
+      const book = this.db.prepare("SELECT id, last_opened_at FROM books WHERE import_hash = ?").get(pos.bookImportHash) as { id: string; last_opened_at: number } | undefined;
+      if (!book) continue;
+      if (exportedAtMs > book.last_opened_at) {
+        this.savePosition({ bookId: book.id, chapterIndex: pos.chapterIndex, blockOffset: pos.blockOffset, bookProgress: pos.bookProgress, chapterProgress: 0 });
+        positionsUpdated++;
+      }
+    }
+
+    for (const bm of data.bookmarks) {
+      const book = this.db.prepare("SELECT id FROM books WHERE import_hash = ?").get(bm.bookImportHash) as { id: string } | undefined;
+      if (!book) continue;
+      const exists = this.db.prepare("SELECT id FROM bookmarks WHERE book_id = ? AND chapter_index = ? AND block_offset = ?").get(book.id, bm.chapterIndex, bm.blockOffset);
+      if (!exists) {
+        this.db.prepare("INSERT INTO bookmarks (id, book_id, chapter_index, block_offset, label, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(crypto.randomUUID(), book.id, bm.chapterIndex, bm.blockOffset, bm.label, bm.createdAt);
+        bookmarksAdded++;
+      }
+    }
+
+    for (const note of data.notes) {
+      const book = this.db.prepare("SELECT id FROM books WHERE import_hash = ?").get(note.bookImportHash) as { id: string } | undefined;
+      if (!book) continue;
+      const exists = this.db.prepare("SELECT id FROM notes WHERE book_id = ? AND content = ? AND created_at = ?").get(book.id, note.content, note.createdAt);
+      if (!exists) {
+        this.db.prepare("INSERT INTO notes (id, book_id, chapter_index, block_offset, content, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(crypto.randomUUID(), book.id, note.chapterIndex, note.blockOffset, note.content, note.createdAt);
+        notesAdded++;
+      }
+    }
+
+    for (const tag of data.tags) {
+      const book = this.db.prepare("SELECT id FROM books WHERE import_hash = ?").get(tag.bookImportHash) as { id: string } | undefined;
+      if (!book) continue;
+      const result = this.db.prepare("INSERT OR IGNORE INTO book_tags (book_id, tag) VALUES (?, ?)").run(book.id, tag.tag);
+      if (result.changes > 0) tagsAdded++;
+    }
+
+    return { positionsUpdated, bookmarksAdded, notesAdded, tagsAdded };
   }
 }

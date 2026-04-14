@@ -35,7 +35,7 @@ export const COMMANDS: CommandDefinition[] = [
   },
   {
     name: "add",
-    description: "Import an EPUB from cwd or an explicit path.",
+    description: "Import an EPUB, CBZ, or PDF from cwd or an explicit path.",
     args: [{ name: "path" }],
     flags: [{ name: "cwd" }, { name: "force" }],
     usage: "/add [path] [--cwd] [--force]"
@@ -121,6 +121,18 @@ export const COMMANDS: CommandDefinition[] = [
     description: "Delete a bookmark by id or label.",
     args: [{ name: "id-or-label", required: true }],
     usage: "/delmark <id|label>"
+  },
+  {
+    name: "export",
+    description: "Export reading state (positions, bookmarks, notes, tags) to JSON.",
+    args: [{ name: "path" }],
+    usage: "/export [path]"
+  },
+  {
+    name: "import",
+    description: "Import and merge reading state from a JSON export file.",
+    args: [{ name: "path" }],
+    usage: "/import [path]"
   },
   {
     name: "tag",
