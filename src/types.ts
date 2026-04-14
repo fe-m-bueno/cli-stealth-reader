@@ -2,6 +2,8 @@ export type RenderMode = "code" | "plain";
 
 export type CodeLanguage = "typescript" | "python" | "rust";
 
+export type CodeDensity = 1 | 2 | 3 | 4 | 5;
+
 export type ProgressVisibility = "book" | "both" | "chapter" | "hidden";
 
 export type BlockType =
@@ -95,6 +97,7 @@ export interface AppSettings {
   progressVisibility: ProgressVisibility;
   renderMode: RenderMode;
   codeLanguage: CodeLanguage;
+  codeDensity: CodeDensity;
 }
 
 export interface CommandArgSpec {
@@ -144,6 +147,7 @@ export interface AppState {
   theme: ThemePreset;
   renderMode: RenderMode;
   codeLanguage: CodeLanguage;
+  codeDensity: CodeDensity;
   progressVisibility: ProgressVisibility;
   currentBook: CanonicalBook | null;
   chapterIndex: number;
@@ -178,6 +182,7 @@ export interface AppState {
         bookId: string;
         renderMode: RenderMode;
         codeLanguage: CodeLanguage;
+        codeDensity: CodeDensity;
         width: number;
         bodyHeight: number;
         chapterLineCounts: number[];

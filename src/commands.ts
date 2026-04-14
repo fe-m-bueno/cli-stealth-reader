@@ -78,6 +78,12 @@ export const COMMANDS: CommandDefinition[] = [
     description: "Show keyboard shortcuts.",
     flags: [{ name: "category", takesValue: true }],
     usage: "/keyboardshortcuts [--category navigation|commands|view]"
+  },
+  {
+    name: "density",
+    description: "Set code density (1=max comments, 5=max code). Tecla d cicla entre 1→3→5.",
+    args: [{ name: "level" }],
+    usage: "/density [1-5]"
   }
 ];
 

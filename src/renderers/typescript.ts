@@ -1,4 +1,4 @@
-import type { CanonicalBlock, ThemePreset } from "../types.js";
+import type { CanonicalBlock, CodeDensity, ThemePreset } from "../types.js";
 import { bold, fg } from "../color.js";
 import {
   wrapText, extractWords, lineHash, esc,
@@ -111,17 +111,29 @@ function patTernary(line: string, words: string[], seed: number, t: ThemePreset)
 
 // ─── line selection ───────────────────────────────────────────────────────────
 
-const LINE_PATTERNS = [
-  patConst, patComment, patConsoleLog, patArrow,
-  patReturn, patLet, patExport, patThrow,
-  patAwait, patNullish, patOptional, patTypeAnnotation,
+// "Legíveis": o texto aparece claramente como comentário ou return
+const COMMENT_PATTERNS = [patComment, patReturn] as const;
+
+// "Densos": apenas assignments e chamadas
+const CODE_PATTERNS = [
+  patConst, patLet, patArrow, patConsoleLog, patExport,
+  patThrow, patAwait, patNullish, patOptional, patTypeAnnotation,
   patCast, patGenericCall, patDestructure, patSpread, patTernary,
 ] as const;
 
-function disguiseLine(line: string, blockIndex: number, lineIndex: number, t: ThemePreset): string {
+function disguiseLine(
+  line: string,
+  blockIndex: number,
+  lineIndex: number,
+  t: ThemePreset,
+  density: CodeDensity
+): string {
   const words = extractWords(line);
   const seed = lineHash(blockIndex, lineIndex);
-  const pattern = LINE_PATTERNS[seed % LINE_PATTERNS.length];
+  // density 1 → 80% comment_patterns; density 5 → 0% comment_patterns
+  const commentThreshold = (5 - density) * 20; // 0..80
+  const pool = (seed % 100) < commentThreshold ? COMMENT_PATTERNS : CODE_PATTERNS;
+  const pattern = pool[seed % pool.length];
   return pattern(line, words, seed, t);
 }
 
@@ -193,11 +205,31 @@ function renderGenericFuncOpen(words: string[], seed: number, t: ThemePreset): s
 // +4 buffer for esc() expanding quotes in text.
 const TEXT_OVERHEAD = 46;
 
+// Produces body lines for a struct block with variable indentation.
+// ~30% of lines get double indent (simulates nested if/for inside the function).
+function makeBodyLines(
+  wrapped: string[],
+  blockIndex: number,
+  lineOffset: number,
+  baseIndent: string,
+  theme: ThemePreset,
+  density: CodeDensity
+): string[] {
+  return wrapped.map((line, i) => {
+    const lineIndex = lineOffset + i;
+    const disguised = disguiseLine(line, blockIndex, lineIndex, theme, density);
+    const isNested = lineHash(blockIndex, lineIndex + 50) % 3 === 0;
+    const indent = isNested ? "    " : baseIndent;
+    return indent + disguised;
+  });
+}
+
 export function renderCodeTypescript(
   block: CanonicalBlock,
   width: number,
   theme: ThemePreset,
-  blockIndex: number
+  blockIndex: number,
+  density: CodeDensity = 3
 ): string[] {
   if (block.type === "heading") {
     return [bold(fg(theme.accent, `// ${block.text.toUpperCase()}`))];
@@ -217,13 +249,41 @@ export function renderCodeTypescript(
   if (blockIndex % 41 === 0) {
     const conds = ["isValid", "flag", "active", "ready", "loaded"];
     const cond = conds[seed % conds.length];
-    const wrapped = wrapText(block.text, textWidth);
+    const wrapped = wrapText(block.text, textWidth - 2);
     const half = Math.ceil(wrapped.length / 2);
     return [
       kw(theme, "if") + op(theme, " (") + id(theme, cond) + op(theme, ") {"),
-      ...wrapped.slice(0, half).map((line, i) => "  " + disguiseLine(line, blockIndex, i, theme)),
+      ...makeBodyLines(wrapped.slice(0, half), blockIndex, 0, "  ", theme, density),
       op(theme, "} else {"),
-      ...wrapped.slice(half).map((line, i) => "  " + disguiseLine(line, blockIndex, half + i, theme)),
+      ...makeBodyLines(wrapped.slice(half), blockIndex, half, "  ", theme, density),
+      op(theme, "}"),
+    ];
+  }
+
+  // For loop block
+  if (blockIndex % 43 === 0) {
+    const arrays = ["items", "entries", "records", "nodes", "chunks"];
+    const arr = arrays[seed % arrays.length];
+    const wrapped = wrapText(block.text, textWidth - 2);
+    return [
+      kw(theme, "for") + op(theme, " (") + kw(theme, "const") + " " + id(theme, "item") +
+        " " + kw(theme, "of") + " " + id(theme, arr) + op(theme, ") {"),
+      ...makeBodyLines(wrapped, blockIndex, 0, "  ", theme, density),
+      op(theme, "}"),
+    ];
+  }
+
+  // Try/catch block: text split across both branches
+  if (blockIndex % 47 === 0) {
+    const errNames = ["err", "error", "e", "ex"];
+    const errName = errNames[seed % errNames.length];
+    const wrapped = wrapText(block.text, textWidth - 2);
+    const half = Math.ceil(wrapped.length / 2);
+    return [
+      kw(theme, "try") + " " + op(theme, "{"),
+      ...makeBodyLines(wrapped.slice(0, half), blockIndex, 0, "  ", theme, density),
+      op(theme, "} ") + kw(theme, "catch") + " " + op(theme, "(") + id(theme, errName) + op(theme, ") {"),
+      ...makeBodyLines(wrapped.slice(half), blockIndex, half, "  ", theme, density),
       op(theme, "}"),
     ];
   }
@@ -246,12 +306,11 @@ export function renderCodeTypescript(
     structLines.push(renderGenericFuncOpen(words, seed, theme));
   }
 
-  const wrapped = wrapText(block.text, textWidth);
-  const indent = structLines.length > 0 ? "  " : "";
-  const bodyLines = wrapped.map((line, lineIndex) => {
-    const disguised = disguiseLine(line, blockIndex, lineIndex, theme);
-    return indent + disguised;
-  });
+  // Reduce textWidth for struct blocks (indent eats into line width)
+  const innerTextWidth = structLines.length > 0 ? Math.max(textWidth - 4, 20) : textWidth;
+  const wrapped = wrapText(block.text, innerTextWidth);
+  const baseIndent = structLines.length > 0 ? "  " : "";
+  const bodyLines = makeBodyLines(wrapped, blockIndex, 0, baseIndent, theme, density);
 
   const result = [...structLines, ...bodyLines];
   const needsClose = blockIndex % 23 === 0 || blockIndex % 29 === 0 ||

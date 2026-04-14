@@ -445,6 +445,11 @@ export async function handleInput(
       : state.codeLanguage === "python" ? "rust"
       : "plain";
     await executeCmd(`/mode ${nextMode}`);
+  } else if (chunk === "d" && state.renderMode === "code") {
+    const cycle = [1, 3, 5] as const;
+    const current = cycle.indexOf(state.codeDensity as 1 | 3 | 5);
+    const next = cycle[current < 0 ? 0 : (current + 1) % cycle.length];
+    await executeCmd(`/density ${next}`);
   } else if (chunk === "c") {
     await executeCmd("/colorscheme");
   } else if (chunk === "p") {

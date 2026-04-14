@@ -5,6 +5,7 @@ import type {
   AppSettings,
   CanonicalBook,
   CanonicalChapter,
+  CodeDensity,
   ImportDiagnostic,
   LibraryEntry,
   LibraryEntryWithProgress,
@@ -21,7 +22,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   themeId: "codex",
   progressVisibility: "both",
   renderMode: "code",
-  codeLanguage: "typescript"
+  codeLanguage: "typescript",
+  codeDensity: 3
 };
 
 export class Storage {
@@ -97,8 +99,13 @@ export class Storage {
     const rows = this.db.prepare("SELECT key, value FROM settings").all() as Array<{ key: string; value: string }>;
     const settings = { ...DEFAULT_SETTINGS };
     for (const row of rows) {
-      if (row.key in settings) {
-        (settings as Record<string, string>)[row.key] = row.value;
+      if (row.key === "codeDensity") {
+        const parsed = Number(row.value);
+        if ([1, 2, 3, 4, 5].includes(parsed)) {
+          settings.codeDensity = parsed as CodeDensity;
+        }
+      } else if (row.key in settings) {
+        (settings as Record<string, unknown>)[row.key] = row.value;
       }
     }
     return settings;

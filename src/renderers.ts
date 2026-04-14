@@ -1,6 +1,6 @@
-import type { CanonicalBlock, CodeLanguage, RenderMode, ThemePreset } from "./types.js";
+import type { CanonicalBlock, CodeDensity, CodeLanguage, RenderMode, ThemePreset } from "./types.js";
 import { bold, fg } from "./color.js";
-import { wrapText } from "./renderers/shared.js";
+import { wrapText, lineHash } from "./renderers/shared.js";
 import { renderCodeTypescript } from "./renderers/typescript.js";
 import { renderCodePython } from "./renderers/python.js";
 import { renderCodeRust } from "./renderers/rust.js";
@@ -29,7 +29,8 @@ function renderCode(
   width: number,
   theme: ThemePreset,
   blockIndex: number,
-  codeLanguage: CodeLanguage
+  codeLanguage: CodeLanguage,
+  codeDensity: CodeDensity
 ): string[] {
   switch (codeLanguage) {
     case "python":
@@ -37,7 +38,7 @@ function renderCode(
     case "rust":
       return renderCodeRust(block, width, theme, blockIndex);
     default:
-      return renderCodeTypescript(block, width, theme, blockIndex);
+      return renderCodeTypescript(block, width, theme, blockIndex, codeDensity);
   }
 }
 
@@ -46,14 +47,28 @@ export function renderBlocks(
   mode: RenderMode,
   width: number,
   theme: ThemePreset,
-  codeLanguage: CodeLanguage = "typescript"
+  codeLanguage: CodeLanguage = "typescript",
+  codeDensity: CodeDensity = 3
 ): string[] {
   const lines: string[] = [];
   blocks.forEach((block, index) => {
     const rendered = mode === "plain"
       ? renderPlain(block, width, theme)
-      : renderCode(block, width, theme, index, codeLanguage);
-    lines.push(...rendered, "");
+      : renderCode(block, width, theme, index, codeLanguage, codeDensity);
+    lines.push(...rendered);
+
+    if (mode === "code") {
+      // Vary blank lines: 70% → 1 blank, 20% → 0 blanks, 10% → 2 blanks
+      const r = lineHash(index, 999) % 10;
+      if (r < 7) {
+        lines.push("");
+      } else if (r >= 9) {
+        lines.push("", "");
+      }
+      // r === 7 or 8: no blank line (20%)
+    } else {
+      lines.push("");
+    }
   });
   return lines;
 }

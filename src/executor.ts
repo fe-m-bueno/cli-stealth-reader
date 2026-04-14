@@ -7,6 +7,7 @@ import { THEMES } from "./themes.js";
 import type {
   AppState,
   CanonicalBook,
+  CodeDensity,
   CodeLanguage,
   FolderDiscovery,
   LibraryEntry,
@@ -268,6 +269,22 @@ const handlers: Record<string, CommandHandler> = {
   keyboardshortcuts: async (state) => {
     state.overlay = "keys";
     state.status = "Opened keyboard shortcuts";
+  },
+
+  density: async (state, parsed) => {
+    const VALID: CodeDensity[] = [1, 2, 3, 4, 5];
+    const arg = parsed.args[0];
+    if (!arg) {
+      throw new Error("Use /density <1-5>");
+    }
+    const level = Number(arg) as CodeDensity;
+    if (!VALID.includes(level)) {
+      throw new Error("Density must be a number between 1 and 5");
+    }
+    state.codeDensity = level;
+    state.storage.setSetting("codeDensity", level);
+    state.layoutMetrics = null;
+    state.status = `Code density: ${level}`;
   },
 };
 
