@@ -238,4 +238,5 @@ export interface AppState {
   librarySortKey: LibrarySortKey;
   librarySortDir: SortDirection;
   booksTagFilter: string | null;
+  booksTagMap: Map<string, string[]>;
 }

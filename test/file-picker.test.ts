@@ -159,6 +159,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     librarySortKey: "lastOpened",
     librarySortDir: "desc",
     booksTagFilter: null,
+    booksTagMap: new Map<string, string[]>(),
     focusMode: false,
     focusBlockIndex: 0,
     ...overrides

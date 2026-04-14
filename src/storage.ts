@@ -107,6 +107,8 @@ export class Storage {
         content TEXT NOT NULL,
         created_at INTEGER NOT NULL
       );
+      CREATE INDEX IF NOT EXISTS idx_book_tags_tag ON book_tags(tag);
+      CREATE INDEX IF NOT EXISTS idx_notes_book_id ON notes(book_id);
     `);
     const columns = this.db.prepare("PRAGMA table_info(books)").all() as Array<{ name: string }>;
     if (!columns.some((column) => column.name === "parser_version")) {
@@ -292,7 +294,7 @@ export class Storage {
     let filtered = rows;
     if (tagFilter) {
       const taggedIds = new Set(
-        (this.db.prepare("SELECT book_id FROM book_tags WHERE tag = ?").all(tagFilter) as Array<{ book_id: string }>).map((r) => r.book_id)
+        (this.db.prepare("SELECT book_id FROM book_tags WHERE LOWER(tag) = LOWER(?)").all(tagFilter) as Array<{ book_id: string }>).map((r) => r.book_id)
       );
       filtered = rows.filter((r) => taggedIds.has(r.id));
     }

@@ -120,7 +120,7 @@ export function renderOverlay(state: AppState, width: number, height: number): s
         });
     case "books": {
       const books = state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir, state.booksTagFilter ?? undefined);
-      const tagsByBookId = state.storage.listTagsByBookId();
+      const tagsByBookId = state.booksTagMap;
       const sortKeyLabels: Record<string, string> = {
         lastOpened: "Last Opened",
         title: "Title",
@@ -181,7 +181,8 @@ export function renderOverlay(state: AppState, width: number, height: number): s
       });
     }
     case "themes":
-      return THEMES.map((theme, index) => {        const marker = index === state.overlayCursor ? ">" : " ";
+      return THEMES.map((theme, index) => {
+        const marker = index === state.overlayCursor ? ">" : " ";
         return `${marker} ${theme.label} (${theme.id})`;
       });
     case "help":
@@ -333,7 +334,8 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     navHistoryCursor: -1,
     librarySortKey: "lastOpened",
     librarySortDir: "desc",
-    booksTagFilter: null
+    booksTagFilter: null,
+    booksTagMap: new Map()
   };
 
   if (options?.resume) {
@@ -349,6 +351,7 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     if (books.length > 0) {
       state.overlay = "books";
       state.overlayCursor = 0;
+      state.booksTagMap = storage.listTagsByBookId();
       state.status = "Select a book to open. Press Enter to open, Esc to dismiss.";
     }
   }

@@ -283,6 +283,7 @@ const handlers: Record<string, CommandHandler> = {
     const books = state.storage.listBooks();
     if (!query.trim()) {
       state.booksTagFilter = null;
+      state.booksTagMap = state.storage.listTagsByBookId();
       state.overlay = "books";
       state.overlayCursor = 0;
       state.status = books.length > 0 ? "Opened library picker." : "No books in the library yet.";
@@ -312,9 +313,11 @@ const handlers: Record<string, CommandHandler> = {
       state.overlayCursor = 0;
       if (tagMatches.length > 0) {
         state.booksTagFilter = query.trim();
+        state.booksTagMap = state.storage.listTagsByBookId();
         state.status = `Filtering by tag "${query.trim()}". ${tagMatches.length} book(s) found.`;
       } else {
         state.booksTagFilter = null;
+        state.booksTagMap = state.storage.listTagsByBookId();
         state.status = "No exact match. Opened library picker.";
       }
     }
@@ -641,9 +644,11 @@ const handlers: Record<string, CommandHandler> = {
         throw new Error("Use /tag -d <tag>");
       }
       state.storage.removeTag(state.currentBook.id, tagArg);
+      state.booksTagMap = state.storage.listTagsByBookId();
       state.status = `Tag removed: #${tagArg}`;
     } else if (tagArg) {
       state.storage.addTag(state.currentBook.id, tagArg);
+      state.booksTagMap = state.storage.listTagsByBookId();
       state.status = `Tag added: #${tagArg}`;
     } else {
       const tags = state.storage.listTags(state.currentBook.id);
@@ -677,7 +682,13 @@ const handlers: Record<string, CommandHandler> = {
       if (!id) {
         throw new Error("Use /note -d <id>");
       }
-      state.storage.deleteNote(id);
+      const notes = state.storage.listNotes(state.currentBook.id);
+      const found = notes.find((n) => n.id === id);
+      if (!found) {
+        state.status = "Note not found in current book.";
+        return;
+      }
+      state.storage.deleteNote(found.id);
       state.status = "Note deleted.";
     } else {
       const content = parsed.args.join(" ").trim();
