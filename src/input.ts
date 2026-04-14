@@ -136,7 +136,7 @@ function interactiveOverlayLength(state: AppState): number {
 
 function exitTui(): never {
   process.stdin.setRawMode?.(false);
-  process.stdout.write("\x1b[?1000l\x1b[?1002l\x1b[?1006l\x1b[?25h\x1b[?1049l");
+  process.stdout.write("\x1b[?1000l\x1b[?1006l\x1b[?25h\x1b[?1049l");
   process.exit(0);
 }
 
