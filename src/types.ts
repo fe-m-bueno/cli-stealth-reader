@@ -75,6 +75,15 @@ export interface ThemePreset {
   background: string;
   border: string;
   warning: string;
+  keyword: string;
+  codeString: string;
+  subtle: string;
+}
+
+export interface AppSettings {
+  themeId: string;
+  progressVisibility: ProgressVisibility;
+  renderMode: RenderMode;
 }
 
 export interface CommandArgSpec {

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type {
+  AppSettings,
   CanonicalBook,
   CanonicalChapter,
   ImportDiagnostic,
@@ -12,11 +13,7 @@ import type {
 } from "./types.js";
 import { getAppPaths } from "./paths.js";
 
-export interface AppSettings {
-  themeId: string;
-  progressVisibility: ProgressVisibility;
-  renderMode: RenderMode;
-}
+export type { AppSettings };
 
 const DEFAULT_SETTINGS: AppSettings = {
   themeId: "codex",
