@@ -110,46 +110,31 @@ export function renderStatusBar(state: AppState, width: number): string {
 export function renderFooter(state: AppState, width: number): string {
   const theme = state.theme;
   const border = (s: string) => fg(theme.border, s);
-
-  // Left content
-  let left = state.status ? fg(theme.dim, state.status) : "";
-
-  // Right content
-  let right: string;
-  if (state.commandMode) {
-    right = fg(theme.accent, "/") + state.commandBuffer;
-  } else {
-    right = fg(theme.dim, "/ commands  ? shortcuts  q quit");
-  }
-
   const prefix = "╰─ ";
   const suffix = " ─╯";
-  const sep = " ─";
-  const rightPlain = stripAnsi(right);
-  const prefixLen = prefix.length;
-  const suffixLen = suffix.length;
-  const sepLen = sep.length;
   const minFill = 3;
 
-  // Truncate left content if it would overflow the terminal width
-  const available = width - prefixLen - sepLen - rightPlain.length - suffixLen - minFill;
+  if (state.commandMode) {
+    // Full-width command input line — like a chat prompt at the bottom
+    const prompt = fg(theme.accent, "/") + state.commandBuffer;
+    const promptPlain = "/" + state.commandBuffer;
+    const fixedLen = prefix.length + promptPlain.length + suffix.length;
+    const fill = "─".repeat(Math.max(minFill, width - fixedLen));
+    return border(prefix) + prompt + border(fill + suffix);
+  }
+
+  // Normal mode: status left, hints right
+  let left = state.status ? fg(theme.dim, state.status) : "";
+  const right = fg(theme.dim, "/ commands  ? shortcuts  q quit");
+  const sep = " ─";
+  const rightPlain = stripAnsi(right);
+  const available = width - prefix.length - sep.length - rightPlain.length - suffix.length - minFill;
   if (stripAnsi(left).length > available) {
     left = truncate(stripAnsi(left), available);
   }
-
-  const leftPlain = stripAnsi(left);
-  const fixedLen = prefixLen + leftPlain.length + sepLen + rightPlain.length + suffixLen;
-  const fillCount = Math.max(minFill, width - fixedLen);
-  const fill = "─".repeat(fillCount);
-
-  return (
-    border("╰─ ") +
-    left +
-    border(sep) +
-    border(fill) +
-    right +
-    border(" ─╯")
-  );
+  const fixedLen = prefix.length + stripAnsi(left).length + sep.length + rightPlain.length + suffix.length;
+  const fill = "─".repeat(Math.max(minFill, width - fixedLen));
+  return border(prefix) + left + border(sep) + border(fill) + right + border(suffix);
 }
 
 // Body rendering
