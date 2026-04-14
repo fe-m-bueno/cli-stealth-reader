@@ -117,7 +117,7 @@ export interface FolderDiscovery {
   fileName: string;
 }
 
-export type OverlayKind = "none" | "chapters" | "books" | "themes" | "help" | "keys" | "diagnostics";
+export type OverlayKind = "none" | "chapters" | "books" | "themes" | "help" | "keys" | "diagnostics" | "file-picker";
 
 export interface AppState {
   storage: import("./storage.js").Storage;
@@ -134,4 +134,8 @@ export interface AppState {
   overlay: OverlayKind;
   discoveries: FolderDiscovery[];
   shouldQuit: boolean;
+  filePickerCursor: number;
+  filePickerItems: FolderDiscovery[];
+  filePickerSelected: Set<number>;
+  filePickerForce: boolean;
 }

@@ -1,5 +1,5 @@
 import { commandHelp } from "./commands.js";
-import { executeCommand, openBook } from "./executor.js";
+import { executeCommand, importAndOpen, openBook } from "./executor.js";
 import { handleInput } from "./input.js";
 import { bold, fg } from "./color.js";
 import { discoverEpubs } from "./discovery.js";
@@ -36,6 +36,8 @@ function currentLines(state: AppState, width: number, height: number): string[] 
       state.discoveries.slice(0, Math.max(3, height - 8)).forEach((item) => {
         lines.push(`  ${item.fileName}`);
       });
+      lines.push("");
+      lines.push("Press Enter to open the file picker.");
     }
     return lines;
   }
@@ -73,6 +75,23 @@ function renderOverlay(state: AppState, width: number, height: number): string[]
       return state.currentBook?.diagnostics.length
         ? state.currentBook.diagnostics.map((item) => `${item.severity.toUpperCase()} ${item.message}${item.context ? ` (${item.context})` : ""}`)
         : ["No diagnostics for the current book."];
+    case "file-picker": {
+      if (state.filePickerItems.length === 0) {
+        return ["No EPUBs found in this folder."];
+      }
+      const lines: string[] = [];
+      for (let index = 0; index < state.filePickerItems.length; index += 1) {
+        const item = state.filePickerItems[index];
+        const cursor = index === state.filePickerCursor ? fg(state.theme.accent, "›") : " ";
+        const check = state.filePickerSelected.has(index) ? fg(state.theme.accent, "[x]") : fg(state.theme.dim, "[ ]");
+        const label = truncate(item.fileName, Math.max(1, width - 7));
+        const name = index === state.filePickerCursor
+          ? fg(state.theme.accent, label)
+          : fg(state.theme.dim, label);
+        lines.push(`${cursor} ${check} ${name}`);
+      }
+      return lines;
+    }
     default:
       return [];
   }
@@ -126,7 +145,11 @@ export async function runTui(): Promise<void> {
     status: "Ready",
     overlay: "none",
     discoveries: await discoverEpubs(process.cwd()),
-    shouldQuit: false
+    shouldQuit: false,
+    filePickerCursor: 0,
+    filePickerItems: [],
+    filePickerSelected: new Set(),
+    filePickerForce: false,
   };
 
   const latest = storage.getLatestBookId();
@@ -148,6 +171,11 @@ export async function runTui(): Promise<void> {
     await handleInput(chunk, state, redraw, async (cmd) => {
       await executeCommand(state, cmd);
       syncPosition(state);
-    }, syncPosition);
+    }, syncPosition, async (paths, force) => {
+      for (const epubPath of paths) {
+        await importAndOpen(state, epubPath, force);
+      }
+      syncPosition(state);
+    });
   });
 }

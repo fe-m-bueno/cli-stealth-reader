@@ -6,7 +6,8 @@ export async function handleInput(
   state: AppState,
   redraw: () => void,
   executeCmd: (cmd: string) => Promise<void>,
-  syncPos: (state: AppState) => void
+  syncPos: (state: AppState) => void,
+  confirmPicker: (paths: string[], force: boolean) => Promise<void>
 ): Promise<void> {
   if (chunk === "\u0003") {
     state.shouldQuit = true;
@@ -41,8 +42,49 @@ export async function handleInput(
     return;
   }
 
+  const pickerItems = state.filePickerItems;
+  if (state.overlay === "file-picker") {
+    const maxIndex = Math.max(0, pickerItems.length - 1);
+    if (chunk === "\u001b[B" || chunk === "j") {
+      state.filePickerCursor = clamp(state.filePickerCursor + 1, 0, maxIndex);
+    } else if (chunk === "\u001b[A" || chunk === "k") {
+      state.filePickerCursor = clamp(state.filePickerCursor - 1, 0, maxIndex);
+    } else if (chunk === " ") {
+      if (pickerItems.length > 0) {
+        if (state.filePickerSelected.has(state.filePickerCursor)) {
+          state.filePickerSelected.delete(state.filePickerCursor);
+        } else {
+          state.filePickerSelected.add(state.filePickerCursor);
+        }
+      }
+    } else if (chunk === "\r") {
+      if (pickerItems.length > 0) {
+        const selectedIndexes = state.filePickerSelected.size > 0
+          ? Array.from(state.filePickerSelected).sort((a, b) => a - b)
+          : [state.filePickerCursor];
+        const paths = selectedIndexes
+          .map((index) => pickerItems[index]?.path)
+          .filter((value): value is string => Boolean(value));
+        state.overlay = "none";
+        await confirmPicker(paths, state.filePickerForce);
+      } else {
+        state.overlay = "none";
+      }
+    } else if (chunk === "\u001b") {
+      state.overlay = "none";
+    }
+    redraw();
+    return;
+  }
+
   if (chunk === "\u001b") {
     state.overlay = "none";
+    redraw();
+    return;
+  }
+
+  if (chunk === "\r" && !state.currentBook && state.discoveries.length > 0) {
+    await executeCmd("/add");
     redraw();
     return;
   }

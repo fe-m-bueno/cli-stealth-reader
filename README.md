@@ -46,7 +46,7 @@ node dist/index.js
 ## Uso Rápido
 
 1. Inicie o leitor: `npm run dev`
-2. Selecione um livro da biblioteca ou da pasta atual
+2. Selecione um livro da biblioteca ou abra o picker de EPUBs da pasta atual
 3. Use `j`/`k` ou setas para navegar
 4. Pressione `/` para abrir a barra de comandos
 5. Pressione `?` para ver todos os atalhos
@@ -164,7 +164,7 @@ Pressione `/` para abrir a barra de comandos. Todos os comandos suportam argumen
 /resume [book-query]   # Retomar um livro específico
   --latest             # Retomar o último lido
 
-/add [path]            # Importar um EPUB
+/add [path]            # Importar um EPUB ou abrir o picker da pasta atual
   --cwd                # Procurar EPUBs na pasta atual
   --force              # Reimportar mesmo que já exista
 

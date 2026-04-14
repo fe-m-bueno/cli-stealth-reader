@@ -3,7 +3,14 @@ import path from "node:path";
 import { commandHelp, parseSlashCommand } from "./commands.js";
 import { importEpub } from "./parser/epub.js";
 import { THEMES } from "./themes.js";
-import type { AppState, CanonicalBook, LibraryEntry, ParsedCommandResult, ProgressVisibility } from "./types.js";
+import type {
+  AppState,
+  CanonicalBook,
+  FolderDiscovery,
+  LibraryEntry,
+  ParsedCommandResult,
+  ProgressVisibility
+} from "./types.js";
 
 function findBookByQuery(books: LibraryEntry[], query: string): LibraryEntry | undefined {
   const q = query.toLowerCase();
@@ -26,6 +33,30 @@ export async function importAndOpen(state: AppState, epubPath: string, force = f
   const book = await importEpub(epubPath);
   state.storage.saveBook(book, state.renderMode);
   await openBook(state, book);
+}
+
+function filterDiscoveries(discoveries: FolderDiscovery[], query: string): FolderDiscovery[] {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) {
+    return discoveries;
+  }
+  return discoveries.filter((item) => item.fileName.toLowerCase().includes(normalized));
+}
+
+export function openFilePicker(
+  state: AppState,
+  items: FolderDiscovery[],
+  options?: {
+    force?: boolean;
+    status?: string;
+  }
+): void {
+  state.overlay = "file-picker";
+  state.filePickerItems = items;
+  state.filePickerCursor = 0;
+  state.filePickerSelected = new Set();
+  state.filePickerForce = Boolean(options?.force);
+  state.status = options?.status ?? (items.length > 0 ? "Opened file picker." : "No EPUBs found in this folder.");
 }
 
 type CommandHandler = (state: AppState, parsed: ParsedCommandResult) => Promise<void>;
@@ -109,17 +140,36 @@ const handlers: Record<string, CommandHandler> = {
   },
 
   add: async (state, parsed) => {
+    const force = Boolean(parsed.flags.force);
     if (parsed.flags.cwd || parsed.args.length === 0) {
-      const candidate = state.discoveries[0];
-      if (!candidate) {
-        state.status = "No EPUBs detected in the current directory.";
-        return;
-      }
-      await importAndOpen(state, candidate.path, Boolean(parsed.flags.force));
+      openFilePicker(state, state.discoveries, {
+        force,
+        status: state.discoveries.length > 0
+          ? "Opened file picker."
+          : "No EPUBs detected in the current directory."
+      });
       return;
     }
+
     const target = parsed.args.join(" ");
-    await importAndOpen(state, path.resolve(state.cwd, target), Boolean(parsed.flags.force));
+    const explicitPath = path.resolve(state.cwd, target);
+    if (fs.existsSync(explicitPath)) {
+      await importAndOpen(state, explicitPath, force);
+      return;
+    }
+
+    const matches = filterDiscoveries(state.discoveries, target);
+    if (matches.length === 1) {
+      await importAndOpen(state, matches[0].path, force);
+      return;
+    }
+
+    openFilePicker(state, matches, {
+      force,
+      status: matches.length > 0
+        ? `Opened file picker for "${target}".`
+        : `No EPUBs matched "${target}".`
+    });
   },
 
   remove: async (state, parsed) => {
