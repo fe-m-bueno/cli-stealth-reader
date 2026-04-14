@@ -72,6 +72,15 @@ export interface Bookmark {
   createdAt: number;
 }
 
+export interface Note {
+  id: string;
+  bookId: string;
+  chapterIndex: number | null;
+  blockOffset: number | null;
+  content: string;
+  createdAt: number;
+}
+
 export interface LibraryEntry {
   id: string;
   title: string;
@@ -152,7 +161,7 @@ export interface FolderDiscovery {
   fileName: string;
 }
 
-export type OverlayKind = "none" | "chapters" | "books" | "bookmarks" | "themes" | "help" | "keys" | "diagnostics" | "file-picker";
+export type OverlayKind = "none" | "chapters" | "books" | "bookmarks" | "notes" | "themes" | "help" | "keys" | "diagnostics" | "file-picker";
 
 export interface SearchHit {
   chapterIndex: number;
@@ -228,4 +237,5 @@ export interface AppState {
   navHistoryCursor: number;
   librarySortKey: LibrarySortKey;
   librarySortDir: SortDirection;
+  booksTagFilter: string | null;
 }

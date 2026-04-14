@@ -111,7 +111,17 @@ function makeStorageBase() {
       codeLanguage: "typescript",
       codeDensity: 3,
       plainHighlight: true
-    })
+    }),
+    listBookmarks: () => [],
+    addBookmark: () => ({ id: "", bookId: "", chapterIndex: 0, blockOffset: 0, label: null, createdAt: 0 }),
+    deleteBookmark: () => {},
+    listTagsByBookId: () => new Map<string, string[]>(),
+    listTags: () => [] as string[],
+    addTag: () => {},
+    removeTag: () => {},
+    listNotes: () => [],
+    addNote: () => ({ id: "", bookId: "", chapterIndex: 0, blockOffset: 0, content: "", createdAt: 0 }),
+    deleteNote: () => {}
   };
 }
 
@@ -146,6 +156,11 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     searchState: null,
     navHistory: [],
     navHistoryCursor: -1,
+    librarySortKey: "lastOpened",
+    librarySortDir: "desc",
+    booksTagFilter: null,
+    focusMode: false,
+    focusBlockIndex: 0,
     ...overrides
   };
 }

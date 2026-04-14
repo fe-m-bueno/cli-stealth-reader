@@ -282,6 +282,7 @@ const handlers: Record<string, CommandHandler> = {
     const query = parsed.args.join(" ");
     const books = state.storage.listBooks();
     if (!query.trim()) {
+      state.booksTagFilter = null;
       state.overlay = "books";
       state.overlayCursor = 0;
       state.status = books.length > 0 ? "Opened library picker." : "No books in the library yet.";
@@ -294,9 +295,28 @@ const handlers: Record<string, CommandHandler> = {
         await openBook(state, book);
       }
     } else {
+      const q = query.trim().toLowerCase();
+      const tagsByBookId = state.storage.listTagsByBookId();
+      const tagMatches = books.filter((book) => {
+        const tags = tagsByBookId.get(book.id) ?? [];
+        return tags.some((t) => t.toLowerCase().includes(q));
+      });
+      if (tagMatches.length === 1) {
+        const book = state.storage.getBook(tagMatches[0]!.id);
+        if (book) {
+          await openBook(state, book);
+          return;
+        }
+      }
       state.overlay = "books";
       state.overlayCursor = 0;
-      state.status = "No exact match. Opened library picker.";
+      if (tagMatches.length > 0) {
+        state.booksTagFilter = query.trim();
+        state.status = `Filtering by tag "${query.trim()}". ${tagMatches.length} book(s) found.`;
+      } else {
+        state.booksTagFilter = null;
+        state.status = "No exact match. Opened library picker.";
+      }
     }
   },
 
@@ -607,6 +627,66 @@ const handlers: Record<string, CommandHandler> = {
     }
 
     state.status = `Could not parse position "${raw}". Try /goto 42%, /goto 30%c, /goto 5, or /goto 10% --chapter.`;
+  },
+
+  tag: async (state, parsed) => {
+    if (!state.currentBook) {
+      state.status = "No book open.";
+      return;
+    }
+    const isDelete = Boolean(parsed.flags.delete);
+    const tagArg = parsed.args[0];
+    if (isDelete) {
+      if (!tagArg) {
+        throw new Error("Use /tag -d <tag>");
+      }
+      state.storage.removeTag(state.currentBook.id, tagArg);
+      state.status = `Tag removed: #${tagArg}`;
+    } else if (tagArg) {
+      state.storage.addTag(state.currentBook.id, tagArg);
+      state.status = `Tag added: #${tagArg}`;
+    } else {
+      const tags = state.storage.listTags(state.currentBook.id);
+      state.status = tags.length > 0 ? `Tags: ${tags.map((t) => `#${t}`).join("  ")}` : "No tags for this book.";
+    }
+  },
+
+  tags: async (state) => {
+    if (!state.currentBook) {
+      state.status = "No book open.";
+      return;
+    }
+    const tags = state.storage.listTags(state.currentBook.id);
+    state.status = tags.length > 0 ? `Tags: ${tags.map((t) => `#${t}`).join("  ")}` : "No tags for this book.";
+  },
+
+  note: async (state, parsed) => {
+    if (!state.currentBook) {
+      state.status = "No book open.";
+      return;
+    }
+    const isList = Boolean(parsed.flags.list);
+    const isDelete = Boolean(parsed.flags.delete);
+    if (isList) {
+      const notes = state.storage.listNotes(state.currentBook.id);
+      state.overlay = "notes";
+      state.overlayCursor = 0;
+      state.status = notes.length > 0 ? "Opened notes." : "No notes for this book yet.";
+    } else if (isDelete) {
+      const id = parsed.args[0];
+      if (!id) {
+        throw new Error("Use /note -d <id>");
+      }
+      state.storage.deleteNote(id);
+      state.status = "Note deleted.";
+    } else {
+      const content = parsed.args.join(" ").trim();
+      if (!content) {
+        throw new Error("Use /note <text>");
+      }
+      const note = state.storage.addNote(state.currentBook.id, content, state.chapterIndex, state.blockOffset);
+      state.status = `Note saved (${note.id.slice(0, 8)})`;
+    }
   }
 };
 

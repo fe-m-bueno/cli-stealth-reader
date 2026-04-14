@@ -121,6 +121,25 @@ export const COMMANDS: CommandDefinition[] = [
     description: "Delete a bookmark by id or label.",
     args: [{ name: "id-or-label", required: true }],
     usage: "/delmark <id|label>"
+  },
+  {
+    name: "tag",
+    description: "Add, remove, or list tags for the current book.",
+    args: [{ name: "tag" }],
+    flags: [{ name: "delete", alias: "d" }],
+    usage: "/tag [tag] [-d <tag>]"
+  },
+  {
+    name: "tags",
+    description: "List tags for the current book.",
+    usage: "/tags"
+  },
+  {
+    name: "note",
+    description: "Add a note at current position, list notes (-l), or delete a note (-d <id>).",
+    args: [{ name: "text" }],
+    flags: [{ name: "list", alias: "l" }, { name: "delete", alias: "d" }],
+    usage: "/note [text] [-l] [-d <id>]"
   }
 ];
 

@@ -12,6 +12,7 @@ import type {
   LibraryEntry,
   LibraryEntryWithProgress,
   LibrarySortKey,
+  Note,
   ProgressVisibility,
   ReadingPosition,
   RenderMode,
@@ -91,6 +92,19 @@ export class Storage {
         chapter_index INTEGER NOT NULL,
         block_offset INTEGER NOT NULL,
         label TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS book_tags (
+        book_id TEXT NOT NULL,
+        tag TEXT NOT NULL,
+        PRIMARY KEY (book_id, tag)
+      );
+      CREATE TABLE IF NOT EXISTS notes (
+        id TEXT PRIMARY KEY,
+        book_id TEXT NOT NULL,
+        chapter_index INTEGER,
+        block_offset INTEGER,
+        content TEXT NOT NULL,
         created_at INTEGER NOT NULL
       );
     `);
@@ -248,7 +262,7 @@ export class Storage {
     `).all() as unknown as LibraryEntry[];
   }
 
-  listBooksWithProgress(sort: LibrarySortKey = "lastOpened", dir: SortDirection = "desc"): LibraryEntryWithProgress[] {
+  listBooksWithProgress(sort: LibrarySortKey = "lastOpened", dir: SortDirection = "desc", tagFilter?: string): LibraryEntryWithProgress[] {
     let orderClause: string;
     if (sort === "title") {
       orderClause = `LOWER(b.title) ${dir === "asc" ? "ASC" : "DESC"}`;
@@ -275,9 +289,16 @@ export class Storage {
       LEFT JOIN chapters c ON c.book_id = b.id AND c.chapter_index = p.chapter_index
       ORDER BY ${orderClause}
     `).all() as unknown as LibraryEntryWithProgress[];
+    let filtered = rows;
+    if (tagFilter) {
+      const taggedIds = new Set(
+        (this.db.prepare("SELECT book_id FROM book_tags WHERE tag = ?").all(tagFilter) as Array<{ book_id: string }>).map((r) => r.book_id)
+      );
+      filtered = rows.filter((r) => taggedIds.has(r.id));
+    }
     if (sort === "progress") {
       const multiplier = dir === "asc" ? 1 : -1;
-      return rows.sort((a, b) => {
+      return filtered.sort((a, b) => {
         const ap = a.bookProgress;
         const bp = b.bookProgress;
         if (ap === null && bp === null) return 0;
@@ -286,7 +307,7 @@ export class Storage {
         return (ap - bp) * multiplier;
       });
     }
-    return rows;
+    return filtered;
   }
 
   removeBook(bookId: string): void {
@@ -297,6 +318,8 @@ export class Storage {
       this.db.prepare("DELETE FROM diagnostics WHERE book_id = ?").run(bookId);
       this.db.prepare("DELETE FROM positions WHERE book_id = ?").run(bookId);
       this.db.prepare("DELETE FROM bookmarks WHERE book_id = ?").run(bookId);
+      this.db.prepare("DELETE FROM book_tags WHERE book_id = ?").run(bookId);
+      this.db.prepare("DELETE FROM notes WHERE book_id = ?").run(bookId);
       fs.rmSync(path.join(this.chapterCacheDir, bookId), { recursive: true, force: true });
       this.db.exec("COMMIT");
     } catch (error) {
@@ -377,5 +400,69 @@ export class Storage {
 
   deleteBookmark(id: string): void {
     this.db.prepare("DELETE FROM bookmarks WHERE id = ?").run(id);
+  }
+
+  addTag(bookId: string, tag: string): void {
+    this.db.prepare("INSERT OR IGNORE INTO book_tags (book_id, tag) VALUES (?, ?)").run(bookId, tag.trim());
+  }
+
+  removeTag(bookId: string, tag: string): void {
+    this.db.prepare("DELETE FROM book_tags WHERE book_id = ? AND tag = ?").run(bookId, tag.trim());
+  }
+
+  listTags(bookId: string): string[] {
+    return (
+      this.db.prepare("SELECT tag FROM book_tags WHERE book_id = ? ORDER BY tag").all(bookId) as Array<{ tag: string }>
+    ).map((r) => r.tag);
+  }
+
+  listTagsByBookId(): Map<string, string[]> {
+    const rows = this.db.prepare("SELECT book_id, tag FROM book_tags ORDER BY book_id, tag").all() as Array<{
+      book_id: string;
+      tag: string;
+    }>;
+    const map = new Map<string, string[]>();
+    for (const row of rows) {
+      if (!map.has(row.book_id)) {
+        map.set(row.book_id, []);
+      }
+      map.get(row.book_id)!.push(row.tag);
+    }
+    return map;
+  }
+
+  addNote(bookId: string, content: string, chapterIndex: number, blockOffset: number): Note {
+    const note: Note = {
+      id: crypto.randomUUID(),
+      bookId,
+      chapterIndex,
+      blockOffset,
+      content: content.trim(),
+      createdAt: Date.now()
+    };
+    this.db.prepare(`
+      INSERT INTO notes (id, book_id, chapter_index, block_offset, content, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(note.id, note.bookId, note.chapterIndex, note.blockOffset, note.content, note.createdAt);
+    return note;
+  }
+
+  listNotes(bookId: string): Note[] {
+    return this.db.prepare(`
+      SELECT
+        id,
+        book_id AS bookId,
+        chapter_index AS chapterIndex,
+        block_offset AS blockOffset,
+        content,
+        created_at AS createdAt
+      FROM notes
+      WHERE book_id = ?
+      ORDER BY created_at DESC
+    `).all(bookId) as Note[];
+  }
+
+  deleteNote(id: string): void {
+    this.db.prepare("DELETE FROM notes WHERE id = ?").run(id);
   }
 }

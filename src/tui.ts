@@ -119,7 +119,8 @@ export function renderOverlay(state: AppState, width: number, height: number): s
           return `${marker} ${String(chapter.index + 1).padStart(2, "0")} ${truncate(chapter.title, width - 6)}`;
         });
     case "books": {
-      const books = state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir);
+      const books = state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir, state.booksTagFilter ?? undefined);
+      const tagsByBookId = state.storage.listTagsByBookId();
       const sortKeyLabels: Record<string, string> = {
         lastOpened: "Last Opened",
         title: "Title",
@@ -127,8 +128,9 @@ export function renderOverlay(state: AppState, width: number, height: number): s
         progress: "Progress"
       };
       const dirArrow = state.librarySortDir === "asc" ? "↑" : "↓";
+      const filterNote = state.booksTagFilter ? `  [tag: #${state.booksTagFilter}]` : "";
       const header = truncate(
-        `  Sort: ${sortKeyLabels[state.librarySortKey]} ${dirArrow}   (Press s to change, r to reverse)`,
+        `  Sort: ${sortKeyLabels[state.librarySortKey]} ${dirArrow}   (Press s to change, r to reverse)${filterNote}`,
         width
       );
       return [
@@ -138,7 +140,9 @@ export function renderOverlay(state: AppState, width: number, height: number): s
           const progressTag = book.bookProgress !== null
             ? `[Ch.${(book.chapterIndex ?? 0) + 1} · ${Math.round(book.bookProgress * 100)}%]`
             : "[not started]";
-          const right = `  ${progressTag}`;
+          const tags = tagsByBookId.get(book.id) ?? [];
+          const tagsStr = tags.length > 0 ? `  ${tags.map((t) => `#${t}`).join(" ")}` : "";
+          const right = `  ${progressTag}${tagsStr}`;
           const titleAuthor = truncate(`${book.title}  —  ${book.author}`, Math.max(1, width - 2 - right.length));
           return `${marker} ${titleAuthor}${right}`;
         })
@@ -158,9 +162,26 @@ export function renderOverlay(state: AppState, width: number, height: number): s
         return `${marker} ${left} ${age}`;
       });
     }
-    case "themes":
-      return THEMES.map((theme, index) => {
+    case "notes": {
+      if (!state.currentBook) {
+        return ["No book open."];
+      }
+      const notes = state.storage.listNotes(state.currentBook.id);
+      if (notes.length === 0) {
+        return ["No notes for this book yet."];
+      }
+      return notes.map((note, index) => {
         const marker = index === state.overlayCursor ? ">" : " ";
+        const location = note.chapterIndex !== null
+          ? `Ch.${note.chapterIndex + 1} §${note.blockOffset ?? 0}`
+          : "Book";
+        const age = `[${formatRelativeTime(note.createdAt)}]`;
+        const left = truncate(`${location}  "${note.content}"`, Math.max(1, width - age.length - 1));
+        return `${marker} ${left} ${age}`;
+      });
+    }
+    case "themes":
+      return THEMES.map((theme, index) => {        const marker = index === state.overlayCursor ? ">" : " ";
         return `${marker} ${theme.label} (${theme.id})`;
       });
     case "help":
@@ -311,7 +332,8 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     navHistory: [],
     navHistoryCursor: -1,
     librarySortKey: "lastOpened",
-    librarySortDir: "desc"
+    librarySortDir: "desc",
+    booksTagFilter: null
   };
 
   if (options?.resume) {

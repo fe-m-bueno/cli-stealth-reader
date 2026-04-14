@@ -134,9 +134,11 @@ function interactiveOverlayLength(state: AppState): number {
     case "chapters":
       return state.currentBook?.chapters.length ?? 0;
     case "books":
-      return state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir).length;
+      return state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir, state.booksTagFilter ?? undefined).length;
     case "bookmarks":
       return state.currentBook ? state.storage.listBookmarks(state.currentBook.id).length : 0;
+    case "notes":
+      return state.currentBook ? state.storage.listNotes(state.currentBook.id).length : 0;
     case "themes":
       return THEMES.length;
     default:
@@ -360,7 +362,7 @@ export async function handleInput(
         pushNavHistory(state);
         state.status = `Moved to chapter ${state.chapterIndex + 1}`;
       } else if (state.overlay === "books") {
-        const books = state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir);
+        const books = state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir, state.booksTagFilter ?? undefined);
         const selected = books[state.overlayCursor];
         if (selected) {
           const book = state.storage.getBook(selected.id);
@@ -392,10 +394,22 @@ export async function handleInput(
             ? `Jumped to bookmark "${selected.label}".`
             : `Jumped to bookmark Ch.${selected.chapterIndex + 1} §${selected.blockOffset}.`;
         }
+      } else if (state.overlay === "notes" && state.currentBook) {
+        const notes = state.storage.listNotes(state.currentBook.id);
+        const selected = notes[state.overlayCursor];
+        if (selected && selected.chapterIndex !== null) {
+          pushNavHistory(state);
+          state.chapterIndex = selected.chapterIndex;
+          state.blockOffset = selected.blockOffset ?? 0;
+          pushNavHistory(state);
+          state.status = `Jumped to note at Ch.${selected.chapterIndex + 1} §${selected.blockOffset ?? 0}.`;
+        }
       }
       state.overlay = "none";
+      state.booksTagFilter = null;
     } else if (chunk === "\u001b") {
       state.overlay = "none";
+      state.booksTagFilter = null;
     } else if (chunk === "s" && state.overlay === "books") {
       const cycle: LibrarySortKey[] = ["lastOpened", "title", "author", "progress"];
       const current = cycle.indexOf(state.librarySortKey);
@@ -417,6 +431,21 @@ export async function handleInput(
         } else {
           state.overlayCursor = clamp(state.overlayCursor, 0, remaining - 1);
           state.status = "Bookmark deleted.";
+        }
+      }
+    } else if (chunk === "d" && state.overlay === "notes" && state.currentBook) {
+      const notes = state.storage.listNotes(state.currentBook.id);
+      const selected = notes[state.overlayCursor];
+      if (selected) {
+        state.storage.deleteNote(selected.id);
+        const remaining = state.storage.listNotes(state.currentBook.id).length;
+        if (remaining === 0) {
+          state.overlay = "none";
+          state.overlayCursor = 0;
+          state.status = "Note deleted. No notes remaining.";
+        } else {
+          state.overlayCursor = clamp(state.overlayCursor, 0, remaining - 1);
+          state.status = "Note deleted.";
         }
       }
     }
