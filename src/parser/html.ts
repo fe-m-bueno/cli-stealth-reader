@@ -2,6 +2,8 @@ import { parse } from "parse5";
 import type { CanonicalBlock } from "../types.js";
 
 const BLOCK_NAMES = new Set(["p", "blockquote", "li", "h1", "h2", "h3", "h4", "h5", "h6", "img", "hr"]);
+const SKIP_TEXT_TAGS = new Set(["script", "style", "svg", "title", "head", "noscript"]);
+const CHAPTER_ID_PATTERNS = [/^capitulo\d+$/i, /^chapter\d+$/i, /^ch\d+$/i, /^cap\d+$/i];
 
 type TreeNode = {
   tagName?: string;
@@ -15,6 +17,9 @@ function getAttr(element: TreeNode, name: string): string | undefined {
 }
 
 function collectText(node: TreeNode): string {
+  if (node.tagName && SKIP_TEXT_TAGS.has(node.tagName)) {
+    return "";
+  }
   if ("value" in node) {
     return node.value ?? "";
   }
@@ -49,6 +54,9 @@ function visitNode(
 ): void {
   const tagName = node.tagName;
   if (typeof tagName !== "string") {
+    return;
+  }
+  if (SKIP_TEXT_TAGS.has(tagName)) {
     return;
   }
   const element = node as TreeNode & { tagName: string };
@@ -121,6 +129,47 @@ export function extractBlocksFromHtml(htmlSource: string, prefix: string): Canon
   return blocks;
 }
 
+export function parseNavToc(htmlSource: string): Array<{ href: string; label: string; depth: number }> {
+  const document = parse(htmlSource) as unknown as TreeNode;
+
+  function findNavToc(node: TreeNode): TreeNode | null {
+    if (node.tagName === "nav") {
+      const epubType = getAttr(node, "epub:type") ?? getAttr(node, "type") ?? "";
+      const id = getAttr(node, "id") ?? "";
+      if (epubType.includes("toc") || id === "toc") {
+        return node;
+      }
+    }
+    for (const child of node.childNodes ?? []) {
+      const found = findNavToc(child);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  const items: Array<{ href: string; label: string; depth: number }> = [];
+
+  function collect(node: TreeNode, depth: number): void {
+    if (node.tagName === "a") {
+      const href = getAttr(node, "href");
+      if (href) {
+        items.push({ href, label: normalizeText(collectText(node)) || "Untitled chapter", depth });
+      }
+      return;
+    }
+    for (const child of node.childNodes ?? []) {
+      const nextDepth = node.tagName === "li" && child.tagName === "ol" ? depth + 1 : depth;
+      collect(child, nextDepth);
+    }
+  }
+
+  const navToc = findNavToc(document);
+  if (navToc) {
+    collect(navToc, 0);
+  }
+  return items;
+}
+
 export function sliceBlocksByAnchors(
   blocks: CanonicalBlock[],
   startAnchor?: string,
@@ -146,4 +195,15 @@ export function sliceBlocksByAnchors(
     .slice(startIndex, endIndex)
     .filter((block) => block.type !== "anchor")
     .map((block, index) => ({ ...block, id: `${block.id}-${index}` }));
+}
+
+export function findFirstChapterAnchor(blocks: CanonicalBlock[]): string | undefined {
+  const anchor = blocks.find((block) => {
+    if (block.type !== "anchor" || typeof block.anchorId !== "string") {
+      return false;
+    }
+    const anchorId = block.anchorId;
+    return CHAPTER_ID_PATTERNS.some((pattern) => pattern.test(anchorId));
+  });
+  return anchor?.anchorId;
 }

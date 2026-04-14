@@ -3,7 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import JSZip from "jszip";
 import { ensureArray, parseXml } from "./xml.js";
-import { extractBlocksFromHtml, sliceBlocksByAnchors } from "./html.js";
+import { extractBlocksFromHtml, findFirstChapterAnchor, sliceBlocksByAnchors, parseNavToc } from "./html.js";
 import type { CanonicalBook, CanonicalChapter, CanonicalBlock, ImportDiagnostic } from "../types.js";
 
 interface ContainerXml {
@@ -105,14 +105,6 @@ function flattenNavPoints(points: NcxNavPoint[] | NcxNavPoint | undefined, depth
   return items;
 }
 
-function collectNavAnchors(htmlSource: string): TocItem[] {
-  const matches = Array.from(htmlSource.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gis));
-  return matches.map((match) => ({
-    href: match[1],
-    label: match[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() || "Untitled chapter",
-    depth: 0
-  }));
-}
 
 export async function importEpub(epubPath: string): Promise<CanonicalBook> {
   const raw = await fs.readFile(epubPath);
@@ -144,7 +136,7 @@ export async function importEpub(epubPath: string): Promise<CanonicalBook> {
   const navItem = manifestItems.find((item) => item.properties?.includes("nav"));
   if (navItem) {
     const navHtml = await readZipText(zip, normalizeHref(opfDir, navItem.href));
-    tocItems = collectNavAnchors(navHtml);
+    tocItems = parseNavToc(navHtml);
   } else {
     const tocId = opf.package.spine?.toc;
     const ncxItem = tocId ? manifestMap.get(tocId) : manifestItems.find((item) => item["media-type"]?.includes("ncx"));
@@ -198,7 +190,9 @@ export async function importEpub(epubPath: string): Promise<CanonicalBook> {
     const baseBlocks = await getBlocksForFile(current.basePath);
     let blocks = baseBlocks;
     if (current.fragment || (next && next.basePath === current.basePath && next.fragment)) {
-      blocks = sliceBlocksByAnchors(baseBlocks, current.fragment, next?.basePath === current.basePath ? next.fragment : undefined);
+      const endAnchor = next?.basePath === current.basePath ? next.fragment : undefined;
+      const startAnchor = current.fragment ?? (endAnchor ? findFirstChapterAnchor(baseBlocks) : undefined);
+      blocks = sliceBlocksByAnchors(baseBlocks, startAnchor, endAnchor);
     } else {
       blocks = baseBlocks.filter((block) => block.type !== "anchor").map((block, blockIndex) => ({ ...block, id: `${block.id}-${blockIndex}` }));
     }

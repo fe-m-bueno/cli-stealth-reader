@@ -13,12 +13,43 @@ export function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
 
-export function truncate(text: string, width: number): string {
-  return text.length <= width ? text : `${text.slice(0, Math.max(0, width - 1))}…`;
+export function stripAnsi(s: string): string {
+  return s.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
-function stripAnsi(s: string): string {
-  return s.replace(/\x1b\[[^m]*m/g, "");
+export function truncate(text: string, width: number): string {
+  if (width <= 0) {
+    return "";
+  }
+  if (stripAnsi(text).length <= width) {
+    return text;
+  }
+
+  const target = Math.max(0, width - 1);
+  let visible = 0;
+  let index = 0;
+  let output = "";
+
+  while (index < text.length && visible < target) {
+    if (text[index] === "\x1b") {
+      const match = /\x1b\[[0-9;]*m/.exec(text.slice(index));
+      if (match) {
+        output += match[0];
+        index += match[0].length;
+        continue;
+      }
+    }
+    output += text[index];
+    visible += 1;
+    index += 1;
+  }
+
+  return `${output}…\x1b[0m`;
+}
+
+function padAnsi(text: string, width: number): string {
+  const padding = Math.max(0, width - stripAnsi(text).length);
+  return text + " ".repeat(padding);
 }
 
 export function clearScreen(): void {
@@ -148,9 +179,9 @@ export function renderBody(
 ): string {
   let output = "";
   for (let row = 0; row < bodyHeight; row += 1) {
-    const left = truncate(mainLines[row] ?? "", mainWidth - 1).padEnd(mainWidth, " ");
+    const left = padAnsi(truncate(mainLines[row] ?? "", mainWidth - 1), mainWidth);
     if (overlayWidth) {
-      const right = truncate(overlayLines[row] ?? "", overlayWidth - 1).padEnd(overlayWidth, " ");
+      const right = padAnsi(truncate(overlayLines[row] ?? "", overlayWidth - 1), overlayWidth);
       output += `${left} ${fg(theme.border, "│")} ${right}\n`;
     } else {
       output += `${left}\n`;
