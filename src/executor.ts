@@ -1,0 +1,201 @@
+import fs from "node:fs";
+import path from "node:path";
+import { commandHelp, parseSlashCommand } from "./commands.js";
+import { importEpub } from "./parser/epub.js";
+import { THEMES } from "./themes.js";
+import type { AppState, CanonicalBook, LibraryEntry, ParsedCommandResult, ProgressVisibility } from "./types.js";
+
+function findBookByQuery(books: LibraryEntry[], query: string): LibraryEntry | undefined {
+  const q = query.toLowerCase();
+  return books.find((book) => book.title.toLowerCase().includes(q) || book.author.toLowerCase().includes(q));
+}
+
+export async function openBook(state: AppState, book: CanonicalBook): Promise<void> {
+  state.currentBook = book;
+  const existing = state.storage.getPosition(book.id);
+  state.chapterIndex = existing?.chapterIndex ?? 0;
+  state.blockOffset = existing?.blockOffset ?? 0;
+  state.status = `Opened ${book.title}`;
+}
+
+export async function importAndOpen(state: AppState, epubPath: string, force = false): Promise<void> {
+  if (!force && !fs.existsSync(epubPath)) {
+    state.status = `File not found: ${epubPath}`;
+    return;
+  }
+  const book = await importEpub(epubPath);
+  state.storage.saveBook(book, state.renderMode);
+  await openBook(state, book);
+}
+
+type CommandHandler = (state: AppState, parsed: ParsedCommandResult) => Promise<void>;
+
+const handlers: Record<string, CommandHandler> = {
+  prev: async (state, parsed) => {
+    if (state.currentBook) {
+      const count = Math.max(1, Number(parsed.args[0] ?? "1"));
+      state.chapterIndex = Math.max(0, state.chapterIndex - count);
+      state.blockOffset = 0;
+      state.status = `Moved to chapter ${state.chapterIndex + 1}`;
+    }
+  },
+
+  next: async (state, parsed) => {
+    if (state.currentBook) {
+      const count = Math.max(1, Number(parsed.args[0] ?? "1"));
+      state.chapterIndex = Math.min(state.currentBook.chapters.length - 1, state.chapterIndex + count);
+      state.blockOffset = 0;
+      state.status = `Moved to chapter ${state.chapterIndex + 1}`;
+    }
+  },
+
+  chapters: async (state) => {
+    state.overlay = "chapters";
+    state.status = "Opened table of contents";
+  },
+
+  changebook: async (state, parsed) => {
+    const query = parsed.args.join(" ");
+    const books = state.storage.listBooks();
+    const selected = findBookByQuery(books, query);
+    if (selected) {
+      const book = state.storage.getBook(selected.id);
+      if (book) {
+        await openBook(state, book);
+      }
+    } else {
+      state.overlay = "books";
+      state.status = "No exact match. Opened library picker.";
+    }
+  },
+
+  colorscheme: async (state, parsed) => {
+    if (parsed.flags.list || parsed.args.length === 0) {
+      state.overlay = "themes";
+      state.status = "Opened colorscheme picker";
+      return;
+    }
+    const theme = THEMES.find((item) => item.id === parsed.args[0]);
+    if (!theme) {
+      throw new Error(`Unknown theme ${parsed.args[0]}`);
+    }
+    state.theme = theme;
+    state.storage.setSetting("themeId", theme.id);
+    state.status = `Theme set to ${theme.label}`;
+  },
+
+  resume: async (state, parsed) => {
+    const targetId = parsed.flags.latest ? state.storage.getLatestBookId() : null;
+    if (targetId) {
+      const book = state.storage.getBook(targetId);
+      if (book) {
+        await openBook(state, book);
+      }
+      return;
+    }
+    if (parsed.args.length > 0) {
+      await executeCommand(state, `/changebook ${parsed.args.join(" ")}`);
+    } else {
+      const latest = state.storage.getLatestBookId();
+      if (!latest) {
+        state.status = "No previous book to resume.";
+      } else {
+        const book = state.storage.getBook(latest);
+        if (book) {
+          await openBook(state, book);
+        }
+      }
+    }
+  },
+
+  add: async (state, parsed) => {
+    if (parsed.flags.cwd || parsed.args.length === 0) {
+      const candidate = state.discoveries[0];
+      if (!candidate) {
+        state.status = "No EPUBs detected in the current directory.";
+        return;
+      }
+      await importAndOpen(state, candidate.path, Boolean(parsed.flags.force));
+      return;
+    }
+    const target = parsed.args.join(" ");
+    await importAndOpen(state, path.resolve(state.cwd, target), Boolean(parsed.flags.force));
+  },
+
+  remove: async (state, parsed) => {
+    if (parsed.flags.current && state.currentBook) {
+      state.storage.removeBook(state.currentBook.id);
+      state.currentBook = null;
+      state.status = "Current book removed from the library.";
+      return;
+    }
+    const query = parsed.args.join(" ");
+    const match = state.storage.listBooks().find((book) => book.title.toLowerCase().includes(query.toLowerCase()));
+    if (!match) {
+      state.status = "No matching book found.";
+      return;
+    }
+    state.storage.removeBook(match.id);
+    if (state.currentBook?.id === match.id) {
+      state.currentBook = null;
+    }
+    state.status = `Removed ${match.title} from the library.`;
+  },
+
+  removecurrent: async (state) => {
+    if (!state.currentBook) {
+      state.status = "No current book to remove.";
+      return;
+    }
+    state.storage.removeBook(state.currentBook.id);
+    state.currentBook = null;
+    state.status = "Current book removed from the library.";
+  },
+
+  toggleprogress: async (state, parsed) => {
+    const values: ProgressVisibility[] = ["book", "both", "chapter", "hidden"];
+    if (parsed.args[0] && values.includes(parsed.args[0] as ProgressVisibility)) {
+      state.progressVisibility = parsed.args[0] as ProgressVisibility;
+    } else {
+      const index = values.indexOf(state.progressVisibility);
+      state.progressVisibility = values[(index + 1) % values.length];
+    }
+    state.storage.setSetting("progressVisibility", state.progressVisibility);
+    state.status = `Progress mode: ${state.progressVisibility}`;
+  },
+
+  mode: async (state, parsed) => {
+    const value = parsed.args[0];
+    if (value !== "code" && value !== "plain") {
+      throw new Error("Mode must be code or plain");
+    }
+    state.renderMode = value;
+    state.storage.setSetting("renderMode", value);
+    state.status = `Render mode: ${value}`;
+  },
+
+  help: async (state, parsed) => {
+    state.overlay = "help";
+    state.status = parsed.args[0] ? commandHelp(parsed.args[0])[0] : "Opened help";
+  },
+
+  keyboardshortcuts: async (state) => {
+    state.overlay = "keys";
+    state.status = "Opened keyboard shortcuts";
+  },
+};
+
+export async function executeCommand(state: AppState, raw: string): Promise<void> {
+  try {
+    const parsed = parseSlashCommand(raw);
+    state.storage.saveCommandHistory(raw, parsed.name);
+    const handler = handlers[parsed.name];
+    if (!handler) {
+      state.status = `Command not implemented: ${parsed.name}`;
+      return;
+    }
+    await handler(state, parsed);
+  } catch (error) {
+    state.status = error instanceof Error ? error.message : "Command failed";
+  }
+}

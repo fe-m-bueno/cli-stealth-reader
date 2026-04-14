@@ -1,11 +1,9 @@
-import fs from "node:fs";
-import path from "node:path";
-import { COMMANDS, commandHelp, parseSlashCommand } from "./commands.js";
+import { commandHelp } from "./commands.js";
+import { executeCommand, openBook } from "./executor.js";
 import { handleInput } from "./input.js";
 import { bold, fg } from "./color.js";
 import { discoverEpubs } from "./discovery.js";
 import { KEYBOARD_SHORTCUTS } from "./help.js";
-import { importEpub } from "./parser/epub.js";
 import { renderBlocks } from "./renderers.js";
 import {
   BODY_OVERHEAD,
@@ -21,15 +19,7 @@ import {
 } from "./screen.js";
 import { Storage } from "./storage.js";
 import { DEFAULT_THEME, THEMES } from "./themes.js";
-import type {
-  AppState,
-  CanonicalBook,
-  FolderDiscovery,
-  OverlayKind,
-  ProgressVisibility,
-  RenderMode,
-  ThemePreset
-} from "./types.js";
+import type { AppState } from "./types.js";
 
 export type { AppState };
 
@@ -106,24 +96,6 @@ function draw(state: AppState): void {
   process.stdout.write(renderFooter(state, width) + "\n");
 }
 
-async function openBook(state: AppState, book: CanonicalBook): Promise<void> {
-  state.currentBook = book;
-  const existing = state.storage.getPosition(book.id);
-  state.chapterIndex = existing?.chapterIndex ?? 0;
-  state.blockOffset = existing?.blockOffset ?? 0;
-  state.status = `Opened ${book.title}`;
-}
-
-async function importAndOpen(state: AppState, epubPath: string, force = false): Promise<void> {
-  if (!force && !fs.existsSync(epubPath)) {
-    state.status = `File not found: ${epubPath}`;
-    return;
-  }
-  const book = await importEpub(epubPath);
-  state.storage.saveBook(book, state.renderMode);
-  await openBook(state, book);
-}
-
 function syncPosition(state: AppState): void {
   if (!state.currentBook) {
     return;
@@ -136,169 +108,6 @@ function syncPosition(state: AppState): void {
     bookProgress: computeBookProgress(state.currentBook, state.chapterIndex, state.blockOffset),
     blockOffset: state.blockOffset
   });
-}
-
-async function executeCommand(state: AppState, raw: string): Promise<void> {
-  try {
-    const parsed = parseSlashCommand(raw);
-    state.storage.saveCommandHistory(raw, parsed.name);
-    switch (parsed.name) {
-      case "prev": {
-        if (state.currentBook) {
-          const count = Math.max(1, Number(parsed.args[0] ?? "1"));
-          state.chapterIndex = Math.max(0, state.chapterIndex - count);
-          state.blockOffset = 0;
-          state.status = `Moved to chapter ${state.chapterIndex + 1}`;
-        }
-        break;
-      }
-      case "next": {
-        if (state.currentBook) {
-          const count = Math.max(1, Number(parsed.args[0] ?? "1"));
-          state.chapterIndex = Math.min(state.currentBook.chapters.length - 1, state.chapterIndex + count);
-          state.blockOffset = 0;
-          state.status = `Moved to chapter ${state.chapterIndex + 1}`;
-        }
-        break;
-      }
-      case "chapters":
-        state.overlay = "chapters";
-        state.status = "Opened table of contents";
-        break;
-      case "changebook": {
-        const query = parsed.args.join(" ").toLowerCase();
-        const books = state.storage.listBooks();
-        const selected = books.find((book) => book.title.toLowerCase().includes(query) || book.author.toLowerCase().includes(query));
-        if (selected) {
-          const book = state.storage.getBook(selected.id);
-          if (book) {
-            await openBook(state, book);
-          }
-        } else {
-          state.overlay = "books";
-          state.status = "No exact match. Opened library picker.";
-        }
-        break;
-      }
-      case "colorscheme": {
-        if (parsed.flags.list || parsed.args.length === 0) {
-          state.overlay = "themes";
-          state.status = "Opened colorscheme picker";
-          break;
-        }
-        const theme = THEMES.find((item) => item.id === parsed.args[0]);
-        if (!theme) {
-          throw new Error(`Unknown theme ${parsed.args[0]}`);
-        }
-        state.theme = theme;
-        state.storage.setSetting("themeId", theme.id);
-        state.status = `Theme set to ${theme.label}`;
-        break;
-      }
-      case "resume": {
-        const targetId = parsed.flags.latest ? state.storage.getLatestBookId() : null;
-        if (targetId) {
-          const book = state.storage.getBook(targetId);
-          if (book) {
-            await openBook(state, book);
-          }
-          break;
-        }
-        if (parsed.args.length > 0) {
-          await executeCommand(state, `/changebook ${parsed.args.join(" ")}`);
-        } else {
-          const latest = state.storage.getLatestBookId();
-          if (!latest) {
-            state.status = "No previous book to resume.";
-          } else {
-            const book = state.storage.getBook(latest);
-            if (book) {
-              await openBook(state, book);
-            }
-          }
-        }
-        break;
-      }
-      case "add": {
-        if (parsed.flags.cwd || parsed.args.length === 0) {
-          const candidate = state.discoveries[0];
-          if (!candidate) {
-            state.status = "No EPUBs detected in the current directory.";
-            break;
-          }
-          await importAndOpen(state, candidate.path, Boolean(parsed.flags.force));
-          break;
-        }
-        const target = parsed.args.join(" ");
-        await importAndOpen(state, path.resolve(state.cwd, target), Boolean(parsed.flags.force));
-        break;
-      }
-      case "remove": {
-        if (parsed.flags.current && state.currentBook) {
-          state.storage.removeBook(state.currentBook.id);
-          state.currentBook = null;
-          state.status = "Current book removed from the library.";
-          break;
-        }
-        const query = parsed.args.join(" ").toLowerCase();
-        const match = state.storage.listBooks().find((book) => book.title.toLowerCase().includes(query));
-        if (!match) {
-          state.status = "No matching book found.";
-          break;
-        }
-        state.storage.removeBook(match.id);
-        if (state.currentBook?.id === match.id) {
-          state.currentBook = null;
-        }
-        state.status = `Removed ${match.title} from the library.`;
-        break;
-      }
-      case "removecurrent":
-        if (!state.currentBook) {
-          state.status = "No current book to remove.";
-          break;
-        }
-        state.storage.removeBook(state.currentBook.id);
-        state.currentBook = null;
-        state.status = "Current book removed from the library.";
-        break;
-      case "toggleprogress": {
-        const values: ProgressVisibility[] = ["book", "both", "chapter", "hidden"];
-        if (parsed.args[0] && values.includes(parsed.args[0] as ProgressVisibility)) {
-          state.progressVisibility = parsed.args[0] as ProgressVisibility;
-        } else {
-          const index = values.indexOf(state.progressVisibility);
-          state.progressVisibility = values[(index + 1) % values.length];
-        }
-        state.storage.setSetting("progressVisibility", state.progressVisibility);
-        state.status = `Progress mode: ${state.progressVisibility}`;
-        break;
-      }
-      case "mode": {
-        const value = parsed.args[0];
-        if (value !== "code" && value !== "plain") {
-          throw new Error("Mode must be code or plain");
-        }
-        state.renderMode = value;
-        state.storage.setSetting("renderMode", value);
-        state.status = `Render mode: ${value}`;
-        break;
-      }
-      case "help":
-        state.overlay = "help";
-        state.status = parsed.args[0] ? commandHelp(parsed.args[0])[0] : "Opened help";
-        break;
-      case "keyboardshortcuts":
-        state.overlay = "keys";
-        state.status = "Opened keyboard shortcuts";
-        break;
-      default:
-        state.status = `Command not implemented: ${parsed.name}`;
-    }
-    syncPosition(state);
-  } catch (error) {
-    state.status = error instanceof Error ? error.message : "Command failed";
-  }
 }
 
 
@@ -338,6 +147,9 @@ export async function runTui(): Promise<void> {
   redraw();
 
   process.stdin.on("data", async (chunk: string) => {
-    await handleInput(chunk, state, redraw, (cmd) => executeCommand(state, cmd), syncPosition);
+    await handleInput(chunk, state, redraw, async (cmd) => {
+      await executeCommand(state, cmd);
+      syncPosition(state);
+    }, syncPosition);
   });
 }
