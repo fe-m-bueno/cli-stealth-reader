@@ -1,0 +1,27 @@
+{
+  "name": "cli-stealth-reader",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "stealth-reader": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test": "node --test --import tsx"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.5.3",
+    "jszip": "^3.10.1",
+    "kleur": "^4.1.5",
+    "parse5": "^7.1.2"
+  },
+  "devDependencies": {
+    "@types/jszip": "^3.4.1",
+    "@types/node": "^24.6.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}
