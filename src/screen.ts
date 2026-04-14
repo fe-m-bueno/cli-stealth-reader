@@ -185,7 +185,10 @@ export function renderStatusBar(state: AppState, width: number): string {
   } else {
     const book = state.currentBook;
     const totalChapters = book.chapters.length;
-    left = `${truncate(book.title, 40)} · Ch ${state.chapterIndex + 1}/${totalChapters}`;
+    const searchTag = state.searchState
+      ? ` · [${state.searchState.cursor + 1}/${state.searchState.results.length}] "${state.searchState.query}"`
+      : "";
+    left = `${truncate(book.title, 40)} · Ch ${state.chapterIndex + 1}/${totalChapters}${searchTag}`;
   }
 
   // Right content

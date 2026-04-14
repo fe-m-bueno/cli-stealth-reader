@@ -141,6 +141,24 @@ export interface FolderDiscovery {
 
 export type OverlayKind = "none" | "chapters" | "books" | "themes" | "help" | "keys" | "diagnostics" | "file-picker";
 
+export interface SearchHit {
+  chapterIndex: number;
+  blockIndex: number;
+  lineIndex: number;
+}
+
+export interface SearchState {
+  query: string;
+  global: boolean;
+  results: SearchHit[];
+  cursor: number;
+}
+
+export interface NavHistoryEntry {
+  chapterIndex: number;
+  blockOffset: number;
+}
+
 export interface AppState {
   storage: import("./storage.js").Storage;
   cwd: string;
@@ -189,4 +207,7 @@ export interface AppState {
         chapterViewCounts: number[];
       }
     | null;
+  searchState: SearchState | null;
+  navHistory: NavHistoryEntry[];
+  navHistoryCursor: number;
 }

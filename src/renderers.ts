@@ -1,5 +1,5 @@
 import type { CanonicalBlock, CodeDensity, CodeLanguage, RenderMode, ThemePreset } from "./types.js";
-import { bold, fg } from "./color.js";
+import { bold, fg, highlightPreservingCSI } from "./color.js";
 import { wrapText, lineHash } from "./renderers/shared.js";
 import { renderCodeTypescript } from "./renderers/typescript.js";
 import { renderCodePython } from "./renderers/python.js";
@@ -48,7 +48,8 @@ export function renderBlocks(
   width: number,
   theme: ThemePreset,
   codeLanguage: CodeLanguage = "typescript",
-  codeDensity: CodeDensity = 3
+  codeDensity: CodeDensity = 3,
+  searchQuery?: string | null
 ): string[] {
   const lines: string[] = [];
   blocks.forEach((block, index) => {
@@ -70,5 +71,8 @@ export function renderBlocks(
       lines.push("");
     }
   });
+  if (searchQuery) {
+    return lines.map((line) => highlightPreservingCSI(line, searchQuery, theme.warning, theme.background));
+  }
   return lines;
 }

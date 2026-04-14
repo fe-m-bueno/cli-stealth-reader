@@ -138,6 +138,9 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     chapterTransition: null,
     mouseDrag: null,
     layoutMetrics: null,
+    searchState: null,
+    navHistory: [],
+    navHistoryCursor: -1,
     ...overrides
   };
 }
@@ -341,6 +344,31 @@ test("left and right arrows move between chapters", async () => {
 
   await handleInput("\u001b[D", state, redraw, noop, () => {}, noop);
   assert.equal(state.chapterIndex, 1);
+});
+
+test("history keys go back and forward after /goto", async () => {
+  const state = makeState({ overlay: "none", currentBook: longChapterBook, chapterIndex: 0, blockOffset: 0 });
+  await executeCommand(state, "/goto 50% --chapter");
+  const jumpedOffset = state.blockOffset;
+  assert.ok(jumpedOffset > 0);
+
+  await handleInput("[", state, redraw, noop, () => {}, noop);
+  assert.equal(state.blockOffset, 0);
+
+  await handleInput("]", state, redraw, noop, () => {}, noop);
+  assert.equal(state.blockOffset, jumpedOffset);
+});
+
+test("history keys show boundary messages", async () => {
+  const state = makeState({ overlay: "none", currentBook, chapterIndex: 0, blockOffset: 0 });
+
+  await handleInput("[", state, redraw, noop, () => {}, noop);
+  assert.equal(state.status, "No history to go back");
+
+  state.navHistory = [{ chapterIndex: 0, blockOffset: 0 }];
+  state.navHistoryCursor = 0;
+  await handleInput("]", state, redraw, noop, () => {}, noop);
+  assert.equal(state.status, "No history to go forward");
 });
 
 test("T opens the table of contents", async () => {

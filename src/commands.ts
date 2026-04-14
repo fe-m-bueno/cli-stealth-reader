@@ -84,6 +84,20 @@ export const COMMANDS: CommandDefinition[] = [
     description: "Set code density (1=max comments, 5=max code). Tecla d cicla entre 1→3→5.",
     args: [{ name: "level" }],
     usage: "/density [1-5]"
+  },
+  {
+    name: "goto",
+    description: "Jump by book %, chapter %, or chapter number.",
+    args: [{ name: "position", required: true }],
+    flags: [{ name: "chapter" }],
+    usage: "/goto <n|%> [--chapter]  (ex: /goto 42%  /goto 30%c  /goto 5)"
+  },
+  {
+    name: "search",
+    description: "Search in the current chapter; use -g or --global for the whole book.",
+    args: [{ name: "term" }],
+    flags: [{ name: "global", alias: "g" }],
+    usage: "/search [-g|--global] <term>"
   }
 ];
 
@@ -162,6 +176,18 @@ export function parseSlashCommand(input: string): ParsedCommandResult {
         }
       } else {
         flags[flagName] = true;
+      }
+    } else if (token.startsWith("-") && token.length > 1) {
+      for (let flagIndex = 1; flagIndex < token.length; flagIndex += 1) {
+        const ch = token[flagIndex]!;
+        const flagSpec = definition.flags?.find((flag) => flag.alias === ch);
+        if (!flagSpec) {
+          throw new Error(`Unknown flag -${ch} for /${normalized}`);
+        }
+        if (flagSpec.takesValue) {
+          throw new Error(`Flag -${ch} must be written as --${flagSpec.name}=...`);
+        }
+        flags[flagSpec.name] = true;
       }
     } else {
       args.push(token);

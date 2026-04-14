@@ -3,17 +3,38 @@ import path from "node:path";
 import { commandHelp, parseSlashCommand } from "./commands.js";
 import { discoverEpubs } from "./discovery.js";
 import { EPUB_PARSER_VERSION, importEpub } from "./parser/epub.js";
+import { renderBlocks } from "./renderers.js";
+import { computeChapterMaxOffset, getViewportLayout } from "./screen.js";
 import { THEMES } from "./themes.js";
 import type {
   AppState,
   CanonicalBook,
+  CanonicalChapter,
   CodeDensity,
   CodeLanguage,
   FolderDiscovery,
   LibraryEntry,
   ParsedCommandResult,
-  ProgressVisibility
+  ProgressVisibility,
+  SearchHit
 } from "./types.js";
+
+export function pushNavHistory(state: AppState): void {
+  if (!state.currentBook) {
+    return;
+  }
+  state.navHistory = state.navHistory.slice(0, state.navHistoryCursor + 1);
+  const last = state.navHistory[state.navHistory.length - 1];
+  if (last && last.chapterIndex === state.chapterIndex && last.blockOffset === state.blockOffset) {
+    state.navHistoryCursor = state.navHistory.length - 1;
+    return;
+  }
+  state.navHistory.push({ chapterIndex: state.chapterIndex, blockOffset: state.blockOffset });
+  if (state.navHistory.length > 50) {
+    state.navHistory.shift();
+  }
+  state.navHistoryCursor = state.navHistory.length - 1;
+}
 
 function findBookByQuery(books: LibraryEntry[], query: string): LibraryEntry | undefined {
   const q = query.toLowerCase();
@@ -30,6 +51,9 @@ export async function openBook(state: AppState, book: CanonicalBook): Promise<vo
   const existing = state.storage.getPosition(book.id);
   state.chapterIndex = existing?.chapterIndex ?? 0;
   state.blockOffset = existing?.blockOffset ?? 0;
+  state.searchState = null;
+  state.navHistory = [];
+  state.navHistoryCursor = -1;
   state.status = `Opened ${book.title}`;
 }
 
@@ -75,21 +99,80 @@ export function openFilePicker(
 
 type CommandHandler = (state: AppState, parsed: ParsedCommandResult) => Promise<void>;
 
+function viewportForCommand(state: AppState): { contentWidth: number; bodyHeight: number } {
+  const w = process.stdout.columns || 120;
+  const h = process.stdout.rows || 40;
+  const layout = getViewportLayout(state, w, h);
+  return { contentWidth: layout.contentWidth, bodyHeight: layout.bodyHeight };
+}
+
+function effectiveWordCount(chapter: CanonicalChapter): number {
+  if (chapter.wordCount > 0) {
+    return chapter.wordCount;
+  }
+  const fromText = chapter.blocks.reduce((sum, block) => sum + block.text.length, 0);
+  return fromText > 0 ? fromText : 1;
+}
+
+function firstLineOfBlock(
+  state: AppState,
+  chapterIndex: number,
+  blockIndex: number,
+  contentWidth: number
+): number {
+  const chapter = state.currentBook!.chapters[chapterIndex]!;
+  const prefix = chapter.blocks.slice(0, blockIndex);
+  return renderBlocks(prefix, state.renderMode, contentWidth, state.theme, state.codeLanguage, state.codeDensity).length;
+}
+
+export function applySearchHit(state: AppState, hit: SearchHit): void {
+  const { contentWidth, bodyHeight } = viewportForCommand(state);
+  state.chapterIndex = hit.chapterIndex;
+  const lineStart = firstLineOfBlock(state, hit.chapterIndex, hit.blockIndex, contentWidth);
+  const maxOff = computeChapterMaxOffset(state, contentWidth, bodyHeight);
+  state.blockOffset = Math.min(lineStart, maxOff);
+}
+
+function collectSearchHits(state: AppState, query: string, global: boolean): SearchHit[] {
+  const book = state.currentBook!;
+  const q = query.toLowerCase();
+  const hits: SearchHit[] = [];
+  const chapterIndexes = global
+    ? book.chapters.map((_, index) => index)
+    : [state.chapterIndex];
+  for (const chapterIndex of chapterIndexes) {
+    const chapter = book.chapters[chapterIndex];
+    if (!chapter) {
+      continue;
+    }
+    chapter.blocks.forEach((block, blockIndex) => {
+      if (block.text.toLowerCase().includes(q)) {
+        hits.push({ chapterIndex, blockIndex, lineIndex: 0 });
+      }
+    });
+  }
+  return hits;
+}
+
 const handlers: Record<string, CommandHandler> = {
   prev: async (state, parsed) => {
     if (state.currentBook) {
+      pushNavHistory(state);
       const count = Math.max(1, Number(parsed.args[0] ?? "1"));
       state.chapterIndex = Math.max(0, state.chapterIndex - count);
       state.blockOffset = 0;
+      pushNavHistory(state);
       state.status = `Moved to chapter ${state.chapterIndex + 1}`;
     }
   },
 
   next: async (state, parsed) => {
     if (state.currentBook) {
+      pushNavHistory(state);
       const count = Math.max(1, Number(parsed.args[0] ?? "1"));
       state.chapterIndex = Math.min(state.currentBook.chapters.length - 1, state.chapterIndex + count);
       state.blockOffset = 0;
+      pushNavHistory(state);
       state.status = `Moved to chapter ${state.chapterIndex + 1}`;
     }
   },
@@ -200,6 +283,7 @@ const handlers: Record<string, CommandHandler> = {
     if (parsed.flags.current && state.currentBook) {
       state.storage.removeBook(state.currentBook.id);
       state.currentBook = null;
+      state.searchState = null;
       state.status = "Current book removed from the library.";
       return;
     }
@@ -212,6 +296,7 @@ const handlers: Record<string, CommandHandler> = {
     state.storage.removeBook(match.id);
     if (state.currentBook?.id === match.id) {
       state.currentBook = null;
+      state.searchState = null;
     }
     state.status = `Removed ${match.title} from the library.`;
   },
@@ -223,6 +308,7 @@ const handlers: Record<string, CommandHandler> = {
     }
     state.storage.removeBook(state.currentBook.id);
     state.currentBook = null;
+    state.searchState = null;
     state.status = "Current book removed from the library.";
   },
 
@@ -286,6 +372,136 @@ const handlers: Record<string, CommandHandler> = {
     state.layoutMetrics = null;
     state.status = `Code density: ${level}`;
   },
+
+  search: async (state, parsed) => {
+    if (!state.currentBook) {
+      state.status = "No book open.";
+      return;
+    }
+    const query = parsed.args.join(" ").trim();
+    if (!query) {
+      throw new Error("Use /search [-g|--global] <term>");
+    }
+    const global = Boolean(parsed.flags.global);
+    const hits = collectSearchHits(state, query, global);
+    if (hits.length === 0) {
+      state.searchState = null;
+      state.status = global ? `No matches for "${query}" in this book.` : `No matches for "${query}" in this chapter.`;
+      return;
+    }
+    state.searchState = {
+      query,
+      global,
+      results: hits,
+      cursor: 0
+    };
+    applySearchHit(state, hits[0]!);
+    state.status = global
+      ? `Search: ${hits.length} match(es) in book for "${query}".`
+      : `Search: ${hits.length} match(es) in chapter for "${query}".`;
+  },
+
+  goto: async (state, parsed) => {
+    if (!state.currentBook) {
+      state.status = "No book open.";
+      return;
+    }
+    const raw = parsed.args.join(" ").trim();
+    if (!raw) {
+      throw new Error("Use /goto <chapter>|<percent>%|…%c>");
+    }
+    const dims = viewportForCommand(state);
+    const book = state.currentBook;
+    const lastChapterIndex = book.chapters.length - 1;
+
+    const chapterPercentSuffix = /^(\d+(?:\.\d+)?)%c$/i.exec(raw);
+    const plainPercent = /^(\d+(?:\.\d+)?)%$/.exec(raw);
+    const chapterNumber = /^(\d+)$/.exec(raw);
+
+    if (chapterPercentSuffix) {
+      pushNavHistory(state);
+      const p = Number(chapterPercentSuffix[1]);
+      if (Number.isNaN(p) || p < 0 || p > 100) {
+        state.status = "Percentage must be between 0 and 100.";
+        return;
+      }
+      const maxOff = computeChapterMaxOffset(state, dims.contentWidth, dims.bodyHeight);
+      state.blockOffset = Math.min(Math.floor((p / 100) * maxOff), maxOff);
+      pushNavHistory(state);
+      state.status = `Jumped to ${p}% of chapter ${state.chapterIndex + 1} (offset ${state.blockOffset})`;
+      return;
+    }
+
+    if (plainPercent) {
+      const p = Number(plainPercent[1]);
+      if (Number.isNaN(p) || p < 0 || p > 100) {
+        state.status = "Percentage must be between 0 and 100.";
+        return;
+      }
+      if (parsed.flags.chapter) {
+        pushNavHistory(state);
+        const maxOff = computeChapterMaxOffset(state, dims.contentWidth, dims.bodyHeight);
+        state.blockOffset = Math.min(Math.floor((p / 100) * maxOff), maxOff);
+        pushNavHistory(state);
+        state.status = `Jumped to ${p}% of chapter ${state.chapterIndex + 1} (offset ${state.blockOffset})`;
+        return;
+      }
+
+      const weights = book.chapters.map((chapter) => effectiveWordCount(chapter));
+      const totalWords = weights.reduce((sum, value) => sum + value, 0);
+
+      if (p <= 0) {
+        pushNavHistory(state);
+        state.chapterIndex = 0;
+        state.blockOffset = 0;
+        pushNavHistory(state);
+        state.status = "Jumped to 0% (start of book)";
+        return;
+      }
+      if (p >= 100) {
+        pushNavHistory(state);
+        state.chapterIndex = lastChapterIndex;
+        state.blockOffset = computeChapterMaxOffset(state, dims.contentWidth, dims.bodyHeight);
+        pushNavHistory(state);
+        state.status = `Jumped to 100% (end of book)`;
+        return;
+      }
+
+      pushNavHistory(state);
+      const targetWord = (p / 100) * totalWords;
+      let accumulated = 0;
+      let chapterIndex = 0;
+      while (chapterIndex < lastChapterIndex && targetWord >= accumulated + weights[chapterIndex]!) {
+        accumulated += weights[chapterIndex]!;
+        chapterIndex += 1;
+      }
+      state.chapterIndex = chapterIndex;
+      const chapterWeight = weights[chapterIndex]!;
+      const local = Math.min(Math.max(0, targetWord - accumulated), chapterWeight);
+      const ratio = chapterWeight > 0 ? local / chapterWeight : 0;
+      const maxOff = computeChapterMaxOffset(state, dims.contentWidth, dims.bodyHeight);
+      state.blockOffset = Math.min(Math.floor(ratio * maxOff), maxOff);
+      pushNavHistory(state);
+      state.status = `Jumped to ${p}% of book (Ch.${chapterIndex + 1} · offset ${state.blockOffset})`;
+      return;
+    }
+
+    if (chapterNumber) {
+      const n = Number(chapterNumber[1]);
+      if (n < 1 || n > book.chapters.length) {
+        state.status = `There is no chapter ${n}. This book has ${book.chapters.length} chapter(s).`;
+        return;
+      }
+      pushNavHistory(state);
+      state.chapterIndex = n - 1;
+      state.blockOffset = 0;
+      pushNavHistory(state);
+      state.status = `Jumped to chapter ${n}`;
+      return;
+    }
+
+    state.status = `Could not parse position "${raw}". Try /goto 42%, /goto 30%c, /goto 5, or /goto 10% --chapter.`;
+  }
 };
 
 export async function executeCommand(state: AppState, raw: string): Promise<void> {

@@ -1,4 +1,5 @@
 import { applyCommandAutocomplete, listCommandSuggestions } from "./commands.js";
+import { applySearchHit, pushNavHistory } from "./executor.js";
 import {
   clamp,
   computeChapterMaxOffset,
@@ -14,8 +15,10 @@ function moveChapter(state: AppState, delta: number): void {
   if (!state.currentBook) {
     return;
   }
+  pushNavHistory(state);
   state.chapterIndex = clamp(state.chapterIndex + delta, 0, state.currentBook.chapters.length - 1);
   state.blockOffset = 0;
+  pushNavHistory(state);
 }
 
 function moveToNextChapterFromScroll(state: AppState, redraw: () => void, syncPos: (state: AppState) => void): boolean {
@@ -45,8 +48,10 @@ function showChapterTransition(
     : 0;
   const stage = Math.min(3, previousStage + 1);
   if (stage === 3) {
+    pushNavHistory(state);
     state.chapterIndex = targetChapterIndex;
     state.blockOffset = 0;
+    pushNavHistory(state);
     state.chapterTransition = null;
     state.status = `Moved to chapter ${state.chapterIndex + 1}`;
     syncPos(state);
@@ -330,8 +335,10 @@ export async function handleInput(
       state.overlayCursor = clamp(state.overlayCursor - 1, 0, maxIndex);
     } else if (chunk === "\r") {
       if (state.overlay === "chapters" && state.currentBook) {
+        pushNavHistory(state);
         state.chapterIndex = clamp(state.overlayCursor, 0, state.currentBook.chapters.length - 1);
         state.blockOffset = 0;
+        pushNavHistory(state);
         state.status = `Moved to chapter ${state.chapterIndex + 1}`;
       } else if (state.overlay === "books") {
         const books = state.storage.listBooks();
@@ -340,6 +347,7 @@ export async function handleInput(
           const book = state.storage.getBook(selected.id);
           if (book) {
             state.currentBook = book;
+            state.searchState = null;
             const existing = state.storage.getPosition(book.id);
             state.chapterIndex = existing?.chapterIndex ?? 0;
             state.blockOffset = existing?.blockOffset ?? 0;
@@ -365,6 +373,39 @@ export async function handleInput(
   if (chunk === "\u001b") {
     state.mouseDrag = null;
     state.overlay = "none";
+    state.searchState = null;
+    redraw();
+    return;
+  }
+
+  if (chunk === "[") {
+    if (state.navHistoryCursor <= 0) {
+      state.status = "No history to go back";
+    } else {
+      state.navHistoryCursor -= 1;
+      const target = state.navHistory[state.navHistoryCursor];
+      if (target) {
+        state.chapterIndex = target.chapterIndex;
+        state.blockOffset = target.blockOffset;
+      }
+    }
+    syncPos(state);
+    redraw();
+    return;
+  }
+
+  if (chunk === "]") {
+    if (state.navHistoryCursor >= state.navHistory.length - 1) {
+      state.status = "No history to go forward";
+    } else {
+      state.navHistoryCursor += 1;
+      const target = state.navHistory[state.navHistoryCursor];
+      if (target) {
+        state.chapterIndex = target.chapterIndex;
+        state.blockOffset = target.blockOffset;
+      }
+    }
+    syncPos(state);
     redraw();
     return;
   }
@@ -379,6 +420,20 @@ export async function handleInput(
   const layout = getViewportLayout(state, process.stdout.columns || 120, process.stdout.rows || 40);
   const pageSize = Math.max(MIN_PAGE_LINES, layout.bodyHeight);
   const chapterMaxOffset = computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
+
+  if (state.searchState && state.currentBook && (chunk === "n" || chunk === "N")) {
+    const { results, cursor } = state.searchState;
+    if (results.length > 0) {
+      const next = chunk === "n"
+        ? (cursor + 1) % results.length
+        : (cursor - 1 + results.length) % results.length;
+      state.searchState = { ...state.searchState, cursor: next };
+      applySearchHit(state, results[next]!);
+    }
+    syncPos(state);
+    redraw();
+    return;
+  }
   const atChapterEnd = state.currentBook && state.blockOffset >= chapterMaxOffset;
   const cancelChapterTransition = () => {
     if (state.chapterTransition) {
