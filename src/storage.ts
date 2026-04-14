@@ -136,7 +136,7 @@ export class Storage {
           settings.codeDensity = parsed as CodeDensity;
         }
       } else if (row.key === "plainHighlight") {
-        settings.plainHighlight = row.value !== "false";
+        settings.plainHighlight = row.value === "true";
       } else if (row.key in settings) {
         (settings as Record<string, unknown>)[row.key] = row.value;
       }
@@ -145,7 +145,7 @@ export class Storage {
   }
 
   setSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): void {
-    this.db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, value);
+    this.db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, String(value));
   }
 
   saveBook(book: CanonicalBook, renderMode: RenderMode): void {

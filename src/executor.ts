@@ -470,14 +470,14 @@ const handlers: Record<string, CommandHandler> = {
   },
 
   highlight: async (state, parsed) => {
-    const hasOn = Boolean(parsed.flags.on);
-    const hasOff = Boolean(parsed.flags.off);
-    if (parsed.args.length > 0 || hasOn === hasOff) {
-      throw new Error("Use /highlight --on|--off");
+    const value = parsed.args[0]?.toLowerCase();
+    if (parsed.args.length !== 1 || (value !== "on" && value !== "off")) {
+      throw new Error("Use /highlight <on|off>");
     }
-    state.plainHighlight = hasOn;
-    state.storage.setSetting("plainHighlight", hasOn);
-    state.status = `Dialogue highlight: ${hasOn ? "on" : "off"}`;
+    const enabled = value === "on";
+    state.plainHighlight = enabled;
+    state.storage.setSetting("plainHighlight", enabled);
+    state.status = `Dialogue highlight: ${enabled ? "on" : "off"}`;
   },
 
   help: async (state, parsed) => {

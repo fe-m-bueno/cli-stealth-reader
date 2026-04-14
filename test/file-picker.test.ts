@@ -570,20 +570,20 @@ test("p key wraps progress visibility back to book after hidden", async () => {
   assert.equal(state.progressVisibility, "book");
 });
 
-test("/highlight requires an explicit flag", async () => {
+test("/highlight requires on/off argument", async () => {
   const state = makeState({ overlay: "none", plainHighlight: true });
   await executeCommand(state, "/highlight");
   assert.equal(state.plainHighlight, true);
-  assert.equal(state.status, "Use /highlight --on|--off");
+  assert.equal(state.status, "Use /highlight <on|off>");
 });
 
-test("/highlight --off and --on toggle plain dialogue highlight", async () => {
+test("/highlight off and on toggle plain dialogue highlight", async () => {
   const state = makeState({ overlay: "none", plainHighlight: true });
-  await executeCommand(state, "/highlight --off");
+  await executeCommand(state, "/highlight off");
   assert.equal(state.plainHighlight, false);
   assert.equal(state.status, "Dialogue highlight: off");
 
-  await executeCommand(state, "/highlight --on");
+  await executeCommand(state, "/highlight on");
   assert.equal(state.plainHighlight, true);
   assert.equal(state.status, "Dialogue highlight: on");
 });

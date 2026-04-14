@@ -67,9 +67,9 @@ export const COMMANDS: CommandDefinition[] = [
   },
   {
     name: "highlight",
-    description: "Toggle plain-mode dialogue highlight (required flag).",
-    flags: [{ name: "on" }, { name: "off" }],
-    usage: "/highlight --on|--off"
+    description: "Toggle plain-mode dialogue highlight.",
+    args: [{ name: "state", required: true }],
+    usage: "/highlight <on|off>"
   },
   {
     name: "help",

@@ -1,6 +1,6 @@
 # cli-stealth-reader
 
-[![Node.js](https://img.shields.io/badge/Node.js-20%2B-green)](https://nodejs.org/)
+[Node.js](https://nodejs.org/)
 
 Um leitor de EPUB para terminal em modo tela cheia, com renderização e um diferencial único: o modo **stealth** disfarça o texto como código (TypeScript, Python ou Rust) plausível, para que pareça que você está programando enquanto lê.
 
@@ -14,6 +14,7 @@ O **cli-stealth-reader** oferece múltiplas experiências de leitura:
 - **Modo Plain**: Prosa limpa e legível com formatação visual clara
 
 Além disso:
+
 - Interface TUI moderna com status bar integrada
 - 4 temas de cores elegantes (Codex, Graphite, Amber, Forest)
 - 25+ slash commands com suporte a argumentos, aliases e flags
@@ -138,51 +139,59 @@ livro', pensou Alice, 'sem figuras ou conversas?'
 
 ### Navegação
 
-| Tecla | Ação |
-|-------|------|
-| `j` / `↓` | Scroll para baixo |
-| `k` / `↑` | Scroll para cima |
-| `Space` | Página para frente |
-| `b` | Página para trás |
-| `Home` | Ir para o início do capítulo |
-| `End` | Ir para o fim do capítulo |
-| `←` / `→` | Capítulo anterior / próximo capítulo |
-| `T` | Abrir tabela de conteúdos |
-| `B` | Abrir overlay de bookmarks |
+
+| Tecla     | Ação                                       |
+| --------- | ------------------------------------------ |
+| `j` / `↓` | Scroll para baixo                          |
+| `k` / `↑` | Scroll para cima                           |
+| `Space`   | Página para frente                         |
+| `b`       | Página para trás                           |
+| `Home`    | Ir para o início do capítulo               |
+| `End`     | Ir para o fim do capítulo                  |
+| `←` / `→` | Capítulo anterior / próximo capítulo       |
+| `T`       | Abrir tabela de conteúdos                  |
+| `B`       | Abrir overlay de bookmarks                 |
 | `[` / `]` | Voltar / avançar no histórico de navegação |
-| `wheel` | Scroll com mouse |
-| `g` | Ir para o topo da leitura atual |
-| `G` | Ir para o fim da leitura atual |
+| `wheel`   | Scroll com mouse                           |
+| `g`       | Ir para o topo da leitura atual            |
+| `G`       | Ir para o fim da leitura atual             |
+
 
 ### Comandos
 
-| Tecla | Ação |
-|-------|------|
-| `/` | Abrir barra de comandos |
-| `Enter` | Executar comando ativo |
-| `Esc` | Fechar overlay ou limpar input |
-| `Tab` | Navegar seleção / completar comando |
-| `n` / `N` | Próximo / anterior resultado de busca (após `/search`) |
-| `d` | Deletar bookmark selecionado (dentro do overlay de bookmarks) |
+
+| Tecla     | Ação                                                          |
+| --------- | ------------------------------------------------------------- |
+| `/`       | Abrir barra de comandos                                       |
+| `Enter`   | Executar comando ativo                                        |
+| `Esc`     | Fechar overlay ou limpar input                                |
+| `Tab`     | Navegar seleção / completar comando                           |
+| `n` / `N` | Próximo / anterior resultado de busca (após `/search`)        |
+| `d`       | Deletar bookmark selecionado (dentro do overlay de bookmarks) |
+
 
 ### Interface
 
-| Tecla | Ação |
-|-------|------|
-| `m` | Ciclar modo de renderização (plain → typescript → python → rust) |
-| `f` | Alternar modo foco (bloco único centralizado) |
-| `d` | Ciclar densidade do código stealth (1 → 3 → 5) |
-| `c` | Abrir picker de colorscheme |
-| `p` | Avançar visibilidade da barra de progresso |
-| `?` | Ver atalhos de teclado |
-| `q` | Sair do leitor |
+
+| Tecla | Ação                                                             |
+| ----- | ---------------------------------------------------------------- |
+| `m`   | Ciclar modo de renderização (plain → typescript → python → rust) |
+| `f`   | Alternar modo foco (bloco único centralizado)                    |
+| `d`   | Ciclar densidade do código stealth (1 → 3 → 5)                   |
+| `c`   | Abrir picker de colorscheme                                      |
+| `p`   | Avançar visibilidade da barra de progresso                       |
+| `?`   | Ver atalhos de teclado                                           |
+| `q`   | Sair do leitor                                                   |
+
 
 ### Na Biblioteca (`/book`)
 
-| Tecla | Ação |
-|-------|------|
-| `s` | Ciclar critério de ordenação (último aberto → título → autor → progresso) |
-| `r` | Reverter direção de ordenação |
+
+| Tecla | Ação                                                                      |
+| ----- | ------------------------------------------------------------------------- |
+| `s`   | Ciclar critério de ordenação (último aberto → título → autor → progresso) |
+| `r`   | Reverter direção de ordenação                                             |
+
 
 ## Slash Commands
 
@@ -311,15 +320,19 @@ Pressione `f` para entrar no modo foco: a tela exibe um único bloco de conteúd
 Quatro temas pensados para leitura prolongada:
 
 ### Codex (Padrão)
+
 Azul frio e sofisticado — ideal para ambientes corporativos. Parece código real de um desenvolvedor.
 
 ### Graphite
+
 Cinza neutro minimalista — clássico e profissional. Máxima discrição.
 
 ### Amber
+
 Tons quentes de ouro e laranja — confortável para noites. Reduz fadiga ocular.
 
 ### Forest
+
 Verde natural suave — ambiente calmo. Ideal para sessões longas de leitura.
 
 ## Arquitetura
@@ -373,9 +386,9 @@ Arquivo EPUB → epub.ts (JSZip + parsing) → CanonicalBook (chapters → block
 
 O estado é persistido em diretórios XDG-padrão:
 
-- **`$XDG_DATA_HOME/cli-stealth-reader/`**: Banco de dados SQLite (WAL mode)
+- `**$XDG_DATA_HOME/cli-stealth-reader/**`: Banco de dados SQLite (WAL mode)
   - Tabelas: `books`, `chapters`, `positions`, `diagnostics`, `settings`, `command_history`, `bookmarks`, `book_tags`, `notes`
-- **`$XDG_CACHE_HOME/cli-stealth-reader/`**: Cache de JSON de livros
+- `**$XDG_CACHE_HOME/cli-stealth-reader/**`: Cache de JSON de livros
 
 EPUBs, CBZs e PDFs encontrados no diretório atual são automaticamente oferecidos na tela inicial e em `/add --cwd`.
 
@@ -399,7 +412,8 @@ node --import tsx --test test/commands.test.ts
 
 ### Modelo de Dados Principal
 
-**`CanonicalBlock`** — Unidade básica de conteúdo:
+`**CanonicalBlock**` — Unidade básica de conteúdo:
+
 ```typescript
 type CanonicalBlock = 
   | { type: "heading"; text: string }
@@ -411,7 +425,8 @@ type CanonicalBlock =
   | { type: "anchor"; id: string }
 ```
 
-**`CanonicalChapter`** — Capítulo com metadados:
+`**CanonicalChapter**` — Capítulo com metadados:
+
 ```typescript
 {
   title: string
@@ -421,7 +436,8 @@ type CanonicalBlock =
 }
 ```
 
-**`CanonicalBook`** — Livro completo:
+`**CanonicalBook**` — Livro completo:
+
 ```typescript
 {
   title: string
