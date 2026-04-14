@@ -23,31 +23,16 @@ import {
 import { Storage } from "./storage.js";
 import { DEFAULT_THEME, THEMES } from "./themes.js";
 import type {
+  AppState,
   CanonicalBook,
   FolderDiscovery,
+  OverlayKind,
   ProgressVisibility,
   RenderMode,
   ThemePreset
 } from "./types.js";
 
-type OverlayKind = "none" | "chapters" | "books" | "themes" | "help" | "keys" | "diagnostics";
-
-export interface AppState {
-  storage: Storage;
-  cwd: string;
-  theme: ThemePreset;
-  renderMode: RenderMode;
-  progressVisibility: ProgressVisibility;
-  currentBook: CanonicalBook | null;
-  chapterIndex: number;
-  blockOffset: number;
-  commandBuffer: string;
-  commandMode: boolean;
-  status: string;
-  overlay: OverlayKind;
-  discoveries: FolderDiscovery[];
-  shouldQuit: boolean;
-}
+export type { AppState };
 
 function currentLines(state: AppState, width: number, height: number): string[] {
   if (!state.currentBook) {

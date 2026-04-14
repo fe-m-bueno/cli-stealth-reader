@@ -116,3 +116,22 @@ export interface FolderDiscovery {
   path: string;
   fileName: string;
 }
+
+export type OverlayKind = "none" | "chapters" | "books" | "themes" | "help" | "keys" | "diagnostics";
+
+export interface AppState {
+  storage: import("./storage.js").Storage;
+  cwd: string;
+  theme: ThemePreset;
+  renderMode: RenderMode;
+  progressVisibility: ProgressVisibility;
+  currentBook: CanonicalBook | null;
+  chapterIndex: number;
+  blockOffset: number;
+  commandBuffer: string;
+  commandMode: boolean;
+  status: string;
+  overlay: OverlayKind;
+  discoveries: FolderDiscovery[];
+  shouldQuit: boolean;
+}

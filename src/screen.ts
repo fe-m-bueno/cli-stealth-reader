@@ -1,6 +1,5 @@
 import { fg } from "./color.js";
-import type { CanonicalBook, CanonicalChapter, ThemePreset } from "./types.js";
-import type { AppState } from "./tui.js";
+import type { AppState, CanonicalBook, CanonicalChapter, ThemePreset } from "./types.js";
 
 // Layout constants
 export const OVERLAY_MAX_WIDTH = 42;
@@ -16,6 +15,10 @@ export function clamp(v: number, min: number, max: number): number {
 
 export function truncate(text: string, width: number): string {
   return text.length <= width ? text : `${text.slice(0, Math.max(0, width - 1))}…`;
+}
+
+function stripAnsi(s: string): string {
+  return s.replace(/\x1b\[[^m]*m/g, "");
 }
 
 export function clearScreen(): void {
@@ -72,19 +75,25 @@ export function renderStatusBar(state: AppState, width: number): string {
   const right = `${state.renderMode} · ${theme.label}`;
 
   // Calculate plain text lengths (strip ANSI for width calculation)
-  const stripAnsi = (s: string) => s.replace(/\x1b\[[^m]*m/g, "");
   const prefix = "╭─ ";
   const suffix = " ─╮";
   const sep = " ─";
-  const leftPlain = stripAnsi(left);
   const rightPlain = stripAnsi(right);
   const prefixLen = prefix.length;
   const suffixLen = suffix.length;
   const sepLen = sep.length;
+  const minFill = 3;
 
+  // Truncate left content if it would overflow the terminal width
+  const available = width - prefixLen - sepLen - rightPlain.length - suffixLen - minFill;
+  if (stripAnsi(left).length > available) {
+    left = truncate(stripAnsi(left), available);
+  }
+
+  const leftPlain = stripAnsi(left);
   // Total fixed: prefix + left + sep + right + suffix
   const fixedLen = prefixLen + leftPlain.length + sepLen + rightPlain.length + suffixLen;
-  const fillCount = Math.max(1, width - fixedLen);
+  const fillCount = Math.max(minFill, width - fixedLen);
   const fill = "─".repeat(fillCount);
 
   return (
@@ -103,7 +112,7 @@ export function renderFooter(state: AppState, width: number): string {
   const border = (s: string) => fg(theme.border, s);
 
   // Left content
-  const left = state.status ? fg(theme.dim, state.status) : "";
+  let left = state.status ? fg(theme.dim, state.status) : "";
 
   // Right content
   let right: string;
@@ -113,18 +122,24 @@ export function renderFooter(state: AppState, width: number): string {
     right = fg(theme.dim, "/ commands  ? shortcuts  q quit");
   }
 
-  const stripAnsi = (s: string) => s.replace(/\x1b\[[^m]*m/g, "");
   const prefix = "╰─ ";
   const suffix = " ─╯";
   const sep = " ─";
-  const leftPlain = stripAnsi(left);
   const rightPlain = stripAnsi(right);
   const prefixLen = prefix.length;
   const suffixLen = suffix.length;
   const sepLen = sep.length;
+  const minFill = 3;
 
+  // Truncate left content if it would overflow the terminal width
+  const available = width - prefixLen - sepLen - rightPlain.length - suffixLen - minFill;
+  if (stripAnsi(left).length > available) {
+    left = truncate(stripAnsi(left), available);
+  }
+
+  const leftPlain = stripAnsi(left);
   const fixedLen = prefixLen + leftPlain.length + sepLen + rightPlain.length + suffixLen;
-  const fillCount = Math.max(1, width - fixedLen);
+  const fillCount = Math.max(minFill, width - fixedLen);
   const fill = "─".repeat(fillCount);
 
   return (
