@@ -71,6 +71,26 @@ function chapterTransitionLine(state: AppState, width: number): string | null {
   return bg(state.theme.accent, fg(state.theme.background, padded.padEnd(width, " ")));
 }
 
+function formatRelativeTime(timestamp: number): string {
+  const elapsedMs = Math.max(0, Date.now() - timestamp);
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (elapsedMs < minute) {
+    return "agora";
+  }
+  if (elapsedMs < hour) {
+    const minutes = Math.floor(elapsedMs / minute);
+    return `há ${minutes} min`;
+  }
+  if (elapsedMs < day) {
+    const hours = Math.floor(elapsedMs / hour);
+    return `há ${hours} h`;
+  }
+  const days = Math.floor(elapsedMs / day);
+  return `há ${days} dia${days > 1 ? "s" : ""}`;
+}
+
 export function renderOverlay(state: AppState, width: number, height: number): string[] {
   switch (state.overlay) {
     case "chapters":
@@ -95,6 +115,20 @@ export function renderOverlay(state: AppState, width: number, height: number): s
         const right = `  ${progressTag}`;
         const titleAuthor = truncate(`${book.title}  —  ${book.author}`, Math.max(1, width - 2 - right.length));
         return `${marker} ${titleAuthor}${right}`;
+      });
+    }
+    case "bookmarks": {
+      if (!state.currentBook) {
+        return ["No book open."];
+      }
+      const bookmarks = state.storage.listBookmarks(state.currentBook.id);
+      return bookmarks.map((bookmark, index) => {
+        const marker = index === state.overlayCursor ? ">" : " ";
+        const location = `Ch.${bookmark.chapterIndex + 1} §${bookmark.blockOffset}`;
+        const label = bookmark.label ? ` — "${bookmark.label}"` : "";
+        const age = `[${formatRelativeTime(bookmark.createdAt)}]`;
+        const left = truncate(`${location}${label}`, Math.max(1, width - age.length - 1));
+        return `${marker} ${left} ${age}`;
       });
     }
     case "themes":

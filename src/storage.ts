@@ -1,8 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import Database from "better-sqlite3";
 import type {
   AppSettings,
+  Bookmark,
   CanonicalBook,
   CanonicalChapter,
   CodeDensity,
@@ -78,6 +80,14 @@ export class Storage {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         raw_command TEXT NOT NULL,
         normalized_name TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS bookmarks (
+        id TEXT PRIMARY KEY,
+        book_id TEXT NOT NULL,
+        chapter_index INTEGER NOT NULL,
+        block_offset INTEGER NOT NULL,
+        label TEXT,
         created_at INTEGER NOT NULL
       );
     `);
@@ -261,6 +271,7 @@ export class Storage {
       this.db.prepare("DELETE FROM chapters WHERE book_id = ?").run(bookId);
       this.db.prepare("DELETE FROM diagnostics WHERE book_id = ?").run(bookId);
       this.db.prepare("DELETE FROM positions WHERE book_id = ?").run(bookId);
+      this.db.prepare("DELETE FROM bookmarks WHERE book_id = ?").run(bookId);
       fs.rmSync(path.join(this.chapterCacheDir, bookId), { recursive: true, force: true });
       this.db.exec("COMMIT");
     } catch (error) {
@@ -306,5 +317,40 @@ export class Storage {
 
   saveCommandHistory(rawCommand: string, normalizedName: string): void {
     this.db.prepare("INSERT INTO command_history (raw_command, normalized_name, created_at) VALUES (?, ?, ?)").run(rawCommand, normalizedName, Date.now());
+  }
+
+  addBookmark(bookId: string, chapterIndex: number, blockOffset: number, label?: string): Bookmark {
+    const bookmark: Bookmark = {
+      id: crypto.randomUUID(),
+      bookId,
+      chapterIndex,
+      blockOffset,
+      label: label?.trim() || null,
+      createdAt: Date.now()
+    };
+    this.db.prepare(`
+      INSERT INTO bookmarks (id, book_id, chapter_index, block_offset, label, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(bookmark.id, bookmark.bookId, bookmark.chapterIndex, bookmark.blockOffset, bookmark.label, bookmark.createdAt);
+    return bookmark;
+  }
+
+  listBookmarks(bookId: string): Bookmark[] {
+    return this.db.prepare(`
+      SELECT
+        id,
+        book_id AS bookId,
+        chapter_index AS chapterIndex,
+        block_offset AS blockOffset,
+        label,
+        created_at AS createdAt
+      FROM bookmarks
+      WHERE book_id = ?
+      ORDER BY created_at DESC
+    `).all(bookId) as Bookmark[];
+  }
+
+  deleteBookmark(id: string): void {
+    this.db.prepare("DELETE FROM bookmarks WHERE id = ?").run(id);
   }
 }

@@ -60,6 +60,15 @@ export interface ReadingPosition {
   blockOffset: number;
 }
 
+export interface Bookmark {
+  id: string;
+  bookId: string;
+  chapterIndex: number;
+  blockOffset: number;
+  label: string | null;
+  createdAt: number;
+}
+
 export interface LibraryEntry {
   id: string;
   title: string;
@@ -139,7 +148,7 @@ export interface FolderDiscovery {
   fileName: string;
 }
 
-export type OverlayKind = "none" | "chapters" | "books" | "themes" | "help" | "keys" | "diagnostics" | "file-picker";
+export type OverlayKind = "none" | "chapters" | "books" | "bookmarks" | "themes" | "help" | "keys" | "diagnostics" | "file-picker";
 
 export interface SearchHit {
   chapterIndex: number;

@@ -132,6 +132,8 @@ function interactiveOverlayLength(state: AppState): number {
       return state.currentBook?.chapters.length ?? 0;
     case "books":
       return state.storage.listBooks().length;
+    case "bookmarks":
+      return state.currentBook ? state.storage.listBookmarks(state.currentBook.id).length : 0;
     case "themes":
       return THEMES.length;
     default:
@@ -361,10 +363,37 @@ export async function handleInput(
           state.storage.setSetting("themeId", theme.id);
           state.status = `Theme set to ${theme.label}`;
         }
+      } else if (state.overlay === "bookmarks" && state.currentBook) {
+        const bookmarks = state.storage.listBookmarks(state.currentBook.id);
+        const selected = bookmarks[state.overlayCursor];
+        if (selected) {
+          pushNavHistory(state);
+          state.chapterIndex = selected.chapterIndex;
+          state.blockOffset = selected.blockOffset;
+          pushNavHistory(state);
+          state.status = selected.label
+            ? `Jumped to bookmark "${selected.label}".`
+            : `Jumped to bookmark Ch.${selected.chapterIndex + 1} §${selected.blockOffset}.`;
+        }
       }
       state.overlay = "none";
     } else if (chunk === "\u001b") {
       state.overlay = "none";
+    } else if (chunk === "d" && state.overlay === "bookmarks" && state.currentBook) {
+      const bookmarks = state.storage.listBookmarks(state.currentBook.id);
+      const selected = bookmarks[state.overlayCursor];
+      if (selected) {
+        state.storage.deleteBookmark(selected.id);
+        const remaining = state.storage.listBookmarks(state.currentBook.id).length;
+        if (remaining === 0) {
+          state.overlay = "none";
+          state.overlayCursor = 0;
+          state.status = "Bookmark deleted. No bookmarks remaining.";
+        } else {
+          state.overlayCursor = clamp(state.overlayCursor, 0, remaining - 1);
+          state.status = "Bookmark deleted.";
+        }
+      }
     }
     redraw();
     return;
@@ -494,6 +523,16 @@ export async function handleInput(
     cancelChapterTransition();
     state.overlay = "chapters";
     state.overlayCursor = state.chapterIndex;
+  } else if (chunk === "B") {
+    cancelChapterTransition();
+    if (!state.currentBook) {
+      state.status = "No book open.";
+    } else {
+      const bookmarks = state.storage.listBookmarks(state.currentBook.id);
+      state.overlay = "bookmarks";
+      state.overlayCursor = 0;
+      state.status = bookmarks.length > 0 ? "Opened bookmarks." : "No bookmarks in this book yet.";
+    }
   } else if (chunk === "m") {
     const nextMode = state.renderMode === "plain" ? "typescript"
       : state.codeLanguage === "typescript" ? "python"

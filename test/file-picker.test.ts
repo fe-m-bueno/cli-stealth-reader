@@ -284,6 +284,7 @@ test("slash opens command mode and tab autocompletes commands", async () => {
   assert.equal(state.commandMode, true);
 
   await handleInput("m", state, redraw, noop, () => {}, noop);
+  await handleInput("o", state, redraw, noop, () => {}, noop);
   await handleInput("\t", state, redraw, noop, () => {}, noop);
   assert.equal(state.commandBuffer, "mode");
 });

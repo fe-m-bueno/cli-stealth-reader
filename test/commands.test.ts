@@ -35,6 +35,19 @@ test("parses /goto percentage and chapter flag", () => {
   assert.equal(parsed.flags.chapter, true);
 });
 
+test("parses bookmark commands", () => {
+  const mark = parseSlashCommand('/mark "Ponto importante"');
+  assert.equal(mark.name, "mark");
+  assert.deepEqual(mark.args, ["Ponto importante"]);
+
+  const marks = parseSlashCommand("/marks");
+  assert.equal(marks.name, "marks");
+
+  const delmark = parseSlashCommand("/delmark Ch.3");
+  assert.equal(delmark.name, "delmark");
+  assert.deepEqual(delmark.args, ["Ch.3"]);
+});
+
 test("lists all commands when the slash buffer is empty", () => {
   const suggestions = listCommandSuggestions("");
   assert.ok(suggestions.length > 5);

@@ -98,6 +98,23 @@ export const COMMANDS: CommandDefinition[] = [
     args: [{ name: "term" }],
     flags: [{ name: "global", alias: "g" }],
     usage: "/search [-g|--global] <term>"
+  },
+  {
+    name: "mark",
+    description: "Save a bookmark at the current reading position.",
+    args: [{ name: "label" }],
+    usage: "/mark [label]"
+  },
+  {
+    name: "marks",
+    description: "Open bookmarks for the current book.",
+    usage: "/marks"
+  },
+  {
+    name: "delmark",
+    description: "Delete a bookmark by id or label.",
+    args: [{ name: "id-or-label", required: true }],
+    usage: "/delmark <id|label>"
   }
 ];
 

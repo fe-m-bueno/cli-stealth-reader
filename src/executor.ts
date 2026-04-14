@@ -154,6 +154,32 @@ function collectSearchHits(state: AppState, query: string, global: boolean): Sea
   return hits;
 }
 
+function autoBookmarkLabel(chapterIndex: number, blockOffset: number): string {
+  return `Ch.${chapterIndex + 1} §${blockOffset}`;
+}
+
+function findBookmarkIdByQuery(state: AppState, query: string): string | null {
+  const bookId = state.currentBook?.id;
+  if (!bookId) {
+    return null;
+  }
+  const bookmarks = state.storage.listBookmarks(bookId);
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  const exactId = bookmarks.find((item) => item.id === query.trim());
+  if (exactId) {
+    return exactId.id;
+  }
+  const exactLabel = bookmarks.find((item) => item.label?.toLowerCase() === normalized);
+  if (exactLabel) {
+    return exactLabel.id;
+  }
+  const partialLabel = bookmarks.filter((item) => item.label?.toLowerCase().includes(normalized));
+  return partialLabel.length === 1 ? partialLabel[0]!.id : null;
+}
+
 const handlers: Record<string, CommandHandler> = {
   prev: async (state, parsed) => {
     if (state.currentBook) {
@@ -181,6 +207,50 @@ const handlers: Record<string, CommandHandler> = {
     state.overlay = "chapters";
     state.overlayCursor = state.chapterIndex;
     state.status = "Opened table of contents";
+  },
+
+  mark: async (state, parsed) => {
+    if (!state.currentBook) {
+      state.status = "No book open.";
+      return;
+    }
+    const label = parsed.args.join(" ").trim();
+    const bookmark = state.storage.addBookmark(
+      state.currentBook.id,
+      state.chapterIndex,
+      state.blockOffset,
+      label || autoBookmarkLabel(state.chapterIndex, state.blockOffset)
+    );
+    state.status = `Bookmark saved (${bookmark.id.slice(0, 8)})`;
+  },
+
+  marks: async (state) => {
+    if (!state.currentBook) {
+      state.status = "No book open.";
+      return;
+    }
+    const bookmarks = state.storage.listBookmarks(state.currentBook.id);
+    state.overlay = "bookmarks";
+    state.overlayCursor = 0;
+    state.status = bookmarks.length > 0 ? "Opened bookmarks." : "No bookmarks in this book yet.";
+  },
+
+  delmark: async (state, parsed) => {
+    if (!state.currentBook) {
+      state.status = "No book open.";
+      return;
+    }
+    const query = parsed.args.join(" ").trim();
+    if (!query) {
+      throw new Error("Use /delmark <id|label>");
+    }
+    const matchedId = findBookmarkIdByQuery(state, query);
+    if (!matchedId) {
+      state.status = `No bookmark matched "${query}".`;
+      return;
+    }
+    state.storage.deleteBookmark(matchedId);
+    state.status = "Bookmark deleted.";
   },
 
   changebook: async (state, parsed) => {

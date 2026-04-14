@@ -64,3 +64,25 @@ test("savePosition overwrites the previous position for the same book", () => {
     cleanup();
   }
 });
+
+test("adds, lists and deletes bookmarks", () => {
+  const { storage, cleanup } = makeTempStorage();
+  try {
+    const created = storage.addBookmark("book-1", 2, 42, "Trecho");
+    assert.ok(created.id.length > 0);
+    assert.equal(created.bookId, "book-1");
+    assert.equal(created.chapterIndex, 2);
+    assert.equal(created.blockOffset, 42);
+    assert.equal(created.label, "Trecho");
+
+    const listed = storage.listBookmarks("book-1");
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0]?.id, created.id);
+    assert.equal(listed[0]?.createdAt, created.createdAt);
+
+    storage.deleteBookmark(created.id);
+    assert.deepEqual(storage.listBookmarks("book-1"), []);
+  } finally {
+    cleanup();
+  }
+});
