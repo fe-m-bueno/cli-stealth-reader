@@ -91,6 +91,12 @@ function lineHash(blockIndex: number, lineIndex: number): number {
   return Math.abs(h);
 }
 
+function withGenerics(typeName: string, seed: number): string {
+  if (seed % 10 >= 3) return typeName;
+  const suffixes = ["<T>", "<T, K>", "<T extends Base>"];
+  return typeName + suffixes[seed % 3];
+}
+
 // ─── per-line code patterns ───────────────────────────────────────────────────
 // Each function takes a single pre-wrapped line of text and renders it as code.
 
@@ -152,12 +158,50 @@ function patTypeAnnotation(line: string, words: string[], seed: number, t: Theme
   return kw(t, "type") + " " + tp(t, typeName) + op(t, " = ") + str(t, `"${esc(line)}"`) + op(t, ";");
 }
 
+function patCast(line: string, words: string[], seed: number, t: ThemePreset): string {
+  const v = toVarName(words, seed);
+  const typeName = toTypeName(words, seed + 1);
+  return kw(t, "const") + " " + id(t, v) + op(t, " = ") +
+    str(t, `"${esc(line)}"`) + " " + kw(t, "as") + " " + tp(t, typeName) + op(t, ";");
+}
+
+function patGenericCall(line: string, words: string[], seed: number, t: ThemePreset): string {
+  const f = toFuncName(words, seed);
+  const typeName = toTypeName(words, seed + 2);
+  return fn_(t, f) + op(t, "<") + tp(t, typeName) + op(t, ">(") +
+    str(t, `"${esc(line)}"`) + op(t, ");");
+}
+
+function patDestructure(line: string, words: string[], seed: number, t: ThemePreset): string {
+  const prop1 = toVarName(words, seed).slice(0, 6);
+  const prop2 = toVarName(words, seed + 3, "Id").slice(0, 6);
+  const f = toFuncName(words, seed + 1).slice(0, 7);
+  return kw(t, "const") + " " + op(t, "{ ") + dm(t, prop1) + op(t, ", ") + dm(t, prop2) +
+    op(t, " } = ") + fn_(t, f) + op(t, "(") + str(t, `"${esc(line)}"`) + op(t, ");");
+}
+
+function patSpread(line: string, words: string[], seed: number, t: ThemePreset): string {
+  const v = toVarName(words, seed);
+  const key = toVarName(words, seed + 2).slice(0, 5);
+  return kw(t, "const") + " " + id(t, v) + op(t, " = { ...") +
+    id(t, "state") + op(t, `, ${key}: `) + str(t, `"${esc(line)}"`) + op(t, " };");
+}
+
+function patTernary(line: string, words: string[], seed: number, t: ThemePreset): string {
+  const v = toVarName(words, seed);
+  const conds = ["isValid", "flag", "active", "ready", "loaded"];
+  const cond = conds[seed % conds.length];
+  return kw(t, "const") + " " + id(t, v) + op(t, " = ") +
+    dm(t, cond) + op(t, " ? ") + str(t, `"${esc(line)}"`) + op(t, " : ") + dm(t, "null") + op(t, ";");
+}
+
 // ─── line selection ───────────────────────────────────────────────────────────
 
 const LINE_PATTERNS = [
   patConst, patComment, patConsoleLog, patArrow,
   patReturn, patLet, patExport, patThrow,
   patAwait, patNullish, patOptional, patTypeAnnotation,
+  patCast, patGenericCall, patDestructure, patSpread, patTernary,
 ] as const;
 
 function disguiseLine(line: string, blockIndex: number, lineIndex: number, t: ThemePreset): string {
@@ -186,7 +230,7 @@ function renderAsyncOpen(words: string[], seed: number, t: ThemePreset): string 
 }
 
 function renderInterfaceLines(words: string[], seed: number, t: ThemePreset): string[] {
-  const typeName = toTypeName(words, seed);
+  const typeName = withGenerics(toTypeName(words, seed), seed);
   const prop1 = toVarName(words, seed + 1);
   const prop2 = toVarName(words, seed + 2, "Id");
   const types = ["string", "number", "boolean"];
@@ -198,12 +242,42 @@ function renderInterfaceLines(words: string[], seed: number, t: ThemePreset): st
   ];
 }
 
+function renderEnumBlock(words: string[], seed: number, t: ThemePreset): string {
+  const name = toTypeName(words, seed);
+  const members = ["Active", "Pending", "Resolved", "Ready", "Loading", "Done", "Error"];
+  const m1 = members[seed % members.length];
+  const m2 = members[(seed + 2) % members.length];
+  const m3 = members[(seed + 4) % members.length];
+  return kw(t, "enum") + " " + tp(t, name) + op(t, " { ") +
+    id(t, m1) + op(t, ", ") + id(t, m2) + op(t, ", ") + id(t, m3) + op(t, " }");
+}
+
+function renderClassLines(words: string[], seed: number, t: ThemePreset): string[] {
+  const decorators = ["Injectable", "Component", "Service", "Controller", "Directive"];
+  const decorator = decorators[seed % decorators.length];
+  const name = withGenerics(toTypeName(words, seed), seed + 5);
+  return [
+    op(t, "@") + fn_(t, decorator) + op(t, "()"),
+    kw(t, "class") + " " + tp(t, name) + op(t, " {"),
+  ];
+}
+
+function renderGenericFuncOpen(words: string[], seed: number, t: ThemePreset): string {
+  const fname = toFuncName(words, seed);
+  const retType = toTypeName(words, seed + 1);
+  const extType = toTypeName(words, seed + 2);
+  return kw(t, "function") + " " + fn_(t, fname) +
+    op(t, "<") + tp(t, "T") + " " + kw(t, "extends") + " " + tp(t, extType) + op(t, ">") +
+    op(t, "(") + id(t, "item") + op(t, ": ") + tp(t, "T") + op(t, "): ") +
+    tp(t, "Promise") + op(t, "<") + tp(t, retType) + op(t, "> {");
+}
+
 // ─── main code renderer ───────────────────────────────────────────────────────
 
 // TEXT_OVERHEAD: max visual chars consumed by code boilerplate around the string value.
-// Worst case: patNullish = "const " (6) + name (MAX_NAME=10) + " = state.value ?? \"\";" (22) = 38
+// Worst case: patSpread = "const " (6) + name (10) + " = { ...state, " (15) + key (5) + ": \"\";" (6) = 42
 // +4 buffer for esc() expanding quotes in text.
-const TEXT_OVERHEAD = 42;
+const TEXT_OVERHEAD = 46;
 
 function renderCode(block: CanonicalBlock, width: number, theme: ThemePreset, blockIndex: number): string[] {
   if (block.type === "heading") {
@@ -220,16 +294,37 @@ function renderCode(block: CanonicalBlock, width: number, theme: ThemePreset, bl
   const seed = lineHash(blockIndex, 0);
   const textWidth = Math.max(width - TEXT_OVERHEAD, 20);
 
-  // Occasionally open with a structural line (import / function / interface)
+  // If/else block: text split across both branches
+  if (blockIndex % 41 === 0) {
+    const conds = ["isValid", "flag", "active", "ready", "loaded"];
+    const cond = conds[seed % conds.length];
+    const wrapped = wrapText(block.text, textWidth);
+    const half = Math.ceil(wrapped.length / 2);
+    return [
+      kw(theme, "if") + op(theme, " (") + id(theme, cond) + op(theme, ") {"),
+      ...wrapped.slice(0, half).map((line, i) => "  " + disguiseLine(line, blockIndex, i, theme)),
+      op(theme, "} else {"),
+      ...wrapped.slice(half).map((line, i) => "  " + disguiseLine(line, blockIndex, half + i, theme)),
+      op(theme, "}"),
+    ];
+  }
+
+  // Occasionally open with a structural line (import / enum / interface / function / class / generic)
   const structLines: string[] = [];
   if (blockIndex % 13 === 0) {
     structLines.push(renderImportBlock(words, seed, theme));
+  } else if (blockIndex % 17 === 0) {
+    structLines.push(renderEnumBlock(words, seed, theme));
   } else if (blockIndex % 19 === 0) {
     structLines.push(...renderInterfaceLines(words, seed, theme));
   } else if (blockIndex % 23 === 0) {
     structLines.push(renderFuncOpen(words, seed, theme));
   } else if (blockIndex % 29 === 0) {
     structLines.push(renderAsyncOpen(words, seed, theme));
+  } else if (blockIndex % 31 === 0) {
+    structLines.push(...renderClassLines(words, seed, theme));
+  } else if (blockIndex % 37 === 0) {
+    structLines.push(renderGenericFuncOpen(words, seed, theme));
   }
 
   const wrapped = wrapText(block.text, textWidth);
@@ -240,7 +335,9 @@ function renderCode(block: CanonicalBlock, width: number, theme: ThemePreset, bl
   });
 
   const result = [...structLines, ...bodyLines];
-  if (structLines.length > 0 && (blockIndex % 23 === 0 || blockIndex % 29 === 0)) {
+  const needsClose = blockIndex % 23 === 0 || blockIndex % 29 === 0 ||
+    blockIndex % 31 === 0 || blockIndex % 37 === 0;
+  if (structLines.length > 0 && needsClose) {
     result.push(op(theme, "}"));
   }
   return result;
