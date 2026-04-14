@@ -1,6 +1,6 @@
 # cli-stealth-reader
 
-[![Node.js](https://img.shields.io/badge/Node.js-22%2B-green)](https://nodejs.org/) [![MIT License](https://img.shields.io/badge/License-MIT-blue)](#licença)
+[![Node.js](https://img.shields.io/badge/Node.js-20%2B-green)](https://nodejs.org/)
 
 Um leitor de EPUB para terminal em modo tela cheia, com renderização e um diferencial único: o modo **stealth** disfarça o texto como código JavaScript plausível, para que pareça que você está programando enquanto lê.
 
@@ -14,17 +14,19 @@ O **cli-stealth-reader** oferece duas experiências de leitura:
 Além disso:
 - Interface TUI moderna com status bar integrada
 - 4 temas de cores elegantes (Codex, Graphite, Amber, Forest)
-- 14 slash commands com suporte a argumentos e flags
-- Biblioteca SQLite persistida com XDG directories
+- 13 slash commands com suporte a argumentos, aliases e flags
+- Biblioteca SQLite persistida com XDG directories via `better-sqlite3`
 - Import rigoroso de EPUB com suporte a EPUB3, NCX fallback e fragmentos de âncora
 - Auto-detecção de arquivos `.epub` no diretório atual
 - Posição de leitura sincronizada por livro
+- Picker interativo de arquivos no diretório atual
+- Scroll com mouse e barra lateral de progresso
 
 ## Instalação
 
 ### Requisitos
 
-- **Node.js 22+** (usa `node:sqlite` nativo)
+- **Node.js 20+**
 - Terminal com suporte a cores 24-bit
 
 ### Setup Rápido
@@ -46,8 +48,8 @@ node dist/index.js
 ## Uso Rápido
 
 1. Inicie o leitor: `npm run dev`
-2. Selecione um livro da biblioteca ou abra o picker de EPUBs da pasta atual
-3. Use `j`/`k` ou setas para navegar
+2. Importe um livro com `/add` ou pressione `Enter` para abrir o picker de EPUBs da pasta atual
+3. Use `j`/`k`, setas, `Space`/`b` ou a roda do mouse para navegar
 4. Pressione `/` para abrir a barra de comandos
 5. Pressione `?` para ver todos os atalhos
 
@@ -121,8 +123,12 @@ livro', pensou Alice, 'sem figuras ou conversas?'
 | `k` / `↑` | Scroll para cima |
 | `Space` | Página para frente |
 | `b` | Página para trás |
-| `g` | Ir para o início do livro |
-| `G` | Ir para o fim do livro |
+| `Home` | Ir para o início do capítulo |
+| `End` | Ir para o fim do capítulo |
+| `←` / `→` | Capítulo anterior / próximo capítulo |
+| `wheel` | Scroll com mouse |
+| `g` | Ir para o topo da leitura atual |
+| `G` | Ir para o fim da leitura atual |
 
 ### Comandos
 
@@ -172,7 +178,6 @@ Pressione `/` para abrir a barra de comandos. Todos os comandos suportam argumen
   --current            # Remover o livro atual
 
 /removecurrent         # Remover apenas o livro em leitura
-  --confirm            # Confirmar sem prompt
 ```
 
 ### Visualização
@@ -197,6 +202,12 @@ Pressione `/` para abrir a barra de comandos. Todos os comandos suportam argumen
 /keyboardshortcuts     # Ver atalhos de teclado
   --category <tipo>    # Filtrar por: navigation, commands, view
 ```
+
+### Aliases
+
+- `/book` → `/changebook`
+- `/theme` → `/colorscheme`
+- `/keys` → `/keyboardshortcuts`
 
 ## Temas de Cores
 
@@ -255,7 +266,6 @@ O estado é persistido em diretórios XDG-padrão:
 - **`$XDG_DATA_HOME/cli-stealth-reader/`**: Banco de dados SQLite (WAL mode)
   - Tabelas: `books`, `chapters`, `positions`, `diagnostics`, `settings`, `command_history`
 - **`$XDG_CACHE_HOME/cli-stealth-reader/`**: Cache de JSON de livros
-- **`$XDG_CONFIG_HOME/cli-stealth-reader/`**: Configurações do usuário
 
 EPUBs encontrados no diretório atual são automaticamente oferecidos na tela inicial e em `/add --cwd`.
 
@@ -329,14 +339,6 @@ type CanonicalBlock =
 - Remoção de livro apaga apenas a entrada da biblioteca — o arquivo EPUB original não é deletado
 - Posição de leitura é persistida por livro automaticamente
 
-## Licença
-
-MIT — veja [LICENSE](LICENSE) para detalhes.
-
 ## Contribuição
 
 Contribuições são bem-vindas! Siga o estilo de código existente e rode os testes antes de abrir um PR.
-
----
-
-**Divirta-se lendo em stealth!** 📖🥷

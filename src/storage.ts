@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import Database from "better-sqlite3";
 import type {
   AppSettings,
   CanonicalBook,
@@ -23,14 +23,14 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export class Storage {
-  readonly db: DatabaseSync;
+  readonly db: Database.Database;
   readonly chapterCacheDir: string;
 
   constructor() {
     const paths = getAppPaths();
     this.chapterCacheDir = path.join(paths.cacheDir, "books");
     fs.mkdirSync(this.chapterCacheDir, { recursive: true });
-    this.db = new DatabaseSync(paths.dbPath);
+    this.db = new Database(paths.dbPath);
     this.db.exec(`
       PRAGMA journal_mode = WAL;
       CREATE TABLE IF NOT EXISTS books (
