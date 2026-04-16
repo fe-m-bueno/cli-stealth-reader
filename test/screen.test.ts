@@ -129,6 +129,42 @@ test("normal footer keeps progress on a separate bottom-right line", () => {
   assert.ok(footer[1].startsWith(" "));
 });
 
+test("overlay footer advertises escape close hint", () => {
+  const state = {
+    theme,
+    commandMode: false,
+    commandBuffer: "",
+    commandSuggestionIndex: 0,
+    currentBook: null,
+    progressVisibility: "hidden",
+    status: "Opened keyboard shortcuts",
+    overlay: "keys",
+    chapterIndex: 0,
+    blockOffset: 0
+  } as AppState;
+
+  const footer = renderFooter(state, 100).map(stripAnsi);
+  assert.match(footer[0], /Esc close/);
+});
+
+test("normal footer does not show escape close hint", () => {
+  const state = {
+    theme,
+    commandMode: false,
+    commandBuffer: "",
+    commandSuggestionIndex: 0,
+    currentBook: null,
+    progressVisibility: "hidden",
+    status: "Ready",
+    overlay: "none",
+    chapterIndex: 0,
+    blockOffset: 0
+  } as AppState;
+
+  const footer = renderFooter(state, 100).map(stripAnsi);
+  assert.doesNotMatch(footer[0], /Esc close/);
+});
+
 test("progress uses rendered viewport lines instead of raw block count", () => {
   const longParagraph = Array.from({ length: 120 }, (_, index) => `word${index}`).join(" ");
   const state = {

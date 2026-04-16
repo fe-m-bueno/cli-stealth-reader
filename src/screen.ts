@@ -307,7 +307,10 @@ export function renderFooter(state: AppState, width: number, progress = ""): str
   }
 
   const status = fg(theme.dim, state.status || "Ready");
-  const right = fg(theme.dim, "/ commands  ? shortcuts  q quit");
+  const shortcuts = state.overlay && state.overlay !== "none"
+    ? "Esc close  / commands  ? shortcuts  q quit"
+    : "/ commands  ? shortcuts  q quit";
+  const right = fg(theme.dim, shortcuts);
   const sep = " ─";
   const statusPlain = stripAnsi(status);
   const rightPlain = stripAnsi(right);
