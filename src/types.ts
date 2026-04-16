@@ -178,7 +178,7 @@ export interface FolderDiscovery {
   fileName: string;
 }
 
-export type OverlayKind = "none" | "chapters" | "books" | "bookmarks" | "notes" | "colorschemes" | "themes" | "help" | "keys" | "diagnostics" | "file-picker";
+export type OverlayKind = "none" | "chapters" | "books" | "bookmarks" | "notes" | "colorschemes" | "themes" | "settings" | "help" | "keys" | "diagnostics" | "file-picker";
 
 export interface ExportPosition {
   bookImportHash: string;
@@ -308,4 +308,7 @@ export interface AppState {
   booksTagMap: Map<string, string[]>;
   helpCommand: string | null;
   mouseCapture: boolean;
+  settingsDraft?: import("./settings-panel.js").SettingsPanelDraft | null;
+  settingsSearchBuffer?: string;
+  settingsSearchMode?: boolean;
 }

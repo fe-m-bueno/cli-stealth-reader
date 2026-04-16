@@ -44,6 +44,11 @@ test("parses /highlight with on/off argument", () => {
   assert.deepEqual(parsed.flags, {});
 });
 
+test("parses /settings and /config alias", () => {
+  assert.equal(parseSlashCommand("/settings").name, "settings");
+  assert.equal(parseSlashCommand("/config").name, "settings");
+});
+
 test("parses bookmark commands", () => {
   const mark = parseSlashCommand('/mark "Ponto importante"');
   assert.equal(mark.name, "mark");
@@ -69,6 +74,10 @@ test("filters command suggestions by prefix and aliases", () => {
 
   const byTheme = listCommandSuggestions("theme");
   assert.deepEqual(byTheme.map((item) => item.name), ["theme"]);
+
+  const byAlias = listCommandSuggestions("conf");
+  assert.deepEqual(byAlias.map((item) => item.name), ["settings"]);
+  assert.equal(byAlias[0]?.matchedAlias, "config");
 });
 
 test("applies autocomplete to the command token only", () => {

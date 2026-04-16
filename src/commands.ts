@@ -154,6 +154,18 @@ export const COMMANDS: CommandDefinition[] = [
     notes: ["When mouse capture is on, most terminals still allow text selection with Shift-drag."]
   },
   {
+    name: "settings",
+    aliases: ["config"],
+    description: "Open the reader settings panel.",
+    usage: "/settings",
+    details: [
+      "Opens a searchable settings panel for reader-specific options.",
+      "Inside the panel, Space changes the selected setting, Enter saves, / searches, and Esc cancels."
+    ],
+    examples: ["/settings", "/config"],
+    notes: ["Shortcut: press S from the reader to open settings."]
+  },
+  {
     name: "help",
     description: "Show help for commands.",
     args: [{ name: "command" }],

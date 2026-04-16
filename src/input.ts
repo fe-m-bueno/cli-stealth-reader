@@ -9,6 +9,13 @@ import {
   MIN_PAGE_LINES,
   scrollbarOffsetFromThumb
 } from "./screen.js";
+import {
+  applySettingsDraft,
+  closeSettingsPanel,
+  cycleSelectedSetting,
+  filteredSettingsItems,
+  openSettingsPanel
+} from "./settings-panel.js";
 import { APPEARANCE_THEMES, THEMES, applyAppearanceTheme } from "./themes.js";
 import type { AppState, LibrarySortKey } from "./types.js";
 
@@ -202,6 +209,8 @@ function interactiveOverlayLength(state: AppState): number {
       return THEMES.length;
     case "themes":
       return APPEARANCE_THEMES.length;
+    case "settings":
+      return filteredSettingsItems(state).length;
     default:
       return 0;
   }
@@ -367,6 +376,38 @@ export async function handleInput(
     } else {
       state.commandBuffer += chunk;
       state.commandSuggestionIndex = 0;
+    }
+    redraw();
+    return;
+  }
+
+  if (state.overlay === "settings") {
+    const items = filteredSettingsItems(state);
+    const maxIndex = Math.max(0, items.length - 1);
+    state.overlayCursor = clamp(state.overlayCursor, 0, maxIndex);
+
+    if (chunk === "\u001b") {
+      closeSettingsPanel(state);
+      state.status = "Settings cancelled.";
+    } else if (chunk === "\r") {
+      applySettingsDraft(state);
+    } else if (isDownKey(chunk) || chunk === "j") {
+      state.overlayCursor = clamp(state.overlayCursor + 1, 0, maxIndex);
+      state.settingsSearchMode = false;
+    } else if (isUpKey(chunk) || chunk === "k") {
+      state.overlayCursor = clamp(state.overlayCursor - 1, 0, maxIndex);
+      state.settingsSearchMode = false;
+    } else if (chunk === " ") {
+      cycleSelectedSetting(state);
+    } else if (chunk === "/") {
+      state.settingsSearchMode = true;
+      state.status = "Settings search.";
+    } else if (chunk === "\u007f" && state.settingsSearchMode) {
+      state.settingsSearchBuffer = (state.settingsSearchBuffer ?? "").slice(0, -1);
+      state.overlayCursor = 0;
+    } else if (state.settingsSearchMode && chunk.length === 1 && chunk >= " ") {
+      state.settingsSearchBuffer = `${state.settingsSearchBuffer ?? ""}${chunk}`;
+      state.overlayCursor = 0;
     }
     redraw();
     return;
@@ -592,6 +633,12 @@ export async function handleInput(
   const layout = getViewportLayout(state, process.stdout.columns || 120, process.stdout.rows || 40);
   const pageSize = Math.max(MIN_PAGE_LINES, layout.bodyHeight);
   const chapterMaxOffset = computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
+
+  if (chunk === "S") {
+    openSettingsPanel(state);
+    redraw();
+    return;
+  }
 
   if (state.overlay === "help") {
     const lines = commandHelp(state.helpCommand ?? undefined, layout.contentWidth);

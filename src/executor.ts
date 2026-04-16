@@ -7,6 +7,7 @@ import { EPUB_PARSER_VERSION, importEpub } from "./parser/epub.js";
 import { importFile } from "./parser/index.js";
 import { renderBlocks } from "./renderers.js";
 import { computeChapterMaxOffset, getViewportLayout } from "./screen.js";
+import { openSettingsPanel } from "./settings-panel.js";
 import { APPEARANCE_THEMES, THEMES, applyAppearanceTheme } from "./themes.js";
 import type {
   AppState,
@@ -525,6 +526,10 @@ const handlers: Record<string, CommandHandler> = {
   keyboardshortcuts: async (state) => {
     state.overlay = "keys";
     state.status = "Opened keyboard shortcuts";
+  },
+
+  settings: async (state) => {
+    openSettingsPanel(state);
   },
 
   density: async (state, parsed) => {

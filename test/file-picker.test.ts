@@ -6,6 +6,7 @@ import path from "node:path";
 import { executeCommand } from "../src/executor.js";
 import { handleInput } from "../src/input.js";
 import { computeChapterMaxOffset, getScrollbarMetrics, getViewportLayout, stripAnsi } from "../src/screen.js";
+import { renderSettingsPanel } from "../src/settings-panel.js";
 import { APPEARANCE_THEMES, THEMES } from "../src/themes.js";
 import { renderOverlay } from "../src/tui.js";
 import type { AppState, CanonicalBook, FolderDiscovery, ThemePreset } from "../src/types.js";
@@ -615,6 +616,70 @@ test("C key opens the theme picker", async () => {
   const state = makeState({ overlay: "none" });
   await handleInput("C", state, redraw, async (cmd) => { await executeCommand(state, cmd); }, () => {}, noop);
   assert.equal(state.overlay, "themes");
+});
+
+test("/settings and S open the settings panel", async () => {
+  const state = makeState({ overlay: "none" });
+  await executeCommand(state, "/settings");
+  assert.equal(state.overlay, "settings");
+  assert.equal(state.settingsDraft?.renderMode, "plain");
+
+  const shortcutState = makeState({ overlay: "none" });
+  await handleInput("S", shortcutState, redraw, async (cmd) => { await executeCommand(shortcutState, cmd); }, () => {}, noop);
+  assert.equal(shortcutState.overlay, "settings");
+});
+
+test("settings panel filters reader settings with its own search field", async () => {
+  const state = makeState({ overlay: "none" });
+  await executeCommand(state, "/config");
+  await handleInput("/", state, redraw, noop, () => {}, noop);
+  await handleInput("d", state, redraw, noop, () => {}, noop);
+  await handleInput("e", state, redraw, noop, () => {}, noop);
+  await handleInput("n", state, redraw, noop, () => {}, noop);
+
+  assert.equal(state.overlay, "settings");
+  assert.equal(state.commandMode, false);
+  assert.equal(state.settingsSearchBuffer, "den");
+
+  const lines = renderSettingsPanel(state, 80, 20).map(stripAnsi);
+  assert.ok(lines.some((line) => line.includes("Code density")));
+  assert.ok(!lines.some((line) => line.includes("Mouse capture")));
+});
+
+test("space stages a settings change and escape cancels it", async () => {
+  const state = makeState({ overlay: "none", renderMode: "plain", codeLanguage: "typescript" });
+  await executeCommand(state, "/settings");
+  await handleInput(" ", state, redraw, noop, () => {}, noop);
+
+  assert.equal(state.settingsDraft?.renderMode, "code");
+  assert.equal(state.settingsDraft?.codeLanguage, "typescript");
+  assert.equal(state.renderMode, "plain");
+
+  await handleInput("\u001b", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "none");
+  assert.equal(state.renderMode, "plain");
+  assert.equal(state.status, "Settings cancelled.");
+});
+
+test("enter saves staged settings and persists app settings", async () => {
+  const saved: Array<[string, unknown]> = [];
+  const storage = makeStorage({
+    setSetting: (key: string, value: unknown) => {
+      saved.push([key, value]);
+    }
+  });
+  const state = makeState({ overlay: "none", storage, renderMode: "plain", codeLanguage: "typescript" });
+
+  await executeCommand(state, "/settings");
+  await handleInput(" ", state, redraw, noop, () => {}, noop);
+  await handleInput("\r", state, redraw, noop, () => {}, noop);
+
+  assert.equal(state.overlay, "none");
+  assert.equal(state.renderMode, "code");
+  assert.equal(state.codeLanguage, "typescript");
+  assert.equal(state.status, "Settings saved.");
+  assert.ok(saved.some(([key, value]) => key === "renderMode" && value === "code"));
+  assert.ok(saved.some(([key, value]) => key === "codeLanguage" && value === "typescript"));
 });
 
 test("p key cycles progress visibility to the next value", async () => {

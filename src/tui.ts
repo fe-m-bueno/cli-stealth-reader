@@ -29,6 +29,7 @@ import {
   THEMES,
   applyAppearanceTheme
 } from "./themes.js";
+import { renderSettingsPanel } from "./settings-panel.js";
 import type { AppState } from "./types.js";
 
 let mouseCaptureEnabled = false;
@@ -44,6 +45,10 @@ function setMouseCapture(enabled: boolean): void {
 function currentLines(state: AppState, width: number, height: number): string[] {
   if (state.overlay === "help") {
     return commandHelp(state.helpCommand ?? undefined, width, state.theme);
+  }
+
+  if (state.overlay === "settings") {
+    return renderSettingsPanel(state, width, height);
   }
 
   if (!state.currentBook) {
@@ -254,6 +259,8 @@ function draw(state: AppState): void {
   }
   const maxOffset = state.overlay === "help"
     ? helpMaxOffset
+    : state.overlay === "settings"
+    ? 0
     : state.focusMode
     ? 0
     : computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
@@ -262,6 +269,8 @@ function draw(state: AppState): void {
   }
   const mainLines = state.overlay === "help"
     ? allMainLines.slice(state.overlayCursor, state.overlayCursor + layout.bodyHeight)
+    : state.overlay === "settings"
+    ? allMainLines.slice(0, layout.bodyHeight)
     : state.focusMode
     ? allMainLines.slice(0, layout.bodyHeight)
     : allMainLines.slice(state.blockOffset, state.blockOffset + layout.bodyHeight);
@@ -281,13 +290,13 @@ function draw(state: AppState): void {
     : state.focusMode
     ? mapFocusIndexToBlockOffset(state, layout.contentWidth, state.focusBlockIndex)
     : state.blockOffset;
-  const scrollbar = state.currentBook
+  const scrollbar = state.currentBook && state.overlay !== "settings"
     ? renderScrollbar(allMainLines.length, layout.bodyHeight, effectiveOffset, state.theme, state.overlay === "help" ? false : state.focusMode)
     : state.overlay === "help"
       ? renderScrollbar(allMainLines.length, layout.bodyHeight, effectiveOffset, state.theme, false)
     : [];
   const originalOffset = state.blockOffset;
-  const progress = state.overlay === "help"
+  const progress = state.overlay === "help" || state.overlay === "settings"
     ? ""
     : (() => {
         state.blockOffset = effectiveOffset;
@@ -396,7 +405,10 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     booksTagFilter: null,
     booksTagMap: new Map(),
     helpCommand: null,
-    mouseCapture: false
+    mouseCapture: false,
+    settingsDraft: null,
+    settingsSearchBuffer: "",
+    settingsSearchMode: false
   };
 
   if (options?.resume) {

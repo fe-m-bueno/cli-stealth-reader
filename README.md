@@ -197,6 +197,7 @@ livro', pensou Alice, 'sem figuras ou conversas?'
 | `d`   | Ciclar densidade do código stealth (1 → 3 → 5)                   |
 | `c`   | Abrir picker de colorscheme                                      |
 | `C`   | Abrir picker de tema                                             |
+| `S`   | Abrir painel de configurações                                    |
 | `p`   | Avançar visibilidade da barra de progresso                       |
 | `?`   | Ver atalhos de teclado                                           |
 | `q`   | Sair do leitor                                                   |
@@ -314,6 +315,9 @@ O arquivo exportado é indexado por `importHash` — sem dependência de caminho
 
 /toggleprogress [mode] # Controlar barra de progresso
   book | both | chapter | hidden
+
+/settings              # Abrir painel pesquisável de configurações do leitor
+                       # Space altera, Enter salva, / pesquisa, Esc cancela
 ```
 
 ### Sistema
@@ -330,6 +334,7 @@ O arquivo exportado é indexado por `importHash` — sem dependência de caminho
 
 - `/book` → `/changebook`
 - `/keys` → `/keyboardshortcuts`
+- `/config` → `/settings`
 - `/tags` → `/tag`
 
 ### Modo Foco
