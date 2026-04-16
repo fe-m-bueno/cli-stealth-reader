@@ -573,10 +573,11 @@ export async function handleInput(
   }
 
   if (chunk === "\u001b") {
-    if (state.overlay === "help") {
+    if (state.overlay !== "none") {
       state.overlay = "none";
       state.helpCommand = null;
       state.overlayCursor = 0;
+      state.booksTagFilter = null;
       redraw();
       return;
     }
@@ -708,7 +709,7 @@ export async function handleInput(
 
     const atFocusEnd = state.focusBlockIndex >= blockCount - 1;
     const focusForwardIntent =
-      chunk === "j"
+      chunk === "k"
       || chunk === " "
       || isDownKey(chunk)
       || isPageDownKey(chunk)
@@ -732,7 +733,7 @@ export async function handleInput(
     clearChapterTransition(state);
     if (focusForwardIntent) {
       state.focusBlockIndex = clampFocusBlockIndex(state, state.focusBlockIndex + 1);
-    } else if (chunk === "k" || isUpKey(chunk) || isMouseWheelUp(chunk)) {
+    } else if (chunk === "j" || isUpKey(chunk) || isMouseWheelUp(chunk)) {
       state.focusBlockIndex = clampFocusBlockIndex(state, state.focusBlockIndex - 1);
     } else if (chunk === "g" || isHomeKey(chunk)) {
       state.focusBlockIndex = 0;

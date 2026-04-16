@@ -87,6 +87,25 @@ const multiChapterScrollBook: CanonicalBook = {
   ]
 };
 
+const focusBook: CanonicalBook = {
+  ...currentBook,
+  chapters: [
+    {
+      id: "ch-focus",
+      index: 0,
+      title: "Focus",
+      href: "focus",
+      depth: 0,
+      blocks: [
+        { id: "focus-1", type: "paragraph", text: "first" },
+        { id: "focus-2", type: "paragraph", text: "second" },
+        { id: "focus-3", type: "paragraph", text: "third" }
+      ],
+      wordCount: 3
+    }
+  ]
+};
+
 const baseBook = { id: "book-1", title: "Alpha", author: "Anon", sourcePath: "/tmp/alpha.epub", importHash: "hash", lastOpenedAt: 0, renderMode: "plain" as const };
 
 function makeStorage(overrides: Partial<ReturnType<typeof makeStorageBase>> = {}) {
@@ -437,6 +456,55 @@ test("T opens the table of contents", async () => {
   await handleInput("T", state, redraw, noop, () => {}, noop);
   assert.equal(state.overlay, "chapters");
   assert.equal(state.overlayCursor, 2);
+});
+
+test("focus mode maps k forward and j backward", async () => {
+  const state = makeState({
+    overlay: "none",
+    currentBook: focusBook,
+    focusMode: true,
+    focusBlockIndex: 1
+  });
+
+  await handleInput("k", state, redraw, noop, () => {}, noop);
+  assert.equal(state.focusBlockIndex, 2);
+
+  await handleInput("j", state, redraw, noop, () => {}, noop);
+  assert.equal(state.focusBlockIndex, 1);
+});
+
+test("focus mode escape closes shortcut aside without leaving focus", async () => {
+  const state = makeState({
+    overlay: "none",
+    currentBook: focusBook,
+    focusMode: true,
+    focusBlockIndex: 1
+  });
+
+  await handleInput("?", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "keys");
+
+  await handleInput("\u001b", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "none");
+  assert.equal(state.focusMode, true);
+  assert.equal(state.focusBlockIndex, 1);
+});
+
+test("focus mode escape closes empty bookmark aside without leaving focus", async () => {
+  const state = makeState({
+    overlay: "none",
+    currentBook: focusBook,
+    focusMode: true,
+    focusBlockIndex: 1
+  });
+
+  await handleInput("B", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "bookmarks");
+
+  await handleInput("\u001b", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "none");
+  assert.equal(state.focusMode, true);
+  assert.equal(state.focusBlockIndex, 1);
 });
 
 test("extra downward wheel at chapter end moves to the next chapter and shows a banner", async () => {
