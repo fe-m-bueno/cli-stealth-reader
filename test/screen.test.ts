@@ -33,8 +33,9 @@ test("full frame rendering pads lines without erase sequences", () => {
 });
 
 test("frame rendering can paint a stable background across colored segments", () => {
-  const frame = renderFrame([`${fg("#ffffff", "x")}y`], 3, 1, "#000000");
+  const frame = renderFrame([`${fg("#ffffff", "x")}y`], 3, 1, "#000000", "#111111");
   assert.match(frame, /\x1b\[48;2;0;0;0m/);
+  assert.match(frame, /\x1b\[38;2;17;17;17m/);
   assert.match(frame, /\x1b\[0m\x1b\[48;2;0;0;0m/);
 });
 

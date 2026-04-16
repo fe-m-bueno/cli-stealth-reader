@@ -315,7 +315,16 @@ function draw(state: AppState): void {
     ...body.slice(0, -1).split("\n"),
     ...footerLines
   ];
-  process.stdout.write(renderFrame(frameLines, width, height, state.theme.background));
+  const shouldPaintFrameBackground = state.appearanceTheme.id.startsWith("light");
+  process.stdout.write(
+    renderFrame(
+      frameLines,
+      width,
+      height,
+      shouldPaintFrameBackground ? state.theme.background : undefined,
+      shouldPaintFrameBackground ? state.theme.foreground : undefined
+    )
+  );
 }
 
 function syncPosition(state: AppState): void {

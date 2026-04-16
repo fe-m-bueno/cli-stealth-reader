@@ -416,8 +416,16 @@ export function renderBody(
   return output;
 }
 
-export function renderFrame(lines: string[], width: number, height: number, background?: string): string {
+export function renderFrame(
+  lines: string[],
+  width: number,
+  height: number,
+  background?: string,
+  foreground?: string
+): string {
   const frameLines = Array.from({ length: height }, (_, index) => padFrameLine(lines[index] ?? "", width));
-  const paintedLines = background ? frameLines.map((line) => paintBackground(background, line)) : frameLines;
+  const paintedLines = background
+    ? frameLines.map((line) => paintBackground(background, line, foreground))
+    : frameLines;
   return `${screenResetSequence(false)}${paintedLines.join("\n")}`;
 }

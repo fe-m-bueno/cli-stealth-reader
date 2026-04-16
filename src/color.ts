@@ -89,9 +89,9 @@ export function bg(hex: string, text: string): string {
   return `${bgOpen(hex)}${text}\x1b[0m`;
 }
 
-export function paintBackground(color: string, text: string): string {
-  const open = bgOpen(color);
-  return `${open}${text.replace(/\x1b\[0m/g, `\x1b[0m${open}`)}\x1b[0m`;
+export function paintBackground(color: string, text: string, foreground?: string): string {
+  const reopen = `${bgOpen(color)}${foreground ? fgOpen(foreground) : ""}`;
+  return `${reopen}${text.replace(/\x1b\[0m/g, `\x1b[0m${reopen}`)}\x1b[0m`;
 }
 
 /** Highlight case-insensitive matches without splitting inside CSI `\\x1b[...m` sequences. */
