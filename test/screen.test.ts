@@ -147,6 +147,45 @@ test("overlay footer advertises escape close hint", () => {
   assert.match(footer[0], /Esc close/);
 });
 
+test("focus mode footer advertises escape exit hint", () => {
+  const state = {
+    theme,
+    commandMode: false,
+    commandBuffer: "",
+    commandSuggestionIndex: 0,
+    currentBook: null,
+    progressVisibility: "hidden",
+    status: "Focus mode enabled",
+    overlay: "none",
+    focusMode: true,
+    chapterIndex: 0,
+    blockOffset: 0
+  } as AppState;
+
+  const footer = renderFooter(state, 100).map(stripAnsi);
+  assert.match(footer[0], /Esc exit focus/);
+});
+
+test("overlay footer close hint takes precedence over focus mode exit hint", () => {
+  const state = {
+    theme,
+    commandMode: false,
+    commandBuffer: "",
+    commandSuggestionIndex: 0,
+    currentBook: null,
+    progressVisibility: "hidden",
+    status: "Opened keyboard shortcuts",
+    overlay: "keys",
+    focusMode: true,
+    chapterIndex: 0,
+    blockOffset: 0
+  } as AppState;
+
+  const footer = renderFooter(state, 100).map(stripAnsi);
+  assert.match(footer[0], /Esc close/);
+  assert.doesNotMatch(footer[0], /Esc exit focus/);
+});
+
 test("normal footer does not show escape close hint", () => {
   const state = {
     theme,
@@ -163,6 +202,7 @@ test("normal footer does not show escape close hint", () => {
 
   const footer = renderFooter(state, 100).map(stripAnsi);
   assert.doesNotMatch(footer[0], /Esc close/);
+  assert.doesNotMatch(footer[0], /Esc exit focus/);
 });
 
 test("progress uses rendered viewport lines instead of raw block count", () => {

@@ -309,6 +309,8 @@ export function renderFooter(state: AppState, width: number, progress = ""): str
   const status = fg(theme.dim, state.status || "Ready");
   const shortcuts = state.overlay && state.overlay !== "none"
     ? "Esc close  / commands  ? shortcuts  q quit"
+    : state.focusMode
+    ? "Esc exit focus  / commands  ? shortcuts  q quit"
     : "/ commands  ? shortcuts  q quit";
   const right = fg(theme.dim, shortcuts);
   const sep = " ─";
