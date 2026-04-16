@@ -159,8 +159,8 @@ livro', pensou Alice, 'sem figuras ou conversas?'
 
 | Tecla     | Ação                                       |
 | --------- | ------------------------------------------ |
-| `j` / `↓` | Scroll para baixo                          |
-| `k` / `↑` | Scroll para cima                           |
+| `j` / `↑` | Scroll para cima                           |
+| `k` / `↓` | Scroll para baixo                          |
 | `Space`   | Página para frente                         |
 | `b`       | Página para trás                           |
 | `Home`    | Ir para o início do capítulo               |

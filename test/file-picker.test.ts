@@ -360,6 +360,23 @@ test("page up and page down scroll the current chapter", async () => {
   assert.ok(state.blockOffset > 0);
 });
 
+test("normal reader maps k forward and j backward", async () => {
+  const state = makeState({ overlay: "none", currentBook: longChapterBook, blockOffset: 1 });
+
+  await handleInput("k", state, redraw, noop, () => {}, noop);
+  assert.equal(state.blockOffset, 2);
+
+  await handleInput("j", state, redraw, noop, () => {}, noop);
+  assert.equal(state.blockOffset, 1);
+});
+
+test("normal reader handles buffered j and k input", async () => {
+  const state = makeState({ overlay: "none", currentBook: longChapterBook, blockOffset: 1 });
+
+  await handleInput("kkj", state, redraw, noop, () => {}, noop);
+  assert.equal(state.blockOffset, 2);
+});
+
 test("bundled alternate-scroll arrows scroll the current chapter", async () => {
   const state = makeState({ overlay: "none", currentBook: longChapterBook, blockOffset: 0 });
   await handleInput("\u001bOB\u001bOB\u001bOB", state, redraw, noop, () => {}, noop);

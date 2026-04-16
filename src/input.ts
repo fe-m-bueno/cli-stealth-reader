@@ -102,6 +102,8 @@ const LEFT_KEYS = ["\u001b[D", "\u001bOD"];
 const PAGE_UP_KEYS = ["\u001b[5~"];
 const PAGE_DOWN_KEYS = ["\u001b[6~"];
 const BUFFERED_NAV_KEYS = [
+  "j",
+  "k",
   ...PAGE_DOWN_KEYS,
   ...PAGE_UP_KEYS,
   ...RIGHT_KEYS,
@@ -786,7 +788,7 @@ export async function handleInput(
     }
   };
   const isForwardScrollIntent =
-    chunk === "j"
+    chunk === "k"
     || isDownKey(chunk)
     || isMouseWheelDown(chunk);
 
@@ -805,10 +807,10 @@ export async function handleInput(
 
     showChapterTransition(state, redraw, syncPos, state.chapterTransition.message, state.chapterTransition.targetChapterIndex);
     return;
-  } else if (chunk === "j" || isDownKey(chunk) || isMouseWheelDown(chunk)) {
+  } else if (chunk === "k" || isDownKey(chunk) || isMouseWheelDown(chunk)) {
     cancelChapterTransition();
     state.blockOffset += 1;
-  } else if (chunk === "k" || isUpKey(chunk) || isMouseWheelUp(chunk)) {
+  } else if (chunk === "j" || isUpKey(chunk) || isMouseWheelUp(chunk)) {
     cancelChapterTransition();
     state.blockOffset = clamp(state.blockOffset - 1, 0, Infinity);
   } else if (chunk === " " || isPageDownKey(chunk)) {

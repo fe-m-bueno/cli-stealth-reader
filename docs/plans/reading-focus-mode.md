@@ -26,9 +26,9 @@ Substituir `currentLines` quando `focusMode === true`:
 4. Opcionalmente exibir número do bloco/total no footer: `§ 42 / 318`.
 
 ### Navegação em modo foco
-- `j` / `Space` → próximo bloco (`focusBlockIndex++`), ao fim do capítulo → próximo capítulo.
-- `k` → bloco anterior.
-- Ao atingir o fim do bloco e pressionar j novamente → exibir transição de capítulo (mesmo mecanismo atual).
+- `k` / `Space` → próximo bloco (`focusBlockIndex++`), ao fim do capítulo → próximo capítulo.
+- `j` → bloco anterior.
+- Ao atingir o fim do bloco e pressionar k novamente → exibir transição de capítulo (mesmo mecanismo atual).
 - `g` / `G` → primeiro/último bloco do capítulo.
 - `Esc` ou `f` → sair do modo foco.
 
@@ -51,6 +51,6 @@ Indicar `[FOCUS]` ao lado do renderMode.
 
 ## Critérios de aceitação
 - Modo foco exibe exatamente um bloco centralizado.
-- `j`/`k` avança/retrocede por bloco, não por linha.
+- `k`/`j` avança/retrocede por bloco, não por linha.
 - Toggle `f` retorna à posição equivalente no modo normal (bloco visível → blockOffset).
 - Funciona em ambos plain e code mode.

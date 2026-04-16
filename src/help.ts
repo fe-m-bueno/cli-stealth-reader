@@ -1,6 +1,6 @@
 export const KEYBOARD_SHORTCUTS: Array<{ category: string; key: string; description: string }> = [
-  { category: "navigation", key: "j / ↓", description: "Scroll down" },
-  { category: "navigation", key: "k / ↑", description: "Scroll up" },
+  { category: "navigation", key: "j / ↑", description: "Scroll up" },
+  { category: "navigation", key: "k / ↓", description: "Scroll down" },
   { category: "navigation", key: "space / PgDn", description: "Page down / toggle picker selection" },
   { category: "navigation", key: "b / PgUp", description: "Page up" },
   { category: "navigation", key: "Home", description: "Jump to chapter start" },
