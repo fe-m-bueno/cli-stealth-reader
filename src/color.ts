@@ -11,13 +11,70 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
   };
 }
 
+const ANSI_FG_CODES: Record<string, number> = {
+  black: 30,
+  red: 31,
+  green: 32,
+  yellow: 33,
+  blue: 34,
+  magenta: 35,
+  cyan: 36,
+  white: 37,
+  brightblack: 90,
+  brightred: 91,
+  brightgreen: 92,
+  brightyellow: 93,
+  brightblue: 94,
+  brightmagenta: 95,
+  brightcyan: 96,
+  brightwhite: 97,
+  gray: 90,
+  grey: 90
+};
+
 function wrap(code: string, text: string): string {
   return `\x1b[${code}m${text}\x1b[0m`;
 }
 
+function ansiName(color: string): string | null {
+  if (!color.startsWith("ansi:")) {
+    return null;
+  }
+  return color.slice("ansi:".length).replace(/[\s_-]/g, "").toLowerCase();
+}
+
+function ansiCode(color: string, target: "fg" | "bg"): number | null {
+  const name = ansiName(color);
+  if (!name) {
+    return null;
+  }
+  const fgCode = ANSI_FG_CODES[name];
+  if (fgCode === undefined) {
+    throw new Error(`Unknown ANSI color: ${color}`);
+  }
+  return target === "fg" ? fgCode : fgCode + 10;
+}
+
+function fgOpen(color: string): string {
+  const code = ansiCode(color, "fg");
+  if (code !== null) {
+    return `\x1b[${code}m`;
+  }
+  const { r, g, b } = hexToRgb(color);
+  return `\x1b[38;2;${r};${g};${b}m`;
+}
+
+function bgOpen(color: string): string {
+  const code = ansiCode(color, "bg");
+  if (code !== null) {
+    return `\x1b[${code}m`;
+  }
+  const { r, g, b } = hexToRgb(color);
+  return `\x1b[48;2;${r};${g};${b}m`;
+}
+
 export function fg(hex: string, text: string): string {
-  const { r, g, b } = hexToRgb(hex);
-  return wrap(`38;2;${r};${g};${b}`, text);
+  return `${fgOpen(hex)}${text}\x1b[0m`;
 }
 
 export function bold(text: string): string {
@@ -29,8 +86,12 @@ export function inverse(text: string): string {
 }
 
 export function bg(hex: string, text: string): string {
-  const { r, g, b } = hexToRgb(hex);
-  return wrap(`48;2;${r};${g};${b}`, text);
+  return `${bgOpen(hex)}${text}\x1b[0m`;
+}
+
+export function paintBackground(color: string, text: string): string {
+  const open = bgOpen(color);
+  return `${open}${text.replace(/\x1b\[0m/g, `\x1b[0m${open}`)}\x1b[0m`;
 }
 
 /** Highlight case-insensitive matches without splitting inside CSI `\\x1b[...m` sequences. */
@@ -61,9 +122,7 @@ export function highlightPreservingCSI(full: string, query: string, warningHex: 
       }
       if (!crosses) {
         const slice = full.slice(i, i + qLen);
-        const { r, g, b } = hexToRgb(warningHex);
-        const { r: tr, g: tg, b: tb } = hexToRgb(textOnWarningHex);
-        out += `\x1b[48;2;${r};${g};${b}m\x1b[38;2;${tr};${tg};${tb}m${slice}\x1b[0m`;
+        out += `${bgOpen(warningHex)}${fgOpen(textOnWarningHex)}${slice}\x1b[0m`;
         i += qLen;
         continue;
       }

@@ -5,7 +5,7 @@ import { stripAnsi } from "../src/screen.js";
 import type { ThemePreset } from "../src/types.js";
 
 test("parses args and flags", () => {
-  const parsed = parseSlashCommand('/colorscheme amber --preview --list');
+  const parsed = parseSlashCommand("/colorscheme amber --preview --list");
   assert.equal(parsed.name, "colorscheme");
   assert.deepEqual(parsed.args, ["amber"]);
   assert.equal(parsed.flags.preview, true);
@@ -67,8 +67,8 @@ test("filters command suggestions by prefix and aliases", () => {
   const byName = listCommandSuggestions("mod");
   assert.deepEqual(byName.map((item) => item.name), ["mode"]);
 
-  const byAlias = listCommandSuggestions("theme");
-  assert.deepEqual(byAlias.map((item) => item.name), ["colorscheme"]);
+  const byTheme = listCommandSuggestions("theme");
+  assert.deepEqual(byTheme.map((item) => item.name), ["theme"]);
 });
 
 test("applies autocomplete to the command token only", () => {
@@ -86,12 +86,11 @@ test("renders full manual help with examples", () => {
   assert.ok(lines.includes("  /mode typescript"));
 });
 
-test("renders manual page for a specific command alias", () => {
+test("renders manual page for the theme command", () => {
   const lines = commandHelp("theme");
-  assert.ok(lines.includes("/COLORSCHEME(1)"));
-  assert.ok(lines.includes("ALIASES"));
-  assert.ok(lines.includes("  /theme"));
-  assert.ok(lines.includes("  /theme forest --preview"));
+  assert.ok(lines.includes("/THEME(1)"));
+  assert.ok(lines.includes("  /theme light"));
+  assert.ok(lines.includes("  /theme dark-colorblind"));
 });
 
 test("wraps manual help to the viewport width", () => {

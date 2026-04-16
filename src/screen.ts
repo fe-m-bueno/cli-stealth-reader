@@ -1,4 +1,4 @@
-import { fg, inverse } from "./color.js";
+import { fg, inverse, paintBackground } from "./color.js";
 import { listCommandSuggestions } from "./commands.js";
 import { renderBlocks } from "./renderers.js";
 import type { AppState, CommandSuggestion, ThemePreset } from "./types.js";
@@ -416,7 +416,8 @@ export function renderBody(
   return output;
 }
 
-export function renderFrame(lines: string[], width: number, height: number): string {
+export function renderFrame(lines: string[], width: number, height: number, background?: string): string {
   const frameLines = Array.from({ length: height }, (_, index) => padFrameLine(lines[index] ?? "", width));
-  return `${screenResetSequence(false)}${frameLines.join("\n")}`;
+  const paintedLines = background ? frameLines.map((line) => paintBackground(background, line)) : frameLines;
+  return `${screenResetSequence(false)}${paintedLines.join("\n")}`;
 }

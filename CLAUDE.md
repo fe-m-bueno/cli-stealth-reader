@@ -33,7 +33,7 @@ A full-screen terminal EPUB reader in TypeScript. Two rendering modes: `plain` (
 | `src/paths.ts` | XDG directory path resolution |
 | `src/discovery.ts` | EPUB file discovery in CWD |
 | `src/renderers.ts` | Block rendering for plain vs code modes |
-| `src/themes.ts` | 4 built-in color themes (Codex, Graphite, Amber, Forest) |
+| `src/themes.ts` | Built-in color schemes and appearance themes |
 | `src/help.ts` | Keyboard shortcut definitions |
 | `src/color.ts` | ANSI color formatting utilities |
 | `src/parser/epub.ts` | EPUB import pipeline (JSZip → canonical blocks) |
@@ -57,7 +57,7 @@ EPUB file → epub.ts (JSZip + XML/HTML parsing) → CanonicalBook (chapters →
 - **`CanonicalBlock`** — unit of content: `heading | paragraph | blockquote | list-item | scene-break | image | anchor`
 - **`CanonicalChapter`** — array of blocks + metadata (title, href, word count)
 - **`CanonicalBook`** — array of chapters + book metadata + import diagnostics
-- **`AppState`** (in `tui.ts`) — runtime state: current book/chapter/block offset, render mode, theme, command buffer, overlay state
+- **`AppState`** (in `tui.ts`) — runtime state: current book/chapter/block offset, render mode, color scheme, appearance theme, command buffer, overlay state
 
 ### Storage (`storage.ts`)
 
@@ -73,7 +73,7 @@ SQLite database in `$XDG_DATA_HOME/cli-stealth-reader/` (WAL mode). Tables: `boo
 
 ### Command System (`commands.ts`)
 
-14 slash commands (e.g. `/next`, `/chapters`, `/mode`, `/colorscheme`). The tokenizer supports quoted arguments and flag variants (`--flag`, `--flag=value`).
+15 slash commands (e.g. `/next`, `/chapters`, `/mode`, `/colorscheme`, `/theme`). The tokenizer supports quoted arguments and flag variants (`--flag`, `--flag=value`).
 
 ### Rendering (`renderers.ts`)
 

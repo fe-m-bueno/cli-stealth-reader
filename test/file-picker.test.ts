@@ -6,7 +6,7 @@ import path from "node:path";
 import { executeCommand } from "../src/executor.js";
 import { handleInput } from "../src/input.js";
 import { computeChapterMaxOffset, getScrollbarMetrics, getViewportLayout, stripAnsi } from "../src/screen.js";
-import { THEMES } from "../src/themes.js";
+import { APPEARANCE_THEMES, THEMES } from "../src/themes.js";
 import { renderOverlay } from "../src/tui.js";
 import type { AppState, CanonicalBook, FolderDiscovery, ThemePreset } from "../src/types.js";
 
@@ -106,6 +106,7 @@ function makeStorageBase() {
     savePosition: () => {},
     getSettings: () => ({
       themeId: "codex",
+      appearanceThemeId: "dark",
       progressVisibility: "book",
       renderMode: "plain",
       codeLanguage: "typescript",
@@ -129,6 +130,8 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
   return {
     storage: makeStorage(),
     cwd: "/tmp",
+    colorScheme: theme,
+    appearanceTheme: APPEARANCE_THEMES[0]!,
     theme,
     renderMode: "plain",
     codeLanguage: "typescript",
@@ -528,18 +531,33 @@ test("books overlay arrow keys move selection and enter opens the selected book"
   assert.equal(state.currentBook?.id, "book-1");
 });
 
-test("themes overlay arrow keys move selection and enter applies the theme", async () => {
+test("colorschemes overlay arrow keys move selection and enter applies the colorscheme", async () => {
   const state = makeState({ overlay: "none" });
   await executeCommand(state, "/colorscheme");
-  assert.equal(state.overlay, "themes");
-  assert.equal(state.overlayCursor, Math.max(0, THEMES.findIndex((item) => item.id === state.theme.id)));
+  assert.equal(state.overlay, "colorschemes");
+  assert.equal(state.overlayCursor, Math.max(0, THEMES.findIndex((item) => item.id === state.colorScheme.id)));
 
   await handleInput("\u001b[B", state, redraw, noop, () => {}, noop);
   assert.equal(state.overlayCursor, 1);
 
   await handleInput("\r", state, redraw, noop, () => {}, noop);
   assert.equal(state.overlay, "none");
-  assert.equal(state.theme.id, THEMES[1].id);
+  assert.equal(state.colorScheme.id, THEMES[1].id);
+});
+
+test("themes overlay arrow keys move selection and enter applies the appearance theme", async () => {
+  const state = makeState({ overlay: "none" });
+  await executeCommand(state, "/theme");
+  assert.equal(state.overlay, "themes");
+  assert.equal(state.overlayCursor, 0);
+
+  await handleInput("\u001b[B", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlayCursor, 1);
+
+  await handleInput("\r", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "none");
+  assert.equal(state.appearanceTheme.id, APPEARANCE_THEMES[1]!.id);
+  assert.equal(state.theme.id, `${state.colorScheme.id}:${APPEARANCE_THEMES[1]!.id}`);
 });
 
 test("books overlay shows [not started] for a book with no saved position", () => {
@@ -590,6 +608,12 @@ test("m key cycles from rust to plain", async () => {
 test("c key opens the colorscheme picker", async () => {
   const state = makeState({ overlay: "none" });
   await handleInput("c", state, redraw, async (cmd) => { await executeCommand(state, cmd); }, () => {}, noop);
+  assert.equal(state.overlay, "colorschemes");
+});
+
+test("C key opens the theme picker", async () => {
+  const state = makeState({ overlay: "none" });
+  await handleInput("C", state, redraw, async (cmd) => { await executeCommand(state, cmd); }, () => {}, noop);
   assert.equal(state.overlay, "themes");
 });
 

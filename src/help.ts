@@ -23,6 +23,7 @@ export const KEYBOARD_SHORTCUTS: Array<{ category: string; key: string; descript
   { category: "view", key: "m", description: "Cycle render mode (plain → typescript → python → rust)" },
   { category: "view", key: "f", description: "Toggle focus mode (single block centered)" },
   { category: "view", key: "c", description: "Open colorscheme picker" },
+  { category: "view", key: "C", description: "Open theme picker" },
   { category: "view", key: "p", description: "Cycle progress bar visibility" },
   { category: "view", key: "Tab", description: "Autocomplete or cycle command suggestions" },
   { category: "view", key: "q", description: "Quit the reader" }

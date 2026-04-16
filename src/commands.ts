@@ -46,16 +46,28 @@ export const COMMANDS: CommandDefinition[] = [
   },
   {
     name: "colorscheme",
-    aliases: ["theme"],
-    description: "Change or preview the active colorscheme.",
-    args: [{ name: "theme" }],
+    description: "Change the active color scheme.",
+    args: [{ name: "scheme" }],
     flags: [{ name: "preview" }, { name: "list" }],
-    usage: "/colorscheme [theme] [--preview] [--list]",
+    usage: "/colorscheme [scheme] [--preview] [--list]",
     details: [
-      "Without a theme, opens the theme picker. With a theme id, applies that colorscheme.",
-      "--preview can be used to inspect a theme before committing to it. --list opens the full list."
+      "Without a scheme, opens the colorscheme picker. With a scheme id, applies that colorscheme.",
+      "Color schemes control the accent hue family and remain separate from light/dark theming.",
+      "--preview is accepted for compatibility. --list opens the full colorscheme list."
     ],
-    examples: ["/colorscheme", "/colorscheme amber", "/theme forest --preview", "/colorscheme --list"]
+    examples: ["/colorscheme", "/colorscheme amber", "/colorscheme forest --preview", "/colorscheme --list"]
+  },
+  {
+    name: "theme",
+    description: "Change the active appearance theme.",
+    args: [{ name: "theme" }],
+    flags: [{ name: "list" }],
+    usage: "/theme [theme] [--list]",
+    details: [
+      "Without a theme, opens the appearance theme picker. With a theme id, applies that appearance.",
+      "Themes control dark/light, colorblind-friendly, and ANSI-only rendering without changing the active colorscheme."
+    ],
+    examples: ["/theme", "/theme light", "/theme dark-colorblind", "/theme light-ansi", "/theme --list"]
   },
   {
     name: "resume",

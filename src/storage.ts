@@ -27,6 +27,7 @@ export type { AppSettings };
 
 const DEFAULT_SETTINGS: AppSettings = {
   themeId: "codex",
+  appearanceThemeId: "dark",
   progressVisibility: "both",
   renderMode: "code",
   codeLanguage: "typescript",

@@ -32,6 +32,12 @@ test("full frame rendering pads lines without erase sequences", () => {
   assert.equal(frame, "\x1b[Habc \nx   \n    ");
 });
 
+test("frame rendering can paint a stable background across colored segments", () => {
+  const frame = renderFrame([`${fg("#ffffff", "x")}y`], 3, 1, "#000000");
+  assert.match(frame, /\x1b\[48;2;0;0;0m/);
+  assert.match(frame, /\x1b\[0m\x1b\[48;2;0;0;0m/);
+});
+
 test("scrollbar uses a full-height thumb when the chapter fits", () => {
   const scrollbar = renderScrollbar(5, 5, 0, theme).map(stripAnsi);
   assert.deepEqual(scrollbar, ["█", "█", "█", "█", "█"]);

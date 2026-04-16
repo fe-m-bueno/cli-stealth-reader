@@ -7,7 +7,7 @@ import { EPUB_PARSER_VERSION, importEpub } from "./parser/epub.js";
 import { importFile } from "./parser/index.js";
 import { renderBlocks } from "./renderers.js";
 import { computeChapterMaxOffset, getViewportLayout } from "./screen.js";
-import { THEMES } from "./themes.js";
+import { APPEARANCE_THEMES, THEMES, applyAppearanceTheme } from "./themes.js";
 import type {
   AppState,
   CanonicalBook,
@@ -329,18 +329,36 @@ const handlers: Record<string, CommandHandler> = {
 
   colorscheme: async (state, parsed) => {
     if (parsed.flags.list || parsed.args.length === 0) {
-      state.overlay = "themes";
-      state.overlayCursor = Math.max(0, THEMES.findIndex((item) => item.id === state.theme.id));
+      state.overlay = "colorschemes";
+      state.overlayCursor = Math.max(0, THEMES.findIndex((item) => item.id === state.colorScheme.id));
       state.status = "Opened colorscheme picker";
       return;
     }
-    const theme = THEMES.find((item) => item.id === parsed.args[0]);
-    if (!theme) {
+    const colorScheme = THEMES.find((item) => item.id === parsed.args[0]);
+    if (!colorScheme) {
+      throw new Error(`Unknown colorscheme ${parsed.args[0]}`);
+    }
+    state.colorScheme = colorScheme;
+    state.theme = applyAppearanceTheme(state.colorScheme, state.appearanceTheme);
+    state.storage.setSetting("themeId", colorScheme.id);
+    state.status = `Colorscheme set to ${colorScheme.label}`;
+  },
+
+  theme: async (state, parsed) => {
+    if (parsed.flags.list || parsed.args.length === 0) {
+      state.overlay = "themes";
+      state.overlayCursor = Math.max(0, APPEARANCE_THEMES.findIndex((item) => item.id === state.appearanceTheme.id));
+      state.status = "Opened theme picker";
+      return;
+    }
+    const appearanceTheme = APPEARANCE_THEMES.find((item) => item.id === parsed.args[0]);
+    if (!appearanceTheme) {
       throw new Error(`Unknown theme ${parsed.args[0]}`);
     }
-    state.theme = theme;
-    state.storage.setSetting("themeId", theme.id);
-    state.status = `Theme set to ${theme.label}`;
+    state.appearanceTheme = appearanceTheme;
+    state.theme = applyAppearanceTheme(state.colorScheme, state.appearanceTheme);
+    state.storage.setSetting("appearanceThemeId", appearanceTheme.id);
+    state.status = `Theme set to ${appearanceTheme.label}`;
   },
 
   resume: async (state, parsed) => {

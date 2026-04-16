@@ -113,8 +113,22 @@ export interface ThemePreset {
   subtle: string;
 }
 
+export type AppearanceThemeId =
+  | "dark"
+  | "light"
+  | "dark-colorblind"
+  | "light-colorblind"
+  | "dark-ansi"
+  | "light-ansi";
+
+export interface AppearanceThemePreset {
+  id: AppearanceThemeId;
+  label: string;
+}
+
 export interface AppSettings {
   themeId: string;
+  appearanceThemeId: AppearanceThemeId;
   progressVisibility: ProgressVisibility;
   renderMode: RenderMode;
   codeLanguage: CodeLanguage;
@@ -164,7 +178,7 @@ export interface FolderDiscovery {
   fileName: string;
 }
 
-export type OverlayKind = "none" | "chapters" | "books" | "bookmarks" | "notes" | "themes" | "help" | "keys" | "diagnostics" | "file-picker";
+export type OverlayKind = "none" | "chapters" | "books" | "bookmarks" | "notes" | "colorschemes" | "themes" | "help" | "keys" | "diagnostics" | "file-picker";
 
 export interface ExportPosition {
   bookImportHash: string;
@@ -235,6 +249,8 @@ export interface NavHistoryEntry {
 export interface AppState {
   storage: import("./storage.js").Storage;
   cwd: string;
+  colorScheme: ThemePreset;
+  appearanceTheme: AppearanceThemePreset;
   theme: ThemePreset;
   renderMode: RenderMode;
   codeLanguage: CodeLanguage;

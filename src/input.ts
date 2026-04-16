@@ -9,7 +9,7 @@ import {
   MIN_PAGE_LINES,
   scrollbarOffsetFromThumb
 } from "./screen.js";
-import { THEMES } from "./themes.js";
+import { APPEARANCE_THEMES, THEMES, applyAppearanceTheme } from "./themes.js";
 import type { AppState, LibrarySortKey } from "./types.js";
 
 function moveChapter(state: AppState, delta: number): void {
@@ -198,8 +198,10 @@ function interactiveOverlayLength(state: AppState): number {
       return state.currentBook ? state.storage.listBookmarks(state.currentBook.id).length : 0;
     case "notes":
       return state.currentBook ? state.storage.listNotes(state.currentBook.id).length : 0;
-    case "themes":
+    case "colorschemes":
       return THEMES.length;
+    case "themes":
+      return APPEARANCE_THEMES.length;
     default:
       return 0;
   }
@@ -442,12 +444,21 @@ export async function handleInput(
             state.status = `Opened ${book.title}`;
           }
         }
+      } else if (state.overlay === "colorschemes") {
+        const colorScheme = THEMES[state.overlayCursor];
+        if (colorScheme) {
+          state.colorScheme = colorScheme;
+          state.theme = applyAppearanceTheme(state.colorScheme, state.appearanceTheme);
+          state.storage.setSetting("themeId", colorScheme.id);
+          state.status = `Colorscheme set to ${colorScheme.label}`;
+        }
       } else if (state.overlay === "themes") {
-        const theme = THEMES[state.overlayCursor];
-        if (theme) {
-          state.theme = theme;
-          state.storage.setSetting("themeId", theme.id);
-          state.status = `Theme set to ${theme.label}`;
+        const appearanceTheme = APPEARANCE_THEMES[state.overlayCursor];
+        if (appearanceTheme) {
+          state.appearanceTheme = appearanceTheme;
+          state.theme = applyAppearanceTheme(state.colorScheme, state.appearanceTheme);
+          state.storage.setSetting("appearanceThemeId", appearanceTheme.id);
+          state.status = `Theme set to ${appearanceTheme.label}`;
         }
       } else if (state.overlay === "bookmarks" && state.currentBook) {
         const bookmarks = state.storage.listBookmarks(state.currentBook.id);
@@ -705,6 +716,8 @@ export async function handleInput(
       await executeCmd(`/density ${next}`);
     } else if (chunk === "c") {
       await executeCmd("/colorscheme");
+    } else if (chunk === "C") {
+      await executeCmd("/theme");
     } else if (chunk === "p") {
       await executeCmd("/toggleprogress");
     } else if (chunk === "?") {
@@ -801,6 +814,8 @@ export async function handleInput(
     await executeCmd(`/density ${next}`);
   } else if (chunk === "c") {
     await executeCmd("/colorscheme");
+  } else if (chunk === "C") {
+    await executeCmd("/theme");
   } else if (chunk === "p") {
     await executeCmd("/toggleprogress");
   } else if (chunk === "?") {

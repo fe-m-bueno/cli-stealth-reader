@@ -16,7 +16,7 @@ O **cli-stealth-reader** oferece múltiplas experiências de leitura:
 Além disso:
 
 - Interface TUI moderna com status bar integrada
-- 4 temas de cores elegantes (Codex, Graphite, Amber, Forest)
+- 4 colorschemes e 6 temas de aparência (dark, light, colorblind-friendly e ANSI)
 - 25+ slash commands com suporte a argumentos, aliases e flags
 - Biblioteca SQLite persistida com XDG directories via `better-sqlite3`
 - Import rigoroso de EPUB com suporte a EPUB3, NCX fallback e fragmentos de âncora
@@ -88,13 +88,20 @@ Depois disso, você pode executar `stealth-reader` em qualquer diretório.
 
 Ou use `m` para ciclar entre os modos sem abrir o comando.
 
-### Exemplo: Mudar Tema
+### Exemplo: Mudar Colorscheme e Tema
 
 ```
 /colorscheme codex      # Tema azul frio
 /colorscheme graphite   # Tema neutro
 /colorscheme amber      # Tema quente
 /colorscheme forest     # Tema verde
+
+/theme dark             # Tema escuro atual
+/theme light            # Tema claro com fundo chalk
+/theme dark-colorblind  # Tema escuro colorblind-friendly
+/theme light-colorblind # Tema claro colorblind-friendly
+/theme dark-ansi        # Tema escuro com cores ANSI
+/theme light-ansi       # Tema claro com cores ANSI
 ```
 
 ## Modos de Renderização
@@ -189,6 +196,7 @@ livro', pensou Alice, 'sem figuras ou conversas?'
 | `f`   | Alternar modo foco (bloco único centralizado)                    |
 | `d`   | Ciclar densidade do código stealth (1 → 3 → 5)                   |
 | `c`   | Abrir picker de colorscheme                                      |
+| `C`   | Abrir picker de tema                                             |
 | `p`   | Avançar visibilidade da barra de progresso                       |
 | `?`   | Ver atalhos de teclado                                           |
 | `q`   | Sair do leitor                                                   |
@@ -292,9 +300,13 @@ O arquivo exportado é indexado por `importHash` — sem dependência de caminho
 /density [level]       # Controlar densidade do código stealth (1–5)
   1 = mais comentários, 5 = código puro
 
-/colorscheme [theme]   # Mudar tema de cores
+/colorscheme [scheme]  # Mudar colorscheme
+  --list               # Listar colorschemes disponíveis
+  --preview            # Flag aceita por compatibilidade
+
+/theme [theme]         # Mudar tema de aparência
+  dark | light | dark-colorblind | light-colorblind | dark-ansi | light-ansi
   --list               # Listar temas disponíveis
-  --preview            # Ver preview do tema antes de aplicar
 
 /highlight             # Ativar destaque de diálogos no modo plain
   --on                 # Ativar
@@ -317,7 +329,6 @@ O arquivo exportado é indexado por `importHash` — sem dependência de caminho
 ### Aliases
 
 - `/book` → `/changebook`
-- `/theme` → `/colorscheme`
 - `/keys` → `/keyboardshortcuts`
 - `/tags` → `/tag`
 
@@ -356,7 +367,7 @@ src/
   executor.ts        # Execução dos slash commands
   renderers.ts       # Dispatcher de renderização (plain vs código)
   focus.ts           # Lógica do modo foco (bloco único centralizado)
-  themes.ts          # 4 temas de cor pré-definidos
+  themes.ts          # Colorschemes e temas de aparência pré-definidos
   help.ts            # Definições de atalhos de teclado
   color.ts           # Utilitários de formatação ANSI
   storage.ts         # Abstração SQLite com WAL (XDG dirs)
@@ -469,7 +480,7 @@ type CanonicalBlock =
 ## Notas de Implementação
 
 - Estado de app e todas as strings renderizadas passam por `tui.ts` — a "fonte da verdade"
-- Comandos suportam aliases (ex: `/book` é alias para `/changebook`, `/theme` para `/colorscheme`)
+- Comandos suportam aliases (ex: `/book` é alias para `/changebook`)
 - Argumentos entre aspas são interpretados literalmente (ex: `/add "Meu Livro.epub"`)
 - A barra de progresso é customizável (`book`, `both`, `chapter`, `hidden`)
 - Remoção de livro apaga apenas a entrada da biblioteca — o arquivo original não é deletado

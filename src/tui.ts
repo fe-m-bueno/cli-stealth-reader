@@ -22,7 +22,13 @@ import {
   truncate
 } from "./screen.js";
 import { Storage } from "./storage.js";
-import { DEFAULT_THEME, THEMES } from "./themes.js";
+import {
+  APPEARANCE_THEMES,
+  DEFAULT_APPEARANCE_THEME,
+  DEFAULT_COLOR_SCHEME,
+  THEMES,
+  applyAppearanceTheme
+} from "./themes.js";
 import type { AppState } from "./types.js";
 
 let mouseCaptureEnabled = false;
@@ -194,8 +200,13 @@ export function renderOverlay(state: AppState, width: number, height: number): s
         return `${marker} ${left} ${age}`;
       });
     }
-    case "themes":
+    case "colorschemes":
       return THEMES.map((theme, index) => {
+        const marker = index === state.overlayCursor ? ">" : " ";
+        return `${marker} ${theme.label} (${theme.id})`;
+      });
+    case "themes":
+      return APPEARANCE_THEMES.map((theme, index) => {
         const marker = index === state.overlayCursor ? ">" : " ";
         return `${marker} ${theme.label} (${theme.id})`;
       });
@@ -304,7 +315,7 @@ function draw(state: AppState): void {
     ...body.slice(0, -1).split("\n"),
     ...footerLines
   ];
-  process.stdout.write(renderFrame(frameLines, width, height));
+  process.stdout.write(renderFrame(frameLines, width, height, state.theme.background));
 }
 
 function syncPosition(state: AppState): void {
@@ -335,10 +346,14 @@ function syncPosition(state: AppState): void {
 export async function runTui(options?: { resume?: boolean }): Promise<void> {
   const storage = new Storage();
   const settings = storage.getSettings();
+  const colorScheme = THEMES.find((item) => item.id === settings.themeId) ?? DEFAULT_COLOR_SCHEME;
+  const appearanceTheme = APPEARANCE_THEMES.find((item) => item.id === settings.appearanceThemeId) ?? DEFAULT_APPEARANCE_THEME;
   const state: AppState = {
     storage,
     cwd: process.cwd(),
-    theme: THEMES.find((item) => item.id === settings.themeId) ?? DEFAULT_THEME,
+    colorScheme,
+    appearanceTheme,
+    theme: applyAppearanceTheme(colorScheme, appearanceTheme),
     renderMode: settings.renderMode,
     codeLanguage: settings.codeLanguage,
     codeDensity: settings.codeDensity,
