@@ -57,6 +57,16 @@ npm run build
 node dist/index.js
 ```
 
+Para instalar o comando globalmente no seu ambiente (via link local):
+
+```bash
+npm run build
+npm link
+which stealth-reader
+```
+
+Depois disso, você pode executar `stealth-reader` em qualquer diretório.
+
 ## Uso Rápido
 
 1. Inicie o leitor: `npm run dev`
