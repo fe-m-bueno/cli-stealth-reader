@@ -160,6 +160,8 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     librarySortDir: "desc",
     booksTagFilter: null,
     booksTagMap: new Map<string, string[]>(),
+    helpCommand: null,
+    mouseCapture: false,
     focusMode: false,
     focusBlockIndex: 0,
     ...overrides
@@ -187,6 +189,12 @@ const noop = async () => {};
 test("arrow down moves cursor", async () => {
   const state = makeState();
   await handleInput("\u001b[B", state, redraw, noop, () => {}, noop);
+  assert.equal(state.filePickerCursor, 1);
+});
+
+test("SS3 arrow down moves cursor", async () => {
+  const state = makeState();
+  await handleInput("\u001bOB", state, redraw, noop, () => {}, noop);
   assert.equal(state.filePickerCursor, 1);
 });
 
@@ -306,6 +314,7 @@ test("slash opens command mode and tab autocompletes commands", async () => {
 
   await handleInput("m", state, redraw, noop, () => {}, noop);
   await handleInput("o", state, redraw, noop, () => {}, noop);
+  await handleInput("d", state, redraw, noop, () => {}, noop);
   await handleInput("\t", state, redraw, noop, () => {}, noop);
   assert.equal(state.commandBuffer, "mode");
 });
@@ -326,6 +335,32 @@ test("page up and page down scroll the current chapter", async () => {
 
   await handleInput("\u001b[6~", state, redraw, noop, () => {}, noop);
   assert.ok(state.blockOffset > 0);
+});
+
+test("bundled alternate-scroll arrows scroll the current chapter", async () => {
+  const state = makeState({ overlay: "none", currentBook: longChapterBook, blockOffset: 0 });
+  await handleInput("\u001bOB\u001bOB\u001bOB", state, redraw, noop, () => {}, noop);
+  assert.equal(state.blockOffset, 3);
+});
+
+test("bundled alternate-scroll arrows scroll the help manual", async () => {
+  const state = makeState({ overlay: "none", currentBook: longChapterBook, blockOffset: 10 });
+  await executeCommand(state, "/help");
+  await handleInput("\u001bOB\u001bOB", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "help");
+  assert.equal(state.overlayCursor, 2);
+  assert.equal(state.blockOffset, 10);
+});
+
+test("/mouse toggles app mouse capture for draggable scrollbar mode", async () => {
+  const state = makeState({ overlay: "none" });
+  assert.equal(state.mouseCapture, false);
+
+  await executeCommand(state, "/mouse on");
+  assert.equal(state.mouseCapture, true);
+
+  await executeCommand(state, "/mouse off");
+  assert.equal(state.mouseCapture, false);
 });
 
 test("home and end jump to the chapter boundaries", async () => {

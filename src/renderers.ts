@@ -29,6 +29,8 @@ const QUOTE_PAIRS = [
   { open: "«", close: "»", single: false }
 ] as const;
 
+const DIALOGUE_DASHES = new Set(["—", "―", "–"]);
+
 function isWordChar(char: string | undefined): boolean {
   return char !== undefined && /^[\p{L}\p{N}_]$/u.test(char);
 }
@@ -89,7 +91,7 @@ function collectDialogueSpans(line: string): DialogueSpan[] {
     }
   }
   const firstNonSpace = line.search(/\S/);
-  if (firstNonSpace >= 0 && line[firstNonSpace] === "—") {
+  if (firstNonSpace >= 0 && DIALOGUE_DASHES.has(line[firstNonSpace]!)) {
     spans.push({ start: firstNonSpace, end: line.length });
   }
   if (spans.length <= 1) {

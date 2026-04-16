@@ -25,7 +25,21 @@ import { Storage } from "./storage.js";
 import { DEFAULT_THEME, THEMES } from "./themes.js";
 import type { AppState } from "./types.js";
 
+let mouseCaptureEnabled = false;
+
+function setMouseCapture(enabled: boolean): void {
+  if (mouseCaptureEnabled === enabled) {
+    return;
+  }
+  process.stdout.write(enabled ? "\x1b[?1000h\x1b[?1002h\x1b[?1006h" : "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
+  mouseCaptureEnabled = enabled;
+}
+
 function currentLines(state: AppState, width: number, height: number): string[] {
+  if (state.overlay === "help") {
+    return commandHelp(state.helpCommand ?? undefined, width, state.theme);
+  }
+
   if (!state.currentBook) {
     const lines = [
       bold(fg(state.theme.accent, "cli-stealth-reader")),
@@ -214,18 +228,30 @@ export function renderOverlay(state: AppState, width: number, height: number): s
 }
 
 function draw(state: AppState): void {
+  setMouseCapture(state.mouseCapture);
+
   const width = process.stdout.columns || 120;
   const height = process.stdout.rows || 40;
 
   const layout = getViewportLayout(state, width, height);
   const allMainLines = currentLines(state, layout.contentWidth, layout.bodyHeight);
-  const maxOffset = state.focusMode
+  const helpMaxOffset = state.overlay === "help"
+    ? Math.max(0, allMainLines.length - layout.bodyHeight)
+    : 0;
+  if (state.overlay === "help") {
+    state.overlayCursor = clamp(state.overlayCursor, 0, helpMaxOffset);
+  }
+  const maxOffset = state.overlay === "help"
+    ? helpMaxOffset
+    : state.focusMode
     ? 0
     : computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
-  if (!state.focusMode) {
+  if (state.overlay !== "help" && !state.focusMode) {
     state.blockOffset = clamp(state.blockOffset, 0, maxOffset);
   }
-  const mainLines = state.focusMode
+  const mainLines = state.overlay === "help"
+    ? allMainLines.slice(state.overlayCursor, state.overlayCursor + layout.bodyHeight)
+    : state.focusMode
     ? allMainLines.slice(0, layout.bodyHeight)
     : allMainLines.slice(state.blockOffset, state.blockOffset + layout.bodyHeight);
   const transitionLine = chapterTransitionLine(state, layout.contentWidth);
@@ -239,16 +265,25 @@ function draw(state: AppState): void {
     mainLines.splice(0, mainLines.length, ...nextLines.slice(0, layout.bodyHeight));
   }
   const overlayLines = layout.overlayWidth ? renderOverlay(state, layout.overlayWidth - 2, layout.bodyHeight) : [];
-  const effectiveOffset = state.focusMode
+  const effectiveOffset = state.overlay === "help"
+    ? state.overlayCursor
+    : state.focusMode
     ? mapFocusIndexToBlockOffset(state, layout.contentWidth, state.focusBlockIndex)
     : state.blockOffset;
   const scrollbar = state.currentBook
-    ? renderScrollbar(allMainLines.length, layout.bodyHeight, effectiveOffset, state.theme, state.focusMode)
+    ? renderScrollbar(allMainLines.length, layout.bodyHeight, effectiveOffset, state.theme, state.overlay === "help" ? false : state.focusMode)
+    : state.overlay === "help"
+      ? renderScrollbar(allMainLines.length, layout.bodyHeight, effectiveOffset, state.theme, false)
     : [];
   const originalOffset = state.blockOffset;
-  state.blockOffset = effectiveOffset;
-  const progress = formatProgress(state, layout.contentWidth, layout.bodyHeight);
-  state.blockOffset = originalOffset;
+  const progress = state.overlay === "help"
+    ? ""
+    : (() => {
+        state.blockOffset = effectiveOffset;
+        const renderedProgress = formatProgress(state, layout.contentWidth, layout.bodyHeight);
+        state.blockOffset = originalOffset;
+        return renderedProgress;
+      })();
   const chapterBlockCount = state.currentBook?.chapters[state.chapterIndex]?.blocks.length ?? 0;
   const focusProgress = state.focusMode && chapterBlockCount > 0
     ? `§ ${state.focusBlockIndex + 1} / ${chapterBlockCount}`
@@ -335,7 +370,9 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     librarySortKey: "lastOpened",
     librarySortDir: "desc",
     booksTagFilter: null,
-    booksTagMap: new Map()
+    booksTagMap: new Map(),
+    helpCommand: null,
+    mouseCapture: false
   };
 
   if (options?.resume) {
@@ -359,7 +396,7 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
   process.stdin.setRawMode?.(true);
   process.stdin.resume();
   process.stdin.setEncoding("utf8");
-  process.stdout.write("\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1006h");
+  process.stdout.write("\x1b[?1007h\x1b[?1049h\x1b[?25l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
 
   const redraw = () => draw(state);
   redraw();

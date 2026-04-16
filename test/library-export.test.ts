@@ -52,6 +52,7 @@ function makeState(storage: Storage, cwd: string, overrides: Partial<AppState> =
     searchState: null, navHistory: [], navHistoryCursor: -1,
     librarySortKey: "lastOpened", librarySortDir: "desc",
     booksTagFilter: null, booksTagMap: new Map(),
+    helpCommand: null, mouseCapture: false,
     ...overrides
   };
 }

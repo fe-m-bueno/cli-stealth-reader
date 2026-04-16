@@ -63,6 +63,7 @@ function makeState(storage: Storage, overrides: Partial<AppState> = {}): AppStat
     searchState: null, navHistory: [], navHistoryCursor: -1,
     librarySortKey: "lastOpened", librarySortDir: "desc",
     booksTagFilter: null, booksTagMap: new Map(),
+    helpCommand: null, mouseCapture: false,
     ...overrides
   };
 }

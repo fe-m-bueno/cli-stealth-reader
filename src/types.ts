@@ -140,6 +140,9 @@ export interface CommandDefinition {
   args?: CommandArgSpec[];
   flags?: CommandFlagSpec[];
   usage: string;
+  details?: string[];
+  examples?: string[];
+  notes?: string[];
 }
 
 export interface ParsedCommandResult {
@@ -287,4 +290,6 @@ export interface AppState {
   librarySortDir: SortDirection;
   booksTagFilter: string | null;
   booksTagMap: Map<string, string[]>;
+  helpCommand: string | null;
+  mouseCapture: boolean;
 }

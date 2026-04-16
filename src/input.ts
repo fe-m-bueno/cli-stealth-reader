@@ -1,4 +1,4 @@
-import { applyCommandAutocomplete, listCommandSuggestions } from "./commands.js";
+import { applyCommandAutocomplete, commandHelp, listCommandSuggestions } from "./commands.js";
 import { applySearchHit, pushNavHistory } from "./executor.js";
 import { clampFocusBlockIndex, getChapterBlockCount, mapBlockOffsetToFocusIndex, mapFocusIndexToBlockOffset } from "./focus.js";
 import {
@@ -88,6 +88,65 @@ function isMouseWheelUp(chunk: string): boolean {
   return /\x1b\[<64;\d+;\d+[mM]/.test(chunk);
 }
 
+const UP_KEYS = ["\u001b[A", "\u001bOA"];
+const DOWN_KEYS = ["\u001b[B", "\u001bOB"];
+const RIGHT_KEYS = ["\u001b[C", "\u001bOC"];
+const LEFT_KEYS = ["\u001b[D", "\u001bOD"];
+const PAGE_UP_KEYS = ["\u001b[5~"];
+const PAGE_DOWN_KEYS = ["\u001b[6~"];
+const BUFFERED_NAV_KEYS = [
+  ...PAGE_DOWN_KEYS,
+  ...PAGE_UP_KEYS,
+  ...RIGHT_KEYS,
+  ...LEFT_KEYS,
+  ...DOWN_KEYS,
+  ...UP_KEYS
+].sort((left, right) => right.length - left.length);
+
+function isOneOf(chunk: string, keys: string[]): boolean {
+  return keys.includes(chunk);
+}
+
+function isUpKey(chunk: string): boolean {
+  return isOneOf(chunk, UP_KEYS);
+}
+
+function isDownKey(chunk: string): boolean {
+  return isOneOf(chunk, DOWN_KEYS);
+}
+
+function isRightKey(chunk: string): boolean {
+  return isOneOf(chunk, RIGHT_KEYS);
+}
+
+function isLeftKey(chunk: string): boolean {
+  return isOneOf(chunk, LEFT_KEYS);
+}
+
+function isPageUpKey(chunk: string): boolean {
+  return isOneOf(chunk, PAGE_UP_KEYS);
+}
+
+function isPageDownKey(chunk: string): boolean {
+  return isOneOf(chunk, PAGE_DOWN_KEYS);
+}
+
+function splitBufferedNavigationInput(chunk: string): string[] | null {
+  const parts: string[] = [];
+  let offset = 0;
+
+  while (offset < chunk.length) {
+    const next = BUFFERED_NAV_KEYS.find((key) => chunk.startsWith(key, offset));
+    if (!next) {
+      return null;
+    }
+    parts.push(next);
+    offset += next.length;
+  }
+
+  return parts.length > 1 ? parts : null;
+}
+
 type MouseEventKind = "press" | "release" | "drag";
 
 interface ParsedMouseEvent {
@@ -148,7 +207,7 @@ function interactiveOverlayLength(state: AppState): number {
 
 function exitTui(): never {
   process.stdin.setRawMode?.(false);
-  process.stdout.write("\x1b[?1000l\x1b[?1006l\x1b[?25h\x1b[?1049l");
+  process.stdout.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1007l\x1b[?25h\x1b[?1049l");
   process.exit(0);
 }
 
@@ -247,6 +306,14 @@ export async function handleInput(
     exitTui();
   }
 
+  const bufferedNavigation = splitBufferedNavigationInput(chunk);
+  if (bufferedNavigation) {
+    for (const key of bufferedNavigation) {
+      await handleInput(key, state, redraw, executeCmd, syncPos, confirmPicker);
+    }
+    return;
+  }
+
   const mouseEvent = parseMouseEvent(chunk);
   if (mouseEvent && applyScrollbarPointer(state, mouseEvent)) {
     syncPos(state);
@@ -285,12 +352,12 @@ export async function handleInput(
         state.commandBuffer = applyCommandAutocomplete(state.commandBuffer, suggestion);
         state.commandSuggestionIndex = appliedIndex;
       }
-    } else if (chunk === "\u001b[B") {
+    } else if (isDownKey(chunk)) {
       const suggestions = listCommandSuggestions(state.commandBuffer);
       if (suggestions.length > 0) {
         state.commandSuggestionIndex = clamp(state.commandSuggestionIndex + 1, 0, suggestions.length - 1);
       }
-    } else if (chunk === "\u001b[A") {
+    } else if (isUpKey(chunk)) {
       const suggestions = listCommandSuggestions(state.commandBuffer);
       if (suggestions.length > 0) {
         state.commandSuggestionIndex = clamp(state.commandSuggestionIndex - 1, 0, suggestions.length - 1);
@@ -314,9 +381,9 @@ export async function handleInput(
   const pickerItems = state.filePickerItems;
   if (state.overlay === "file-picker") {
     const maxIndex = Math.max(0, pickerItems.length - 1);
-    if (chunk === "\u001b[B" || chunk === "j") {
+    if (isDownKey(chunk) || chunk === "j") {
       state.filePickerCursor = clamp(state.filePickerCursor + 1, 0, maxIndex);
-    } else if (chunk === "\u001b[A" || chunk === "k") {
+    } else if (isUpKey(chunk) || chunk === "k") {
       state.filePickerCursor = clamp(state.filePickerCursor - 1, 0, maxIndex);
     } else if (chunk === " ") {
       if (pickerItems.length > 0) {
@@ -350,9 +417,9 @@ export async function handleInput(
   if (overlayLength > 0) {
     state.mouseDrag = null;
     const maxIndex = Math.max(0, overlayLength - 1);
-    if (chunk === "\u001b[B" || chunk === "j") {
+    if (isDownKey(chunk) || chunk === "j") {
       state.overlayCursor = clamp(state.overlayCursor + 1, 0, maxIndex);
-    } else if (chunk === "\u001b[A" || chunk === "k") {
+    } else if (isUpKey(chunk) || chunk === "k") {
       state.overlayCursor = clamp(state.overlayCursor - 1, 0, maxIndex);
     } else if (chunk === "\r") {
       if (state.overlay === "chapters" && state.currentBook) {
@@ -454,6 +521,13 @@ export async function handleInput(
   }
 
   if (chunk === "\u001b") {
+    if (state.overlay === "help") {
+      state.overlay = "none";
+      state.helpCommand = null;
+      state.overlayCursor = 0;
+      redraw();
+      return;
+    }
     state.mouseDrag = null;
     state.overlay = "none";
     state.searchState = null;
@@ -508,6 +582,37 @@ export async function handleInput(
   const pageSize = Math.max(MIN_PAGE_LINES, layout.bodyHeight);
   const chapterMaxOffset = computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
 
+  if (state.overlay === "help") {
+    const lines = commandHelp(state.helpCommand ?? undefined, layout.contentWidth);
+    const maxOffset = Math.max(0, lines.length - layout.bodyHeight);
+    if (chunk === "j" || isDownKey(chunk) || isMouseWheelDown(chunk)) {
+      state.overlayCursor = clamp(state.overlayCursor + 1, 0, maxOffset);
+    } else if (chunk === "k" || isUpKey(chunk) || isMouseWheelUp(chunk)) {
+      state.overlayCursor = clamp(state.overlayCursor - 1, 0, maxOffset);
+    } else if (chunk === " " || isPageDownKey(chunk)) {
+      state.overlayCursor = clamp(state.overlayCursor + pageSize, 0, maxOffset);
+    } else if (chunk === "b" || isPageUpKey(chunk)) {
+      state.overlayCursor = clamp(state.overlayCursor - pageSize, 0, maxOffset);
+    } else if (chunk === "g" || isHomeKey(chunk)) {
+      state.overlayCursor = 0;
+    } else if (chunk === "G" || isEndKey(chunk)) {
+      state.overlayCursor = maxOffset;
+    } else if (chunk === "\u001b") {
+      state.overlay = "none";
+      state.helpCommand = null;
+      state.overlayCursor = 0;
+    } else if (chunk === "?") {
+      state.overlay = "keys";
+      state.helpCommand = null;
+      state.overlayCursor = 0;
+    } else if (chunk === "q") {
+      state.shouldQuit = true;
+      exitTui();
+    }
+    redraw();
+    return;
+  }
+
   if (state.searchState && state.currentBook && (chunk === "n" || chunk === "N")) {
     const { results, cursor } = state.searchState;
     if (results.length > 0) {
@@ -547,8 +652,8 @@ export async function handleInput(
     const focusForwardIntent =
       chunk === "j"
       || chunk === " "
-      || chunk === "\u001b[B"
-      || chunk === "\u001b[6~"
+      || isDownKey(chunk)
+      || isPageDownKey(chunk)
       || isMouseWheelDown(chunk);
 
     if (atFocusEnd && focusForwardIntent) {
@@ -569,15 +674,15 @@ export async function handleInput(
     clearChapterTransition(state);
     if (focusForwardIntent) {
       state.focusBlockIndex = clampFocusBlockIndex(state, state.focusBlockIndex + 1);
-    } else if (chunk === "k" || chunk === "\u001b[A" || isMouseWheelUp(chunk)) {
+    } else if (chunk === "k" || isUpKey(chunk) || isMouseWheelUp(chunk)) {
       state.focusBlockIndex = clampFocusBlockIndex(state, state.focusBlockIndex - 1);
     } else if (chunk === "g" || isHomeKey(chunk)) {
       state.focusBlockIndex = 0;
     } else if (chunk === "G" || isEndKey(chunk)) {
       state.focusBlockIndex = blockCount - 1;
-    } else if (chunk === "\u001b[C") {
+    } else if (isRightKey(chunk)) {
       moveChapter(state, 1);
-    } else if (chunk === "\u001b[D") {
+    } else if (isLeftKey(chunk)) {
       moveChapter(state, -1);
     } else if (chunk === "T") {
       state.overlay = "chapters";
@@ -621,7 +726,7 @@ export async function handleInput(
   };
   const isForwardScrollIntent =
     chunk === "j"
-    || chunk === "\u001b[B"
+    || isDownKey(chunk)
     || isMouseWheelDown(chunk);
 
   if (state.currentBook && atChapterEnd && isForwardScrollIntent) {
@@ -639,16 +744,16 @@ export async function handleInput(
 
     showChapterTransition(state, redraw, syncPos, state.chapterTransition.message, state.chapterTransition.targetChapterIndex);
     return;
-  } else if (chunk === "j" || chunk === "\u001b[B" || isMouseWheelDown(chunk)) {
+  } else if (chunk === "j" || isDownKey(chunk) || isMouseWheelDown(chunk)) {
     cancelChapterTransition();
     state.blockOffset += 1;
-  } else if (chunk === "k" || chunk === "\u001b[A" || isMouseWheelUp(chunk)) {
+  } else if (chunk === "k" || isUpKey(chunk) || isMouseWheelUp(chunk)) {
     cancelChapterTransition();
     state.blockOffset = clamp(state.blockOffset - 1, 0, Infinity);
-  } else if (chunk === " " || chunk === "\u001b[6~") {
+  } else if (chunk === " " || isPageDownKey(chunk)) {
     cancelChapterTransition();
     state.blockOffset += pageSize;
-  } else if (chunk === "b" || chunk === "\u001b[5~") {
+  } else if (chunk === "b" || isPageUpKey(chunk)) {
     cancelChapterTransition();
     state.blockOffset = clamp(state.blockOffset - pageSize, 0, Infinity);
   } else if (chunk === "g") {
@@ -663,10 +768,10 @@ export async function handleInput(
   } else if (isEndKey(chunk)) {
     cancelChapterTransition();
     state.blockOffset = computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
-  } else if (chunk === "\u001b[C") {
+  } else if (isRightKey(chunk)) {
     cancelChapterTransition();
     moveChapter(state, 1);
-  } else if (chunk === "\u001b[D") {
+  } else if (isLeftKey(chunk)) {
     cancelChapterTransition();
     moveChapter(state, -1);
   } else if (chunk === "T") {

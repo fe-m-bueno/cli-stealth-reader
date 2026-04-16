@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { commandHelp, parseSlashCommand } from "./commands.js";
+import { parseSlashCommand } from "./commands.js";
 import { discoverBooks } from "./discovery.js";
 import { mapBlockOffsetToFocusIndex, mapFocusIndexToBlockOffset } from "./focus.js";
 import { EPUB_PARSER_VERSION, importEpub } from "./parser/epub.js";
@@ -480,9 +480,28 @@ const handlers: Record<string, CommandHandler> = {
     state.status = `Dialogue highlight: ${enabled ? "on" : "off"}`;
   },
 
+  mouse: async (state, parsed) => {
+    const value = parsed.args[0]?.toLowerCase();
+    if (!value) {
+      state.mouseCapture = !state.mouseCapture;
+    } else if (value === "on") {
+      state.mouseCapture = true;
+    } else if (value === "off") {
+      state.mouseCapture = false;
+    } else {
+      throw new Error("Use /mouse [on|off]");
+    }
+    state.mouseDrag = null;
+    state.status = state.mouseCapture
+      ? "Mouse capture on: scrollbar drag enabled; use Shift-drag for terminal selection."
+      : "Mouse capture off: native selection enabled; wheel and keyboard scrolling remain active.";
+  },
+
   help: async (state, parsed) => {
     state.overlay = "help";
-    state.status = parsed.args[0] ? commandHelp(parsed.args[0])[0] : "Opened help";
+    state.overlayCursor = 0;
+    state.helpCommand = parsed.flags.all ? null : parsed.args[0] ?? null;
+    state.status = state.helpCommand ? `Opened help for /${state.helpCommand}` : "Opened command manual";
   },
 
   keyboardshortcuts: async (state) => {

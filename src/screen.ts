@@ -72,7 +72,9 @@ export function resetViewport(): void {
 export function getViewportLayout(state: AppState, width: number, height: number) {
   const reservedFooterHeight = footerHeight(state, width);
   const bodyHeight = Math.max(1, height - reservedFooterHeight - 2);
-  const overlayWidth = state.overlay === "none" ? 0 : Math.min(OVERLAY_MAX_WIDTH, Math.floor(width * 0.32));
+  const overlayWidth = state.overlay === "none" || state.overlay === "help"
+    ? 0
+    : Math.min(OVERLAY_MAX_WIDTH, Math.floor(width * 0.32));
   const mainWidth = Math.max(MIN_MAIN_WIDTH, width - overlayWidth - (overlayWidth ? 3 : 0));
   const scrollbarWidth = state.currentBook ? 1 : 0;
   const contentWidth = Math.max(1, mainWidth - 2 - scrollbarWidth);

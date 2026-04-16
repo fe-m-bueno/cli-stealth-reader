@@ -55,6 +55,14 @@ test("highlights em-dash dialogue only when it starts the paragraph", () => {
   assert.ok(!narrative.includes(fg(DEFAULT_THEME.accent, "— item comum.")));
 });
 
+test("highlights common ebook dialogue dash variants", () => {
+  const enDash = renderPlainLine("– Vamos embora.");
+  assert.ok(enDash.includes(fg(DEFAULT_THEME.accent, "– Vamos embora.")));
+
+  const horizontalBar = renderPlainLine("― Vamos embora.");
+  assert.ok(horizontalBar.includes(fg(DEFAULT_THEME.accent, "― Vamos embora.")));
+});
+
 test("keeps wrapped em-dash dialogue highlighted", () => {
   const blocks: CanonicalBlock[] = [{
     id: "b1",

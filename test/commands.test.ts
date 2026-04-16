@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyCommandAutocomplete, listCommandSuggestions, parseSlashCommand } from "../src/commands.js";
+import { applyCommandAutocomplete, commandHelp, listCommandSuggestions, parseSlashCommand } from "../src/commands.js";
+import { stripAnsi } from "../src/screen.js";
+import type { ThemePreset } from "../src/types.js";
 
 test("parses args and flags", () => {
   const parsed = parseSlashCommand('/colorscheme amber --preview --list');
@@ -62,7 +64,7 @@ test("lists all commands when the slash buffer is empty", () => {
 });
 
 test("filters command suggestions by prefix and aliases", () => {
-  const byName = listCommandSuggestions("mo");
+  const byName = listCommandSuggestions("mod");
   assert.deepEqual(byName.map((item) => item.name), ["mode"]);
 
   const byAlias = listCommandSuggestions("theme");
@@ -74,3 +76,50 @@ test("applies autocomplete to the command token only", () => {
   assert.equal(applyCommandAutocomplete("re", suggestion), "remove");
   assert.equal(applyCommandAutocomplete("re current-book", suggestion), "remove current-book");
 });
+
+test("renders full manual help with examples", () => {
+  const lines = commandHelp();
+  assert.ok(lines.includes("CLI-STEALTH-READER(1)"));
+  assert.ok(lines.includes("COMMANDS"));
+  assert.ok(lines.includes("/MODE(1)"));
+  assert.ok(lines.includes("EXAMPLES"));
+  assert.ok(lines.includes("  /mode typescript"));
+});
+
+test("renders manual page for a specific command alias", () => {
+  const lines = commandHelp("theme");
+  assert.ok(lines.includes("/COLORSCHEME(1)"));
+  assert.ok(lines.includes("ALIASES"));
+  assert.ok(lines.includes("  /theme"));
+  assert.ok(lines.includes("  /theme forest --preview"));
+});
+
+test("wraps manual help to the viewport width", () => {
+  const lines = commandHelp(undefined, 48);
+  assert.ok(lines.length > commandHelp().length);
+  assert.ok(lines.every((line) => line.length <= 48));
+  assert.ok(lines.some((line) => line.trim() === "The selected mode is saved and reused the next"));
+});
+
+test("styles manual titles commands and flags when a theme is provided", () => {
+  const lines = commandHelp("search", 80, theme);
+  assert.ok(lines.some((line) => line.includes("\x1b[1m/SEARCH(1)\x1b[0m")));
+  assert.ok(lines.some((line) => line.includes("\x1b[1m\x1b[38;2;89;208;255m/search\x1b[0m\x1b[0m")));
+  assert.ok(lines.some((line) => line.includes("\x1b[38;2;244;184;96m--global\x1b[0m")));
+  assert.ok(lines.every((line) => stripAnsi(line).length <= 80));
+});
+
+const theme: ThemePreset = {
+  id: "codex",
+  label: "Codex",
+  accent: "#59d0ff",
+  accentMuted: "#1f6f88",
+  foreground: "#dce6ea",
+  dim: "#6d7d84",
+  background: "#0b1012",
+  border: "#1e3a45",
+  warning: "#f4b860",
+  keyword: "#7c9ebf",
+  codeString: "#8fb573",
+  subtle: "#3d5560"
+};
