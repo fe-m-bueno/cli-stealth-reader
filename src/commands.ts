@@ -720,3 +720,25 @@ export function applyCommandAutocomplete(buffer: string, suggestion: CommandSugg
   }
   return `${trimmedStart}${suggestion.name} ${parts.slice(1).join(" ")}`;
 }
+
+export function commandAutocompleteIndex(buffer: string, selectedIndex: number, suggestions: CommandSuggestion[]): number {
+  if (suggestions.length === 0) {
+    return 0;
+  }
+  const currentIndex = Math.max(0, Math.min(selectedIndex, suggestions.length - 1));
+  if (buffer.trim().length === 0) {
+    return currentIndex;
+  }
+
+  const currentSuggestion = suggestions[currentIndex];
+  const parts = buffer.trimStart().split(/\s+/).filter(Boolean);
+  const currentCommand = parts[0] ?? "";
+  if (parts.length > 1) {
+    return currentIndex;
+  }
+  if (currentCommand === currentSuggestion?.name || currentCommand === currentSuggestion?.matchedAlias) {
+    return currentIndex >= suggestions.length - 1 ? 0 : currentIndex + 1;
+  }
+
+  return currentIndex;
+}
