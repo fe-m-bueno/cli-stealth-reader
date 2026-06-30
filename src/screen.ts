@@ -190,13 +190,15 @@ export function renderStatusBar(state: AppState, width: number): string {
     const searchTag = state.searchState
       ? ` · [${state.searchState.cursor + 1}/${state.searchState.results.length}] "${state.searchState.query}"`
       : "";
-    left = `${truncate(book.title, 40)} · Ch ${state.chapterIndex + 1}/${totalChapters}${searchTag}`;
+    const chapterTitle = book.chapters[state.chapterIndex]?.title;
+    const chapterLabel = chapterTitle ? ` · ${truncate(chapterTitle, 28)}` : "";
+    left = `${truncate(book.title, 34)} · Ch ${state.chapterIndex + 1}/${totalChapters}${chapterLabel}${searchTag}`;
   }
 
   // Right content
   const modeLabel = state.renderMode === "plain" ? "plain" : state.codeLanguage;
   const densityLabel = state.renderMode === "code" ? ` · density:${state.codeDensity}` : "";
-  const focusLabel = state.focusMode ? " [FOCUS]" : "";
+  const focusLabel = state.focusMode ? ` · focus §${state.focusBlockIndex + 1}` : "";
   const right = `${modeLabel}${densityLabel}${focusLabel} · ${theme.label}`;
 
   // Calculate plain text lengths (strip ANSI for width calculation)
