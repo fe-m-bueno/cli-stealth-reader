@@ -309,6 +309,7 @@ export interface AppState {
   booksTagFilter: string | null;
   booksTagMap: Map<string, string[]>;
   helpCommand: string | null;
+  integrationLines?: string[];
   mouseCapture: boolean;
   settingsDraft?: import("./settings-panel.js").SettingsPanelDraft | null;
   settingsSearchBuffer?: string;
