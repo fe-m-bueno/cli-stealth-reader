@@ -153,24 +153,32 @@ export function renderOverlay(state: AppState, width: number, height: number): s
         progress: "Progress"
       };
       const dirArrow = state.librarySortDir === "asc" ? "↑" : "↓";
-      const filterNote = state.booksTagFilter ? `  [tag: #${state.booksTagFilter}]` : "";
+      const filterNote = state.booksTagFilter ? `  Filter: #${state.booksTagFilter} (Esc clears)` : "";
       const header = truncate(
-        `  Sort: ${sortKeyLabels[state.librarySortKey]} ${dirArrow}   (Press s to change, r to reverse)${filterNote}`,
+        `  Library · Sort: ${sortKeyLabels[state.librarySortKey]} ${dirArrow}${filterNote}`,
+        width
+      );
+      const actionHint = truncate(
+        "  Enter open · b bookmarks · n notes · /book <title|author|#tag> search · s sort · r reverse",
         width
       );
       return [
         header,
+        actionHint,
         ...books.map((book, index) => {
           const marker = index === state.overlayCursor ? ">" : " ";
           const progressTag = book.bookProgress !== null
             ? `[Ch.${(book.chapterIndex ?? 0) + 1} · ${Math.round(book.bookProgress * 100)}%]`
             : "[not started]";
+          const chapterDetail = book.bookProgress !== null && book.chapterTitle ? ` · ${book.chapterTitle}` : "";
           const tags = tagsByBookId.get(book.id) ?? [];
-          const tagsStr = tags.length > 0 ? `  ${tags.map((t) => `#${t}`).join(" ")}` : "";
-          const right = `  ${progressTag}${tagsStr}`;
-          const titleAuthor = truncate(`${book.title}  —  ${book.author}`, Math.max(1, width - 2 - right.length));
-          return `${marker} ${titleAuthor}${right}`;
-        })
+          const tagSummary = tags.length > 0 ? tags.map((t) => `#${t}`).join(" ") : "no tags";
+          const titleTags = tags.length > 0 ? `  ${tagSummary}` : "";
+          const status = `${progressTag}${chapterDetail} · ${formatRelativeTime(book.lastOpenedAt)} · ${tagSummary}`;
+          const titleAuthor = truncate(`${book.title} — ${book.author}${titleTags}`, Math.max(1, width - 2));
+          const detail = truncate(`   ${status}`, Math.max(1, width - 2));
+          return `${marker} ${titleAuthor}\n${index === state.overlayCursor ? "│" : " "} ${detail}`;
+        }).flatMap((row) => row.split("\n"))
       ];
     }
     case "bookmarks": {
