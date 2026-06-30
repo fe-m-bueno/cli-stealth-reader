@@ -159,9 +159,14 @@ export function renderOverlay(state: AppState, width: number, height: number): s
         `  Library · Sort: ${sortKeyLabels[state.librarySortKey]} ${dirArrow}${filterNote}`,
         width
       );
-      const continueAction = latestBookId ? "Enter continue/open" : "Enter open";
+      const continueAction = latestBookId
+        ? state.booksTagFilter
+          ? "Enter continue/open"
+          : "Enter continues selected book"
+        : "Enter open";
+      const resumeHint = state.booksTagFilter ? "/resume latest" : "/resume opens latest";
       const actionHint = truncate(
-        `  ${continueAction} · b bookmarks · n notes · /resume latest · /book <title|author|#tag> search · s sort · r reverse`,
+        `  ${continueAction} · ${resumeHint} · b bookmarks · n notes · /book search`,
         width
       );
       return [
@@ -170,19 +175,16 @@ export function renderOverlay(state: AppState, width: number, height: number): s
         ...books.map((book, index) => {
           const marker = index === state.overlayCursor ? ">" : " ";
           const isLatest = book.id === latestBookId;
-          const continueTag = isLatest ? "[continue] " : "";
           const progressTag = book.bookProgress !== null
-            ? `${continueTag}[Ch.${(book.chapterIndex ?? 0) + 1} · ${Math.round(book.bookProgress * 100)}%]`
-            : `${continueTag}[not started]`;
-          const chapterDetail = book.bookProgress !== null && book.chapterTitle ? ` · ${book.chapterTitle}` : "";
+            ? `[Ch.${(book.chapterIndex ?? 0) + 1} · ${Math.round(book.bookProgress * 100)}%]`
+            : "[not started]";
+          const latestTag = isLatest ? "[continue] " : "";
           const tags = tagsByBookId.get(book.id) ?? [];
-          const tagSummary = tags.length > 0 ? tags.map((t) => `#${t}`).join(" ") : "no tags";
-          const titleTags = tags.length > 0 ? `  ${tagSummary}` : "";
-          const status = `${progressTag}${chapterDetail} · ${formatRelativeTime(book.lastOpenedAt)} · ${tagSummary}`;
-          const titleAuthor = truncate(`${book.title} — ${book.author}${titleTags}`, Math.max(1, width - 2));
-          const detail = truncate(`   ${status}`, Math.max(1, width - 2));
-          return `${marker} ${titleAuthor}\n${index === state.overlayCursor ? "│" : " "} ${detail}`;
-        }).flatMap((row) => row.split("\n"))
+          const tagsStr = tags.length > 0 ? `  ${tags.map((t) => `#${t}`).join(" ")}` : "";
+          const right = `  ${latestTag}${progressTag}${tagsStr}`;
+          const titleAuthor = truncate(`${book.title}  —  ${book.author}`, Math.max(1, width - 2 - right.length));
+          return `${marker} ${titleAuthor}${right}`;
+        })
       ];
     }
     case "bookmarks": {
