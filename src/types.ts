@@ -173,6 +173,9 @@ export interface CommandSuggestion {
   detail: string;
   aliases: string[];
   matchedAlias?: string;
+  completion?: string;
+  completionStart?: number;
+  completionEnd?: number;
 }
 
 export interface FolderDiscovery {

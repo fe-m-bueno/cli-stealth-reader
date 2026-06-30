@@ -1,4 +1,6 @@
 import { bold, fg } from "./color.js";
+import { getTogglCache } from "./toggl.js";
+import type { Storage } from "./storage.js";
 import type { CommandDefinition, CommandSuggestion, ParsedCommandResult, ThemePreset } from "./types.js";
 
 export const COMMANDS: CommandDefinition[] = [
@@ -684,7 +686,117 @@ function matchesPrefix(command: CommandDefinition, prefix: string): string | und
   return command.aliases?.find((alias) => alias.startsWith(prefix));
 }
 
-export function listCommandSuggestions(buffer: string): CommandSuggestion[] {
+type BufferToken = { text: string; start: number; end: number; quote?: '"' | "'" };
+
+function bufferTokens(input: string): BufferToken[] {
+  const tokens: BufferToken[] = [];
+  let token = "";
+  let start = -1;
+  let quote: '"' | "'" | undefined;
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index];
+    if (start < 0 && !/\s/.test(char)) {
+      start = index;
+      if (char === '"' || char === "'") {
+        quote = char;
+        continue;
+      }
+    }
+    if (quote) {
+      if (char === quote) {
+        tokens.push({ text: token, start, end: index + 1, quote });
+        token = "";
+        start = -1;
+        quote = undefined;
+      } else {
+        token += char;
+      }
+      continue;
+    }
+    if (/\s/.test(char)) {
+      if (start >= 0) {
+        tokens.push({ text: token, start, end: index });
+        token = "";
+        start = -1;
+      }
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    token += char;
+  }
+  if (start >= 0) {
+    tokens.push({ text: token, start, end: input.length, quote });
+  }
+  return tokens;
+}
+
+function quoteCompletion(value: string): string {
+  return `"${value.replace(/"/g, "\\\"")}"`;
+}
+
+function fuzzyStarts(value: string, query: string): boolean {
+  return value.toLowerCase().startsWith(query.toLowerCase());
+}
+
+function makeTogglSuggestion(usage: string, description: string, completion: string, start: number, end: number): CommandSuggestion {
+  return {
+    name: "toggl",
+    usage,
+    description,
+    category: "Integrations",
+    detail: "Tab complete",
+    aliases: [],
+    completion,
+    completionStart: start,
+    completionEnd: end
+  };
+}
+
+function listTogglSuggestions(buffer: string, storage?: Storage): CommandSuggestion[] {
+  const tokens = bufferTokens(buffer);
+  const command = tokens[0];
+  if (command?.text !== "toggl") return [];
+  const subcommands = ["auth", "sync", "recent", "start", "stop", "log"];
+  const action = tokens[1];
+  if (!storage && !action) return [];
+  if (!action || (tokens.length === 2 && !buffer.endsWith(" ") && !subcommands.includes(action.text))) {
+    const query = action?.text ?? "";
+    const start = action?.start ?? buffer.length;
+    const end = action?.end ?? buffer.length;
+    return subcommands
+      .filter((subcommand) => fuzzyStarts(subcommand, query))
+      .map((subcommand) => makeTogglSuggestion(subcommand, `Toggl ${subcommand}`, subcommand, start, end));
+  }
+  if (!storage || !["start", "log"].includes(action.text)) return [];
+
+  const projectFlagIndex = tokens.findIndex((token) => token.text === "--project");
+  if (projectFlagIndex >= 0) {
+    const valueToken = tokens[projectFlagIndex + 1];
+    const query = valueToken?.text ?? "";
+    const start = valueToken?.start ?? buffer.length;
+    const end = valueToken?.end ?? buffer.length;
+    return getTogglCache(storage).projects
+      .filter((project) => fuzzyStarts(project.name, query) || fuzzyStarts(`${project.clientName ?? ""} ${project.name}`.trim(), query))
+      .map((project) => makeTogglSuggestion(quoteCompletion(project.name), project.clientName ? `${project.clientName} / ${project.name}` : project.name, quoteCompletion(project.name), start, end));
+  }
+
+  const descriptionToken = tokens[2];
+  const query = descriptionToken?.text ?? "";
+  const start = descriptionToken?.start ?? buffer.length;
+  const end = descriptionToken?.end ?? buffer.length;
+  return getTogglCache(storage).descriptions
+    .filter((item) => fuzzyStarts(item.description, query))
+    .map((item) => makeTogglSuggestion(quoteCompletion(item.description), "Recent Toggl description", quoteCompletion(item.description), start, end));
+}
+
+export function listCommandSuggestions(buffer: string, storage?: Storage): CommandSuggestion[] {
+  const togglSuggestions = listTogglSuggestions(buffer, storage);
+  if (togglSuggestions.length > 0) {
+    return togglSuggestions;
+  }
   const trimmed = buffer.trimStart();
   const [rawCommand, ...rest] = trimmed.split(/\s+/).filter(Boolean);
   const prefix = rest.length > 0 || trimmed.endsWith(" ")
@@ -712,6 +824,9 @@ export function listCommandSuggestions(buffer: string): CommandSuggestion[] {
 }
 
 export function applyCommandAutocomplete(buffer: string, suggestion: CommandSuggestion): string {
+  if (suggestion.completion !== undefined && suggestion.completionStart !== undefined && suggestion.completionEnd !== undefined) {
+    return `${buffer.slice(0, suggestion.completionStart)}${suggestion.completion}${buffer.slice(suggestion.completionEnd)}`;
+  }
   const trimmedStart = buffer.match(/^\s*/)?.[0] ?? "";
   const trimmed = buffer.trimStart();
   const parts = trimmed.split(/\s+/).filter(Boolean);
