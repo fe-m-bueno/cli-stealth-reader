@@ -531,14 +531,33 @@ export async function handleInput(
     } else if (chunk === "\u001b") {
       state.overlay = "none";
       state.booksTagFilter = null;
+    } else if ((chunk === "b" || chunk === "n") && state.overlay === "books") {
+      const books = state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir, state.booksTagFilter ?? undefined);
+      const selected = books[state.overlayCursor];
+      const book = selected ? state.storage.getBook(selected.id) : null;
+      if (book) {
+        state.currentBook = book;
+        state.searchState = null;
+        const existing = state.storage.getPosition(book.id);
+        state.chapterIndex = existing?.chapterIndex ?? 0;
+        state.blockOffset = existing?.blockOffset ?? 0;
+        state.overlay = chunk === "b" ? "bookmarks" : "notes";
+        state.overlayCursor = 0;
+        state.booksTagFilter = null;
+        state.status = chunk === "b"
+          ? `Opened bookmarks for ${book.title}.`
+          : `Opened notes for ${book.title}.`;
+      }
     } else if (chunk === "s" && state.overlay === "books") {
       const cycle: LibrarySortKey[] = ["lastOpened", "title", "author", "progress"];
       const current = cycle.indexOf(state.librarySortKey);
       state.librarySortKey = cycle[(current + 1) % cycle.length]!;
       state.overlayCursor = 0;
+      state.status = `Library sort: ${state.librarySortKey}.`;
     } else if (chunk === "r" && state.overlay === "books") {
       state.librarySortDir = state.librarySortDir === "asc" ? "desc" : "asc";
       state.overlayCursor = 0;
+      state.status = `Library sort direction: ${state.librarySortDir}.`;
     } else if (chunk === "d" && state.overlay === "bookmarks" && state.currentBook) {
       const bookmarks = state.storage.listBookmarks(state.currentBook.id);
       const selected = bookmarks[state.overlayCursor];

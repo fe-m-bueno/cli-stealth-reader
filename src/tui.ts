@@ -154,18 +154,24 @@ export function renderOverlay(state: AppState, width: number, height: number): s
         progress: "Progress"
       };
       const dirArrow = state.librarySortDir === "asc" ? "↑" : "↓";
-      const filterNote = state.booksTagFilter ? `  [tag: #${state.booksTagFilter}]` : "";
-      const actionHint = latestBookId
-        ? "Enter continues selected book · /resume opens latest · /add imports"
-        : "Enter opens selected book · /add imports";
+      const filterNote = state.booksTagFilter ? `  Filter: #${state.booksTagFilter} (Esc clears)` : "";
       const header = truncate(
-        `  Sort: ${sortKeyLabels[state.librarySortKey]} ${dirArrow}   (Press s to change, r to reverse)${filterNote}`,
+        `  Library · Sort: ${sortKeyLabels[state.librarySortKey]} ${dirArrow}${filterNote}`,
         width
       );
-      const actionHintLine = truncate(`  ${actionHint}`, width);
+      const continueAction = latestBookId
+        ? state.booksTagFilter
+          ? "Enter continue/open"
+          : "Enter continues selected book"
+        : "Enter open";
+      const resumeHint = state.booksTagFilter ? "/resume latest" : "/resume opens latest";
+      const actionHint = truncate(
+        `  ${continueAction} · ${resumeHint} · b bookmarks · n notes · /book search`,
+        width
+      );
       return [
         header,
-        actionHintLine,
+        actionHint,
         ...books.map((book, index) => {
           const marker = index === state.overlayCursor ? ">" : " ";
           const isLatest = book.id === latestBookId;
