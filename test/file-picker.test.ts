@@ -524,7 +524,7 @@ test("focus mode escape closes empty bookmark aside without leaving focus", asyn
   assert.equal(state.focusBlockIndex, 1);
 });
 
-test("extra downward wheel at chapter end moves to the next chapter and shows a banner", async () => {
+test("extra downward wheel at chapter end requires a firmer pull before changing chapters", async () => {
   const state = makeState({ overlay: "none", currentBook: multiChapterScrollBook });
   const layout = getViewportLayout(state, 120, 40);
   state.blockOffset = computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
@@ -533,10 +533,17 @@ test("extra downward wheel at chapter end moves to the next chapter and shows a 
   assert.equal(state.chapterIndex, 0);
   assert.match(state.chapterTransition?.message ?? "", /Chapter 2: Two/);
   assert.equal(state.chapterTransition?.stage, 1);
+  assert.match(state.status, /Pull 3 more/);
 
   await handleInput("\u001b[<65;10;10M", state, redraw, noop, () => {}, noop);
   assert.equal(state.chapterIndex, 0);
   assert.equal(state.chapterTransition?.stage, 2);
+  assert.match(state.status, /Pull 2 more/);
+
+  await handleInput("\u001b[<65;10;10M", state, redraw, noop, () => {}, noop);
+  assert.equal(state.chapterIndex, 0);
+  assert.equal(state.chapterTransition?.stage, 3);
+  assert.match(state.status, /Pull once more/);
 
   await handleInput("\u001b[<65;10;10M", state, redraw, noop, () => {}, noop);
   assert.equal(state.chapterIndex, 1);
