@@ -66,6 +66,8 @@ test("lists all commands when the slash buffer is empty", () => {
   const suggestions = listCommandSuggestions("");
   assert.ok(suggestions.length > 5);
   assert.equal(suggestions[0]?.name, "add");
+  assert.equal(suggestions[0]?.category, "Library");
+  assert.match(suggestions[0]?.detail ?? "", /flags/);
 });
 
 test("filters command suggestions by prefix and aliases", () => {
@@ -78,6 +80,15 @@ test("filters command suggestions by prefix and aliases", () => {
   const byAlias = listCommandSuggestions("conf");
   assert.deepEqual(byAlias.map((item) => item.name), ["settings"]);
   assert.equal(byAlias[0]?.matchedAlias, "config");
+  assert.equal(byAlias[0]?.category, "Settings");
+  assert.match(byAlias[0]?.detail ?? "", /alias \/config/);
+});
+
+test("adds richer suggestion context for commands with flags and examples", () => {
+  const [search] = listCommandSuggestions("search");
+  assert.equal(search?.category, "Navigation");
+  assert.match(search?.detail ?? "", /flags -g, --global/);
+  assert.match(search?.detail ?? "", /try \/search ring/);
 });
 
 test("applies autocomplete to the command token only", () => {
