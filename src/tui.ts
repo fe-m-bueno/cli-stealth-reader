@@ -145,6 +145,7 @@ export function renderOverlay(state: AppState, width: number, height: number): s
         });
     case "books": {
       const books = state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir, state.booksTagFilter ?? undefined);
+      const latestBookId = state.storage.getLatestBookId();
       const tagsByBookId = state.booksTagMap;
       const sortKeyLabels: Record<string, string> = {
         lastOpened: "Last Opened",
@@ -158,8 +159,9 @@ export function renderOverlay(state: AppState, width: number, height: number): s
         `  Library · Sort: ${sortKeyLabels[state.librarySortKey]} ${dirArrow}${filterNote}`,
         width
       );
+      const continueAction = latestBookId ? "Enter continue/open" : "Enter open";
       const actionHint = truncate(
-        "  Enter open · b bookmarks · n notes · /book <title|author|#tag> search · s sort · r reverse",
+        `  ${continueAction} · b bookmarks · n notes · /resume latest · /book <title|author|#tag> search · s sort · r reverse`,
         width
       );
       return [
@@ -167,9 +169,11 @@ export function renderOverlay(state: AppState, width: number, height: number): s
         actionHint,
         ...books.map((book, index) => {
           const marker = index === state.overlayCursor ? ">" : " ";
+          const isLatest = book.id === latestBookId;
+          const continueTag = isLatest ? "[continue] " : "";
           const progressTag = book.bookProgress !== null
-            ? `[Ch.${(book.chapterIndex ?? 0) + 1} · ${Math.round(book.bookProgress * 100)}%]`
-            : "[not started]";
+            ? `${continueTag}[Ch.${(book.chapterIndex ?? 0) + 1} · ${Math.round(book.bookProgress * 100)}%]`
+            : `${continueTag}[not started]`;
           const chapterDetail = book.bookProgress !== null && book.chapterTitle ? ` · ${book.chapterTitle}` : "";
           const tags = tagsByBookId.get(book.id) ?? [];
           const tagSummary = tags.length > 0 ? tags.map((t) => `#${t}`).join(" ") : "no tags";
