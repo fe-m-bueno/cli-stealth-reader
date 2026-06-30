@@ -145,6 +145,7 @@ export function renderOverlay(state: AppState, width: number, height: number): s
         });
     case "books": {
       const books = state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir, state.booksTagFilter ?? undefined);
+      const latestBookId = state.storage.getLatestBookId();
       const tagsByBookId = state.booksTagMap;
       const sortKeyLabels: Record<string, string> = {
         lastOpened: "Last Opened",
@@ -154,20 +155,27 @@ export function renderOverlay(state: AppState, width: number, height: number): s
       };
       const dirArrow = state.librarySortDir === "asc" ? "↑" : "↓";
       const filterNote = state.booksTagFilter ? `  [tag: #${state.booksTagFilter}]` : "";
+      const actionHint = latestBookId
+        ? "Enter continues selected book · /resume opens latest · /add imports"
+        : "Enter opens selected book · /add imports";
       const header = truncate(
         `  Sort: ${sortKeyLabels[state.librarySortKey]} ${dirArrow}   (Press s to change, r to reverse)${filterNote}`,
         width
       );
+      const actionHintLine = truncate(`  ${actionHint}`, width);
       return [
         header,
+        actionHintLine,
         ...books.map((book, index) => {
           const marker = index === state.overlayCursor ? ">" : " ";
+          const isLatest = book.id === latestBookId;
           const progressTag = book.bookProgress !== null
             ? `[Ch.${(book.chapterIndex ?? 0) + 1} · ${Math.round(book.bookProgress * 100)}%]`
             : "[not started]";
+          const latestTag = isLatest ? "[continue] " : "";
           const tags = tagsByBookId.get(book.id) ?? [];
           const tagsStr = tags.length > 0 ? `  ${tags.map((t) => `#${t}`).join(" ")}` : "";
-          const right = `  ${progressTag}${tagsStr}`;
+          const right = `  ${latestTag}${progressTag}${tagsStr}`;
           const titleAuthor = truncate(`${book.title}  —  ${book.author}`, Math.max(1, width - 2 - right.length));
           return `${marker} ${titleAuthor}${right}`;
         })
