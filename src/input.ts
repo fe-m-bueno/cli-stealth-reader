@@ -351,6 +351,7 @@ export async function handleInput(
       }
       const raw = `/${state.commandBuffer}`;
       state.commandBuffer = "";
+      state.commandCursor = 0;
       state.commandMode = false;
       state.commandSuggestionIndex = 0;
       await executeCmd(raw);
@@ -358,7 +359,11 @@ export async function handleInput(
       state.commandMode = false;
       state.commandSuggestionIndex = 0;
     } else if (chunk === "\u007f") {
-      state.commandBuffer = state.commandBuffer.slice(0, -1);
+      const cursor = Math.max(0, Math.min(state.commandCursor ?? state.commandBuffer.length, state.commandBuffer.length));
+      if (cursor > 0) {
+        state.commandBuffer = `${state.commandBuffer.slice(0, cursor - 1)}${state.commandBuffer.slice(cursor)}`;
+        state.commandCursor = cursor - 1;
+      }
       state.commandSuggestionIndex = 0;
     } else if (chunk === "\t") {
       const suggestions = listCommandSuggestions(state.commandBuffer, state.storage);
@@ -366,8 +371,13 @@ export async function handleInput(
         const appliedIndex = commandAutocompleteIndex(state.commandBuffer, state.commandSuggestionIndex, suggestions);
         const suggestion = suggestions[clamp(appliedIndex, 0, suggestions.length - 1)];
         state.commandBuffer = applyCommandAutocomplete(state.commandBuffer, suggestion);
+        state.commandCursor = state.commandBuffer.length;
         state.commandSuggestionIndex = appliedIndex;
       }
+    } else if (isLeftKey(chunk)) {
+      state.commandCursor = Math.max(0, (state.commandCursor ?? state.commandBuffer.length) - 1);
+    } else if (isRightKey(chunk)) {
+      state.commandCursor = Math.min(state.commandBuffer.length, (state.commandCursor ?? state.commandBuffer.length) + 1);
     } else if (isDownKey(chunk)) {
       const suggestions = listCommandSuggestions(state.commandBuffer, state.storage);
       if (suggestions.length > 0) {
@@ -379,7 +389,9 @@ export async function handleInput(
         state.commandSuggestionIndex = clamp(state.commandSuggestionIndex - 1, 0, suggestions.length - 1);
       }
     } else {
-      state.commandBuffer += chunk;
+      const cursor = Math.max(0, Math.min(state.commandCursor ?? state.commandBuffer.length, state.commandBuffer.length));
+      state.commandBuffer = `${state.commandBuffer.slice(0, cursor)}${chunk}${state.commandBuffer.slice(cursor)}`;
+      state.commandCursor = cursor + chunk.length;
       state.commandSuggestionIndex = 0;
     }
     redraw();
@@ -421,6 +433,7 @@ export async function handleInput(
   if (chunk === "/") {
     state.commandMode = true;
     state.commandBuffer = "";
+    state.commandCursor = 0;
     state.commandSuggestionIndex = 0;
     redraw();
     return;

@@ -268,6 +268,7 @@ export interface AppState {
   focusMode: boolean;
   focusBlockIndex: number;
   commandBuffer: string;
+  commandCursor: number;
   commandMode: boolean;
   commandSuggestionIndex: number;
   status: string;

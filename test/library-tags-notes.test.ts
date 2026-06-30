@@ -55,7 +55,7 @@ function makeState(storage: Storage, overrides: Partial<AppState> = {}): AppStat
     codeDensity: 3, plainHighlight: true, progressVisibility: "book",
     currentBook: null, chapterIndex: 0, blockOffset: 0,
     focusMode: false, focusBlockIndex: 0,
-    commandBuffer: "", commandMode: false, commandSuggestionIndex: 0,
+    commandBuffer: "", commandCursor: 0, commandMode: false, commandSuggestionIndex: 0,
     status: "", overlay: "none", overlayCursor: 0, discoveries: [],
     shouldQuit: false, filePickerCursor: 0, filePickerItems: [],
     filePickerSelected: new Set(), filePickerForce: false,

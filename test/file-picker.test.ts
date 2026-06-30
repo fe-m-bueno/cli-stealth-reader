@@ -162,6 +162,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     chapterIndex: 0,
     blockOffset: 0,
     commandBuffer: "",
+    commandCursor: 0,
     commandMode: false,
     commandSuggestionIndex: 0,
     status: "",
@@ -340,6 +341,25 @@ test("slash opens command mode and tab autocompletes commands", async () => {
   await handleInput("d", state, redraw, noop, () => {}, noop);
   await handleInput("\t", state, redraw, noop, () => {}, noop);
   assert.equal(state.commandBuffer, "mode");
+});
+
+test("command mode left arrow moves cursor and backspace deletes before cursor", async () => {
+  const state = makeState({ overlay: "none" });
+  await handleInput("/", state, redraw, noop, () => {}, noop);
+  for (const char of "toggl") await handleInput(char, state, redraw, noop, () => {}, noop);
+  await handleInput("\u001b[D", state, redraw, noop, () => {}, noop);
+  await handleInput("\u001b[D", state, redraw, noop, () => {}, noop);
+  assert.equal(state.commandCursor, 3);
+  await handleInput("\u007f", state, redraw, noop, () => {}, noop);
+  assert.equal(state.commandBuffer, "togl");
+  assert.equal(state.commandCursor, 2);
+});
+
+test("command mode inserts text at cursor", async () => {
+  const state = makeState({ overlay: "none", commandMode: true, commandBuffer: "tggl", commandCursor: 1 });
+  await handleInput("o", state, redraw, noop, () => {}, noop);
+  assert.equal(state.commandBuffer, "toggl");
+  assert.equal(state.commandCursor, 2);
 });
 
 test("down arrow cycles command suggestions and keeps the selection visible", async () => {

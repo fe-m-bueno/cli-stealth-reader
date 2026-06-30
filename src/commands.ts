@@ -738,7 +738,7 @@ function quoteCompletion(value: string): string {
 }
 
 function fuzzyStarts(value: string, query: string): boolean {
-  return value.toLowerCase().startsWith(query.toLowerCase());
+  return value.toLowerCase().includes(query.toLowerCase());
 }
 
 function makeTogglSuggestion(usage: string, description: string, completion: string, start: number, end: number): CommandSuggestion {
@@ -778,24 +778,29 @@ function listTogglSuggestions(buffer: string, storage?: Storage): CommandSuggest
     const query = valueToken?.text ?? "";
     const start = valueToken?.start ?? buffer.length;
     const end = valueToken?.end ?? buffer.length;
+    const prefix = valueToken ? "" : buffer.endsWith(" ") ? "" : " ";
     return getTogglCache(storage).projects
       .filter((project) => fuzzyStarts(project.name, query) || fuzzyStarts(`${project.clientName ?? ""} ${project.name}`.trim(), query))
-      .map((project) => makeTogglSuggestion(quoteCompletion(project.name), project.clientName ? `${project.clientName} / ${project.name}` : project.name, quoteCompletion(project.name), start, end));
+      .map((project) => makeTogglSuggestion(quoteCompletion(project.name), project.clientName ? `${project.clientName} / ${project.name}` : project.name, `${prefix}${quoteCompletion(project.name)}`, start, end));
   }
 
   const descriptionToken = tokens[2];
-  const query = descriptionToken?.text ?? "";
-  const start = descriptionToken?.start ?? buffer.length;
-  const end = descriptionToken?.end ?? buffer.length;
+  if (!descriptionToken) return [];
+  const query = descriptionToken.text;
+  const start = descriptionToken.start;
+  const end = descriptionToken.end;
   return getTogglCache(storage).descriptions
     .filter((item) => fuzzyStarts(item.description, query))
-    .map((item) => makeTogglSuggestion(quoteCompletion(item.description), "Recent Toggl description", quoteCompletion(item.description), start, end));
+    .map((item) => makeTogglSuggestion(quoteCompletion(item.description), "Recent Toggl description", `${quoteCompletion(item.description)} `, start, end));
 }
 
 export function listCommandSuggestions(buffer: string, storage?: Storage): CommandSuggestion[] {
   const togglSuggestions = listTogglSuggestions(buffer, storage);
   if (togglSuggestions.length > 0) {
     return togglSuggestions;
+  }
+  if (storage && /^\s*toggl\s+/.test(buffer)) {
+    return [];
   }
   const trimmed = buffer.trimStart();
   const [rawCommand, ...rest] = trimmed.split(/\s+/).filter(Boolean);

@@ -1,6 +1,7 @@
 import { fg, inverse, paintBackground } from "./color.js";
 import { listCommandSuggestions } from "./commands.js";
 import { renderBlocks } from "./renderers.js";
+import { formatRunningTogglTimer } from "./toggl.js";
 import type { AppState, CommandSuggestion, ThemePreset } from "./types.js";
 
 // Layout constants
@@ -283,7 +284,11 @@ function renderCommandBox(state: AppState, width: number): string[] {
   const suggestions = listCommandSuggestions(state.commandBuffer, state.storage);
   const selectedIndex = suggestions.length === 0 ? 0 : clamp(state.commandSuggestionIndex, 0, suggestions.length - 1);
   const promptText = `/${state.commandBuffer}`;
-  const prompt = fg(state.theme.accent, "/") + state.commandBuffer + inverse(" ");
+  const cursor = Math.max(0, Math.min(state.commandCursor ?? state.commandBuffer.length, state.commandBuffer.length));
+  const beforeCursor = state.commandBuffer.slice(0, cursor);
+  const cursorChar = state.commandBuffer[cursor] ?? " ";
+  const afterCursor = cursor < state.commandBuffer.length ? state.commandBuffer.slice(cursor + 1) : "";
+  const prompt = fg(state.theme.accent, "/") + beforeCursor + inverse(cursorChar) + afterCursor;
   const promptLine = padAnsi(truncate(prompt, innerWidth), innerWidth);
   const lines = [
     border(`╭${"─".repeat(innerWidth + 2)}╮`),
@@ -309,7 +314,8 @@ export function renderFooter(state: AppState, width: number, progress = ""): str
 
   if (state.commandMode) {
     const lines = renderCommandBox(state, width);
-    const status = fg(theme.dim, state.status || "Ready");
+    const togglTimer = formatRunningTogglTimer(state.storage);
+    const status = fg(theme.dim, togglTimer ? `${togglTimer} · ${state.status || "Ready"}` : state.status || "Ready");
     const statusPlain = stripAnsi(status);
     const fixedLen = prefix.length + statusPlain.length + suffix.length;
     const fill = "─".repeat(Math.max(minFill, width - fixedLen));
@@ -318,7 +324,8 @@ export function renderFooter(state: AppState, width: number, progress = ""): str
       : [...lines, border(prefix) + status + border(fill + suffix)];
   }
 
-  const status = fg(theme.dim, state.status || "Ready");
+  const togglTimer = formatRunningTogglTimer(state.storage);
+  const status = fg(theme.dim, togglTimer ? `${togglTimer} · ${state.status || "Ready"}` : state.status || "Ready");
   const shortcuts = state.overlay && state.overlay !== "none"
     ? "Esc close  / commands  ? shortcuts  q quit"
     : state.focusMode

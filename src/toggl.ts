@@ -113,7 +113,30 @@ export async function connectToggl(storage: Storage, token: string): Promise<{ f
 
 export function disconnectToggl(storage: Storage): void {
   storage.setRawSetting("togglApiToken", "");
+  storage.setRawSetting("togglCurrentEntry", "");
   writeCache(storage, { defaultWorkspaceId: null, projects: [], descriptions: [], syncedAt: null });
+}
+
+function saveCurrentEntry(storage: Storage, entry: TogglTimeEntry | null): void {
+  storage.setRawSetting("togglCurrentEntry", entry ? JSON.stringify(entry) : "");
+}
+
+export function formatRunningTogglTimer(storage: Storage | undefined, now = new Date()): string | null {
+  const raw = storage?.getSetting("togglCurrentEntry");
+  if (!raw) return null;
+  try {
+    const entry = JSON.parse(raw) as TogglTimeEntry;
+    if (!entry.start || entry.stop) return null;
+    const elapsedMs = Math.max(0, now.getTime() - new Date(entry.start).getTime());
+    const elapsedMinutes = Math.max(0, Math.floor(elapsedMs / 60000));
+    const hours = Math.floor(elapsedMinutes / 60);
+    const minutes = elapsedMinutes % 60;
+    const elapsed = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+    const description = entry.description?.trim() || `#${entry.id}`;
+    return `Toggl ${elapsed} · ${description}`;
+  } catch {
+    return null;
+  }
 }
 
 function uniqueDescriptions(entries: TogglTimeEntry[]): TogglRecentDescription[] {
@@ -194,7 +217,7 @@ export async function startTogglEntry(storage: Storage, description: string, pro
   const cache = readCache(storage);
   const workspaceId = project?.workspaceId ?? cache.defaultWorkspaceId;
   if (!workspaceId) throw new Error("No Toggl workspace found. Run /toggl sync after connecting.");
-  return await togglRequest<TogglTimeEntry>(storage, `/workspaces/${workspaceId}/time_entries`, {
+  const entry = await togglRequest<TogglTimeEntry>(storage, `/workspaces/${workspaceId}/time_entries`, {
     method: "POST",
     body: JSON.stringify({
       description,
@@ -205,6 +228,8 @@ export async function startTogglEntry(storage: Storage, description: string, pro
       created_with: "cli-stealth-reader"
     })
   });
+  saveCurrentEntry(storage, entry);
+  return entry;
 }
 
 export async function logTogglEntry(storage: Storage, description: string, duration: string, projectQuery?: string): Promise<TogglTimeEntry> {
@@ -234,7 +259,9 @@ export async function stopTogglEntry(storage: Storage): Promise<TogglTimeEntry |
   if (!current?.id) return null;
   const workspaceId = current.workspace_id ?? current.wid;
   if (!workspaceId) throw new Error("Current Toggl entry has no workspace id.");
-  return await togglRequest<TogglTimeEntry>(storage, `/workspaces/${workspaceId}/time_entries/${current.id}/stop`, { method: "PATCH" });
+  const stopped = await togglRequest<TogglTimeEntry>(storage, `/workspaces/${workspaceId}/time_entries/${current.id}/stop`, { method: "PATCH" });
+  saveCurrentEntry(storage, null);
+  return stopped;
 }
 
 export function formatTogglRecents(storage: Storage): string[] {
