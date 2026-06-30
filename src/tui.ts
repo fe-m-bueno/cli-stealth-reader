@@ -42,7 +42,7 @@ function setMouseCapture(enabled: boolean): void {
   mouseCaptureEnabled = enabled;
 }
 
-function currentLines(state: AppState, width: number, height: number): string[] {
+export function currentLines(state: AppState, width: number, height: number): string[] {
   if (state.overlay === "help") {
     return commandHelp(state.helpCommand ?? undefined, width, state.theme);
   }
@@ -78,8 +78,16 @@ function currentLines(state: AppState, width: number, height: number): string[] 
     }
     state.focusBlockIndex = clampFocusBlockIndex(state, state.focusBlockIndex);
     const focusedBlockLines = renderFocusBlock(state, width);
-    const topPadding = Math.max(0, Math.floor((height - focusedBlockLines.length) / 2));
-    return [...Array.from({ length: topPadding }, () => ""), ...focusedBlockLines];
+    const focusHeader = fg(
+      state.theme.dim,
+      truncate(
+        `FOCUS · Ch ${state.chapterIndex + 1}/${state.currentBook.chapters.length} ${chapter.title} · § ${state.focusBlockIndex + 1}/${chapter.blocks.length} · j/k next · Esc exit`,
+        width
+      )
+    );
+    const focusLines = [focusHeader, "", ...focusedBlockLines];
+    const topPadding = Math.max(0, Math.floor((height - focusLines.length) / 2));
+    return [...Array.from({ length: topPadding }, () => ""), ...focusLines];
   }
 
   const chapter = state.currentBook.chapters[state.chapterIndex];

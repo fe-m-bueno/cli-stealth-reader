@@ -8,12 +8,14 @@ import {
   getScrollbarMetrics,
   renderFooter,
   renderFrame,
+  renderStatusBar,
   renderScrollbar,
   scrollbarOffsetFromThumb,
   screenResetSequence,
   stripAnsi,
   truncate
 } from "../src/screen.js";
+import { currentLines } from "../src/tui.js";
 import type { AppState, ThemePreset } from "../src/types.js";
 
 test("truncate preserves visible colored text instead of cutting it at ansi boundaries", () => {
@@ -205,6 +207,28 @@ test("normal footer does not show escape close hint", () => {
   assert.doesNotMatch(footer[0], /Esc exit focus/);
 });
 
+test("status bar includes chapter title and focus block cue", () => {
+  const state = readingState({
+    focusMode: true,
+    focusBlockIndex: 2,
+    chapterIndex: 0
+  });
+
+  const status = stripAnsi(renderStatusBar(state, 100));
+  assert.match(status, /Book · Ch 1\/2 · One/);
+  assert.match(status, /plain · focus §3 · Codex/);
+});
+
+test("focus mode renders a compact context hint above the focused block", () => {
+  const state = readingState({ focusMode: true, focusBlockIndex: 1 });
+
+  const lines = currentLines(state, 80, 10).map(stripAnsi).filter((line) => line.trim());
+
+  assert.match(lines[0]!, /FOCUS · Ch 1\/2 One · § 2\/3 · j\/k next · Esc exit/);
+  assert.match(lines.join("\n"), /second paragraph/);
+  assert.doesNotMatch(lines.join("\n"), /first paragraph/);
+});
+
 test("progress uses rendered viewport lines instead of raw block count", () => {
   const longParagraph = Array.from({ length: 120 }, (_, index) => `word${index}`).join(" ");
   const state = {
@@ -244,3 +268,48 @@ test("progress uses rendered viewport lines instead of raw block count", () => {
 
   assert.ok(bookProgressNextChapterStart >= bookProgressNearChapterEnd);
 });
+
+function readingState(overrides: Partial<AppState> = {}): AppState {
+  return {
+    theme,
+    renderMode: "plain",
+    codeLanguage: "typescript",
+    codeDensity: 3,
+    plainHighlight: true,
+    commandMode: false,
+    commandBuffer: "",
+    commandSuggestionIndex: 0,
+    progressVisibility: "book",
+    status: "Reading",
+    overlay: "none",
+    focusMode: false,
+    focusBlockIndex: 0,
+    chapterIndex: 0,
+    blockOffset: 0,
+    currentBook: {
+      id: "book",
+      title: "Book",
+      author: "Anon",
+      sourcePath: "/tmp/book.epub",
+      importHash: "hash",
+      diagnostics: [],
+      chapters: [
+        {
+          id: "ch-1",
+          index: 0,
+          title: "One",
+          href: "one",
+          depth: 0,
+          blocks: [
+            { id: "b1", type: "paragraph", text: "first paragraph" },
+            { id: "b2", type: "paragraph", text: "second paragraph" },
+            { id: "b3", type: "paragraph", text: "third paragraph" }
+          ],
+          wordCount: 6
+        },
+        { id: "ch-2", index: 1, title: "Two", href: "two", depth: 0, blocks: [{ id: "b4", type: "paragraph", text: "world" }], wordCount: 1 }
+      ]
+    },
+    ...overrides
+  } as AppState;
+}
