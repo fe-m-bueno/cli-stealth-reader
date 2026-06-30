@@ -145,8 +145,17 @@ export class Storage {
     return settings;
   }
 
+  getSetting(key: string): string | null {
+    const row = this.db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
+    return row?.value ?? null;
+  }
+
+  setRawSetting(key: string, value: string): void {
+    this.db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, value);
+  }
+
   setSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): void {
-    this.db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, String(value));
+    this.setRawSetting(key, String(value));
   }
 
   saveBook(book: CanonicalBook, renderMode: RenderMode): void {

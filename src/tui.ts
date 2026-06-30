@@ -242,6 +242,9 @@ export function renderOverlay(state: AppState, width: number, height: number): s
     case "keys":
       return KEYBOARD_SHORTCUTS.slice(0, Math.max(1, height)).map((row) => `${row.key.padEnd(14)} ${row.description}`);
     case "diagnostics":
+      if (state.integrationLines?.length) {
+        return state.integrationLines.slice(0, Math.max(1, height));
+      }
       return state.currentBook?.diagnostics.length
         ? state.currentBook.diagnostics.map((item) => `${item.severity.toUpperCase()} ${item.message}${item.context ? ` (${item.context})` : ""}`)
         : ["No diagnostics for the current book."];

@@ -8,6 +8,17 @@ import { importFile } from "./parser/index.js";
 import { renderBlocks } from "./renderers.js";
 import { computeChapterMaxOffset, getViewportLayout } from "./screen.js";
 import { openSettingsPanel } from "./settings-panel.js";
+import {
+  connectToggl,
+  disconnectToggl,
+  formatTogglRecents,
+  logTogglEntry,
+  openTogglTokenPage,
+  startTogglEntry,
+  stopTogglEntry,
+  syncToggl,
+  togglTokenPage
+} from "./toggl.js";
 import { APPEARANCE_THEMES, THEMES, applyAppearanceTheme } from "./themes.js";
 import type {
   AppState,
@@ -530,6 +541,70 @@ const handlers: Record<string, CommandHandler> = {
 
   settings: async (state) => {
     openSettingsPanel(state);
+  },
+
+  toggl: async (state, parsed) => {
+    const action = parsed.args[0]?.toLowerCase() ?? "recent";
+    const rest = parsed.args.slice(1).join(" ").trim();
+    const project = typeof parsed.flags.project === "string" ? parsed.flags.project : undefined;
+
+    if (parsed.flags.disconnect) {
+      disconnectToggl(state.storage);
+      state.status = "Toggl disconnected.";
+      return;
+    }
+
+    if (action === "auth") {
+      const token = rest;
+      if (!token || parsed.flags.open) {
+        openTogglTokenPage();
+        state.status = `Opened Toggl token page. Copy the API token, then run /toggl auth <token>. Link: ${togglTokenPage()}`;
+        return;
+      }
+      const result = await connectToggl(state.storage, token);
+      const cache = await syncToggl(state.storage);
+      state.status = `Connected Toggl${result.fullName ? ` as ${result.fullName}` : ""}. Cached ${cache.projects.length} projects and ${cache.descriptions.length} recent names.`;
+      return;
+    }
+
+    if (action === "sync") {
+      const cache = await syncToggl(state.storage);
+      state.status = `Synced Toggl: ${cache.projects.length} projects, ${cache.descriptions.length} recent names.`;
+      return;
+    }
+
+    if (action === "recent") {
+      state.overlay = "diagnostics";
+      state.overlayCursor = 0;
+      state.integrationLines = formatTogglRecents(state.storage);
+      state.status = "Opened Toggl recent projects and names.";
+      return;
+    }
+
+    if (action === "start") {
+      const description = rest || state.currentBook?.title;
+      if (!description) throw new Error("Use /toggl start <description> [--project name]");
+      const entry = await startTogglEntry(state.storage, description, project);
+      state.status = `Started Toggl timer: ${entry.description ?? description}${project ? ` (${project})` : ""}.`;
+      return;
+    }
+
+    if (action === "stop") {
+      const entry = await stopTogglEntry(state.storage);
+      state.status = entry ? `Stopped Toggl timer: ${entry.description ?? entry.id}.` : "No running Toggl timer.";
+      return;
+    }
+
+    if (action === "log") {
+      const duration = typeof parsed.flags.duration === "string" ? parsed.flags.duration : undefined;
+      const description = rest || state.currentBook?.title;
+      if (!description || !duration) throw new Error("Use /toggl log <description> --duration 25m [--project name]");
+      const entry = await logTogglEntry(state.storage, description, duration, project);
+      state.status = `Logged Toggl time: ${entry.description ?? description} (${duration})${project ? ` → ${project}` : ""}.`;
+      return;
+    }
+
+    throw new Error("Use /toggl auth|sync|recent|start|stop|log");
   },
 
   density: async (state, parsed) => {

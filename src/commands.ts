@@ -166,6 +166,27 @@ export const COMMANDS: CommandDefinition[] = [
     notes: ["Shortcut: press S from the reader to open settings."]
   },
   {
+    name: "toggl",
+    description: "Log reading time directly to Toggl Track.",
+    args: [{ name: "action" }, { name: "description" }],
+    flags: [{ name: "project", takesValue: true }, { name: "duration", takesValue: true }, { name: "open" }, { name: "disconnect" }],
+    usage: "/toggl auth|sync|recent|start|stop|log [description] [--project name] [--duration 25m]",
+    details: [
+      "auth opens the Toggl API token page; paste the token as /toggl auth <token> to connect.",
+      "sync caches recent projects and descriptions from Toggl for fuzzy project lookup.",
+      "start creates a running timer, stop stops the current timer, and log creates a finished entry ending now."
+    ],
+    examples: [
+      "/toggl auth",
+      "/toggl auth <api-token>",
+      "/toggl sync",
+      "/toggl start \"O Nome do Vento\" --project \"Reading books\"",
+      "/toggl log \"Choujin X\" --project \"Reading manga\" --duration 45m",
+      "/toggl stop"
+    ],
+    notes: ["Uses Toggl Track API v9 with API-token basic auth. The token is stored in the local app settings database."]
+  },
+  {
     name: "help",
     description: "Show help for commands.",
     args: [{ name: "command" }],
@@ -338,6 +359,7 @@ const COMMAND_CATEGORIES: Record<string, string> = {
   density: "Appearance",
   mouse: "Settings",
   settings: "Settings",
+  toggl: "Integrations",
   help: "Help",
   keyboardshortcuts: "Help"
 };
