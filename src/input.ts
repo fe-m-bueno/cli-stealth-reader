@@ -1,4 +1,4 @@
-import { applyCommandAutocomplete, commandHelp, listCommandSuggestions } from "./commands.js";
+import { applyCommandAutocomplete, commandAutocompleteIndex, commandHelp, listCommandSuggestions } from "./commands.js";
 import { applySearchHit, pushNavHistory } from "./executor.js";
 import { clampFocusBlockIndex, getChapterBlockCount, mapBlockOffsetToFocusIndex, mapFocusIndexToBlockOffset } from "./focus.js";
 import {
@@ -363,12 +363,7 @@ export async function handleInput(
     } else if (chunk === "\t") {
       const suggestions = listCommandSuggestions(state.commandBuffer);
       if (suggestions.length > 0) {
-        const nextIndex = state.commandSuggestionIndex >= suggestions.length - 1
-          ? 0
-          : state.commandSuggestionIndex + 1;
-        const appliedIndex = state.commandBuffer.trim().length === 0
-          ? state.commandSuggestionIndex
-          : nextIndex;
+        const appliedIndex = commandAutocompleteIndex(state.commandBuffer, state.commandSuggestionIndex, suggestions);
         const suggestion = suggestions[clamp(appliedIndex, 0, suggestions.length - 1)];
         state.commandBuffer = applyCommandAutocomplete(state.commandBuffer, suggestion);
         state.commandSuggestionIndex = appliedIndex;

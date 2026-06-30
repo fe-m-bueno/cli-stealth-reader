@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyCommandAutocomplete, commandHelp, listCommandSuggestions, parseSlashCommand } from "../src/commands.js";
+import { applyCommandAutocomplete, commandAutocompleteIndex, commandHelp, listCommandSuggestions, parseSlashCommand } from "../src/commands.js";
 import { stripAnsi } from "../src/screen.js";
 import type { ThemePreset } from "../src/types.js";
 
@@ -95,6 +95,25 @@ test("applies autocomplete to the command token only", () => {
   const suggestion = listCommandSuggestions("re")[0];
   assert.equal(applyCommandAutocomplete("re", suggestion), "remove");
   assert.equal(applyCommandAutocomplete("re current-book", suggestion), "remove current-book");
+});
+
+test("tab completes the highlighted prefix before cycling command suggestions", () => {
+  const suggestions = listCommandSuggestions("toggl start");
+  assert.deepEqual(suggestions.map((item) => item.name), ["toggl", "toggleprogress"]);
+
+  const firstTabIndex = commandAutocompleteIndex("toggl start", 0, suggestions);
+  assert.equal(firstTabIndex, 0);
+  assert.equal(applyCommandAutocomplete("toggl start", suggestions[firstTabIndex]), "toggl start");
+
+  const secondTabIndex = commandAutocompleteIndex("toggl", firstTabIndex, suggestions);
+  assert.equal(secondTabIndex, 1);
+  assert.equal(applyCommandAutocomplete("toggl start", suggestions[secondTabIndex]), "toggleprogress start");
+});
+
+test("toggl exact command stays ahead of toggleprogress in suggestions", () => {
+  const suggestions = listCommandSuggestions("toggl");
+  assert.equal(suggestions[0]?.name, "toggl");
+  assert.equal(suggestions[1]?.name, "toggleprogress");
 });
 
 test("renders full manual help with examples", () => {
