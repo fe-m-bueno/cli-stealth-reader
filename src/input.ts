@@ -344,7 +344,7 @@ export async function handleInput(
 
   if (state.commandMode) {
     if (chunk === "\r") {
-      const suggestions = listCommandSuggestions(state.commandBuffer);
+      const suggestions = listCommandSuggestions(state.commandBuffer, state.storage);
       if (suggestions.length > 0) {
         const suggestion = suggestions[clamp(state.commandSuggestionIndex, 0, suggestions.length - 1)];
         state.commandBuffer = applyCommandAutocomplete(state.commandBuffer, suggestion);
@@ -361,7 +361,7 @@ export async function handleInput(
       state.commandBuffer = state.commandBuffer.slice(0, -1);
       state.commandSuggestionIndex = 0;
     } else if (chunk === "\t") {
-      const suggestions = listCommandSuggestions(state.commandBuffer);
+      const suggestions = listCommandSuggestions(state.commandBuffer, state.storage);
       if (suggestions.length > 0) {
         const appliedIndex = commandAutocompleteIndex(state.commandBuffer, state.commandSuggestionIndex, suggestions);
         const suggestion = suggestions[clamp(appliedIndex, 0, suggestions.length - 1)];
@@ -369,12 +369,12 @@ export async function handleInput(
         state.commandSuggestionIndex = appliedIndex;
       }
     } else if (isDownKey(chunk)) {
-      const suggestions = listCommandSuggestions(state.commandBuffer);
+      const suggestions = listCommandSuggestions(state.commandBuffer, state.storage);
       if (suggestions.length > 0) {
         state.commandSuggestionIndex = clamp(state.commandSuggestionIndex + 1, 0, suggestions.length - 1);
       }
     } else if (isUpKey(chunk)) {
-      const suggestions = listCommandSuggestions(state.commandBuffer);
+      const suggestions = listCommandSuggestions(state.commandBuffer, state.storage);
       if (suggestions.length > 0) {
         state.commandSuggestionIndex = clamp(state.commandSuggestionIndex - 1, 0, suggestions.length - 1);
       }

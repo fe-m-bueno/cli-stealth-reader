@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseSlashCommand, listCommandSuggestions } from "../src/commands.js";
+import { parseSlashCommand, listCommandSuggestions, applyCommandAutocomplete } from "../src/commands.js";
 import { formatTogglRecents, resolveTogglProject } from "../src/toggl.js";
 import type { Storage } from "../src/storage.js";
 
@@ -55,4 +55,22 @@ test("toggl recent formatter shows cached projects and descriptions", () => {
   const lines = formatTogglRecents(fakeStorageWithCache());
   assert.ok(lines.some((line) => line.includes("Personal / Reading books")));
   assert.ok(lines.some((line) => line.includes("Choujin X")));
+});
+
+test("toggl autocomplete completes subcommands", () => {
+  const suggestions = listCommandSuggestions("toggl st", fakeStorageWithCache());
+  assert.equal(suggestions[0]?.usage, "start");
+  assert.equal(applyCommandAutocomplete("toggl st", suggestions[0]), "toggl start");
+});
+
+test("toggl autocomplete completes recent descriptions inside quotes", () => {
+  const suggestions = listCommandSuggestions('toggl start "O', fakeStorageWithCache());
+  assert.equal(suggestions[0]?.usage, '"O Nome do Vento"');
+  assert.equal(applyCommandAutocomplete('toggl start "O', suggestions[0]), 'toggl start "O Nome do Vento"');
+});
+
+test("toggl autocomplete completes project flag values", () => {
+  const suggestions = listCommandSuggestions('toggl start "O Nome do Vento" --project Read', fakeStorageWithCache());
+  assert.equal(suggestions[0]?.usage, '"Reading books"');
+  assert.equal(applyCommandAutocomplete('toggl start "O Nome do Vento" --project Read', suggestions[0]), 'toggl start "O Nome do Vento" --project "Reading books"');
 });

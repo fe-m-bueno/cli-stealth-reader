@@ -280,7 +280,7 @@ function renderCommandSuggestions(suggestions: CommandSuggestion[], width: numbe
 function renderCommandBox(state: AppState, width: number): string[] {
   const border = (s: string) => fg(state.theme.border, s);
   const innerWidth = Math.max(1, width - 4);
-  const suggestions = listCommandSuggestions(state.commandBuffer);
+  const suggestions = listCommandSuggestions(state.commandBuffer, state.storage);
   const selectedIndex = suggestions.length === 0 ? 0 : clamp(state.commandSuggestionIndex, 0, suggestions.length - 1);
   const promptText = `/${state.commandBuffer}`;
   const prompt = fg(state.theme.accent, "/") + state.commandBuffer + inverse(" ");
