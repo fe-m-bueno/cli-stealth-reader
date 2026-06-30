@@ -408,6 +408,7 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     focusMode: false,
     focusBlockIndex: 0,
     commandBuffer: "",
+    commandCursor: 0,
     commandMode: false,
     commandSuggestionIndex: 0,
     status: "Ready",

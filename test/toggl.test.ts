@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseSlashCommand, listCommandSuggestions, applyCommandAutocomplete } from "../src/commands.js";
-import { formatTogglRecents, resolveTogglProject } from "../src/toggl.js";
+import { formatRunningTogglTimer, formatTogglRecents, resolveTogglProject } from "../src/toggl.js";
 import type { Storage } from "../src/storage.js";
 
 class FakeStorage {
@@ -66,11 +66,39 @@ test("toggl autocomplete completes subcommands", () => {
 test("toggl autocomplete completes recent descriptions inside quotes", () => {
   const suggestions = listCommandSuggestions('toggl start "O', fakeStorageWithCache());
   assert.equal(suggestions[0]?.usage, '"O Nome do Vento"');
-  assert.equal(applyCommandAutocomplete('toggl start "O', suggestions[0]), 'toggl start "O Nome do Vento"');
+  assert.equal(applyCommandAutocomplete('toggl start "O', suggestions[0]), 'toggl start "O Nome do Vento" ');
 });
 
 test("toggl autocomplete completes project flag values", () => {
   const suggestions = listCommandSuggestions('toggl start "O Nome do Vento" --project Read', fakeStorageWithCache());
   assert.equal(suggestions[0]?.usage, '"Reading books"');
   assert.equal(applyCommandAutocomplete('toggl start "O Nome do Vento" --project Read', suggestions[0]), 'toggl start "O Nome do Vento" --project "Reading books"');
+});
+
+test("toggl autocomplete waits for an explicit description token", () => {
+  const suggestions = listCommandSuggestions("toggl start ", fakeStorageWithCache());
+  assert.deepEqual(suggestions, []);
+});
+
+test("toggl autocomplete completes after an opening quote and adds a trailing space", () => {
+  const suggestions = listCommandSuggestions('toggl start "', fakeStorageWithCache());
+  assert.equal(suggestions[0]?.usage, '"O Nome do Vento"');
+  assert.equal(applyCommandAutocomplete('toggl start "', suggestions[0]), 'toggl start "O Nome do Vento" ');
+});
+
+test("toggl autocomplete treats --project without a value as project completion", () => {
+  const suggestions = listCommandSuggestions('toggl start "O Nome do Vento" --project', fakeStorageWithCache());
+  assert.equal(suggestions[0]?.usage, '"Reading books"');
+  assert.equal(applyCommandAutocomplete('toggl start "O Nome do Vento" --project', suggestions[0]), 'toggl start "O Nome do Vento" --project "Reading books"');
+});
+
+test("toggl autocomplete matches projects by partial client text", () => {
+  const suggestions = listCommandSuggestions('toggl start "O Nome do Vento" --project Pers', fakeStorageWithCache());
+  assert.equal(suggestions[0]?.usage, '"Reading books"');
+});
+
+test("running Toggl timer is formatted for the footer", () => {
+  const storage = new FakeStorage();
+  storage.setRawSetting("togglCurrentEntry", JSON.stringify({ description: "O Nome do Vento", start: "2026-06-30T12:00:00.000Z" }));
+  assert.equal(formatRunningTogglTimer(storage as unknown as Storage, new Date("2026-06-30T12:42:00.000Z")), "Toggl 42m · O Nome do Vento");
 });
