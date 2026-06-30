@@ -185,6 +185,29 @@ test("books overlay shows descending arrow by default", () => {
   } finally { cleanup(); }
 });
 
+test("books overlay documents management actions and richer row metadata", () => {
+  const { storage, cleanup } = makeTempStorage();
+  try {
+    insertBook(storage, "b1", "Tagged Book", "A", Date.now() - 60_000, 0.42);
+    storage.addTag("b1", "work");
+    const state = makeState(storage, {
+      overlay: "books",
+      booksTagMap: storage.listTagsByBookId(),
+      booksTagFilter: "work"
+    });
+    const lines = renderOverlay(state, 100, 20).map(stripAnsi);
+    assert.ok(lines[0]?.includes("Filter: #work"), `Expected tag filter affordance, got: ${lines[0]}`);
+    assert.ok(lines[1]?.includes("Enter continue/open"), `Expected continue action hint, got: ${lines[1]}`);
+    assert.ok(lines[1]?.includes("/resume latest"), `Expected resume action hint, got: ${lines[1]}`);
+    assert.ok(lines[1]?.includes("b bookmarks"), `Expected bookmark action hint, got: ${lines[1]}`);
+    assert.ok(lines[1]?.includes("n notes"), `Expected notes action hint, got: ${lines[1]}`);
+    assert.ok(lines[1]?.includes("/book"), `Expected search affordance, got: ${lines[1]}`);
+    assert.ok(lines.some((line) => line.includes("[continue]")), `Expected continue marker, got: ${lines.join(" | ")}`);
+    assert.ok(lines.some((line) => line.includes("42%")), `Expected progress metadata, got: ${lines.join(" | ")}`);
+    assert.ok(lines.some((line) => line.includes("#work")), `Expected tag metadata, got: ${lines.join(" | ")}`);
+  } finally { cleanup(); }
+});
+
 // ── keyboard keys s and r ─────────────────────────────────────────────────────
 
 test("s key cycles sort key in books overlay", async () => {
@@ -226,6 +249,25 @@ test("s and r keys reset overlayCursor to 0", async () => {
     state.overlayCursor = 0;
     await handleInput("r", state, redraw, noop, () => {}, noop);
     assert.equal(state.overlayCursor, 0);
+  } finally { cleanup(); }
+});
+
+test("books overlay b and n open selected book management overlays", async () => {
+  const { storage, cleanup } = makeTempStorage();
+  try {
+    storage.saveBook(book, "plain");
+    const state = makeState(storage, { overlay: "books" });
+
+    await handleInput("b", state, redraw, noop, () => {}, noop);
+    assert.equal(state.overlay, "bookmarks");
+    assert.equal(state.currentBook?.id, "b1");
+    assert.match(state.status, /Opened bookmarks/);
+
+    state.overlay = "books";
+    await handleInput("n", state, redraw, noop, () => {}, noop);
+    assert.equal(state.overlay, "notes");
+    assert.equal(state.currentBook?.id, "b1");
+    assert.match(state.status, /Opened notes/);
   } finally { cleanup(); }
 });
 

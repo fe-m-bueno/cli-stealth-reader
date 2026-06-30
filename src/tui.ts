@@ -42,7 +42,7 @@ function setMouseCapture(enabled: boolean): void {
   mouseCaptureEnabled = enabled;
 }
 
-function currentLines(state: AppState, width: number, height: number): string[] {
+export function currentLines(state: AppState, width: number, height: number): string[] {
   if (state.overlay === "help") {
     return commandHelp(state.helpCommand ?? undefined, width, state.theme);
   }
@@ -78,8 +78,16 @@ function currentLines(state: AppState, width: number, height: number): string[] 
     }
     state.focusBlockIndex = clampFocusBlockIndex(state, state.focusBlockIndex);
     const focusedBlockLines = renderFocusBlock(state, width);
-    const topPadding = Math.max(0, Math.floor((height - focusedBlockLines.length) / 2));
-    return [...Array.from({ length: topPadding }, () => ""), ...focusedBlockLines];
+    const focusHeader = fg(
+      state.theme.dim,
+      truncate(
+        `FOCUS · Ch ${state.chapterIndex + 1}/${state.currentBook.chapters.length} ${chapter.title} · § ${state.focusBlockIndex + 1}/${chapter.blocks.length} · j/k next · Esc exit`,
+        width
+      )
+    );
+    const focusLines = [focusHeader, "", ...focusedBlockLines];
+    const topPadding = Math.max(0, Math.floor((height - focusLines.length) / 2));
+    return [...Array.from({ length: topPadding }, () => ""), ...focusLines];
   }
 
   const chapter = state.currentBook.chapters[state.chapterIndex];
@@ -145,6 +153,7 @@ export function renderOverlay(state: AppState, width: number, height: number): s
         });
     case "books": {
       const books = state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir, state.booksTagFilter ?? undefined);
+      const latestBookId = state.storage.getLatestBookId();
       const tagsByBookId = state.booksTagMap;
       const sortKeyLabels: Record<string, string> = {
         lastOpened: "Last Opened",
@@ -153,21 +162,34 @@ export function renderOverlay(state: AppState, width: number, height: number): s
         progress: "Progress"
       };
       const dirArrow = state.librarySortDir === "asc" ? "↑" : "↓";
-      const filterNote = state.booksTagFilter ? `  [tag: #${state.booksTagFilter}]` : "";
+      const filterNote = state.booksTagFilter ? `  Filter: #${state.booksTagFilter} (Esc clears)` : "";
       const header = truncate(
-        `  Sort: ${sortKeyLabels[state.librarySortKey]} ${dirArrow}   (Press s to change, r to reverse)${filterNote}`,
+        `  Library · Sort: ${sortKeyLabels[state.librarySortKey]} ${dirArrow}${filterNote}`,
+        width
+      );
+      const continueAction = latestBookId
+        ? state.booksTagFilter
+          ? "Enter continue/open"
+          : "Enter continues selected book"
+        : "Enter open";
+      const resumeHint = state.booksTagFilter ? "/resume latest" : "/resume opens latest";
+      const actionHint = truncate(
+        `  ${continueAction} · ${resumeHint} · b bookmarks · n notes · /book search`,
         width
       );
       return [
         header,
+        actionHint,
         ...books.map((book, index) => {
           const marker = index === state.overlayCursor ? ">" : " ";
+          const isLatest = book.id === latestBookId;
           const progressTag = book.bookProgress !== null
             ? `[Ch.${(book.chapterIndex ?? 0) + 1} · ${Math.round(book.bookProgress * 100)}%]`
             : "[not started]";
+          const latestTag = isLatest ? "[continue] " : "";
           const tags = tagsByBookId.get(book.id) ?? [];
           const tagsStr = tags.length > 0 ? `  ${tags.map((t) => `#${t}`).join(" ")}` : "";
-          const right = `  ${progressTag}${tagsStr}`;
+          const right = `  ${latestTag}${progressTag}${tagsStr}`;
           const titleAuthor = truncate(`${book.title}  —  ${book.author}`, Math.max(1, width - 2 - right.length));
           return `${marker} ${titleAuthor}${right}`;
         })

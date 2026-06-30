@@ -169,6 +169,8 @@ export interface CommandSuggestion {
   name: string;
   usage: string;
   description: string;
+  category: string;
+  detail: string;
   aliases: string[];
   matchedAlias?: string;
 }

@@ -50,13 +50,14 @@ function showChapterTransition(
   redraw: () => void,
   syncPos: (state: AppState) => void,
   message: string,
-  targetChapterIndex: number
+  targetChapterIndex: number,
+  requiredStage = 3
 ): void {
   const previousStage = state.chapterTransition?.targetChapterIndex === targetChapterIndex
     ? state.chapterTransition.stage
     : 0;
-  const stage = Math.min(3, previousStage + 1);
-  if (stage === 3) {
+  const stage = Math.min(requiredStage, previousStage + 1);
+  if (stage === requiredStage) {
     pushNavHistory(state);
     state.chapterIndex = targetChapterIndex;
     state.blockOffset = 0;
@@ -74,9 +75,16 @@ function showChapterTransition(
     targetChapterIndex,
     stage
   };
-  state.status = stage === 1
-    ? `Scroll again for ${message}`
-    : `One more scroll to confirm ${message}`;
+  const remaining = requiredStage - stage;
+  if (requiredStage > 3) {
+    state.status = remaining === 1
+      ? `Pull once more · Release to open ${message}`
+      : `Pull ${remaining} more · ${message}`;
+  } else {
+    state.status = stage === 1
+      ? `Scroll again for ${message}`
+      : `One more scroll to confirm ${message}`;
+  }
   redraw();
 }
 
@@ -531,14 +539,33 @@ export async function handleInput(
     } else if (chunk === "\u001b") {
       state.overlay = "none";
       state.booksTagFilter = null;
+    } else if ((chunk === "b" || chunk === "n") && state.overlay === "books") {
+      const books = state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir, state.booksTagFilter ?? undefined);
+      const selected = books[state.overlayCursor];
+      const book = selected ? state.storage.getBook(selected.id) : null;
+      if (book) {
+        state.currentBook = book;
+        state.searchState = null;
+        const existing = state.storage.getPosition(book.id);
+        state.chapterIndex = existing?.chapterIndex ?? 0;
+        state.blockOffset = existing?.blockOffset ?? 0;
+        state.overlay = chunk === "b" ? "bookmarks" : "notes";
+        state.overlayCursor = 0;
+        state.booksTagFilter = null;
+        state.status = chunk === "b"
+          ? `Opened bookmarks for ${book.title}.`
+          : `Opened notes for ${book.title}.`;
+      }
     } else if (chunk === "s" && state.overlay === "books") {
       const cycle: LibrarySortKey[] = ["lastOpened", "title", "author", "progress"];
       const current = cycle.indexOf(state.librarySortKey);
       state.librarySortKey = cycle[(current + 1) % cycle.length]!;
       state.overlayCursor = 0;
+      state.status = `Library sort: ${state.librarySortKey}.`;
     } else if (chunk === "r" && state.overlay === "books") {
       state.librarySortDir = state.librarySortDir === "asc" ? "desc" : "asc";
       state.overlayCursor = 0;
+      state.status = `Library sort direction: ${state.librarySortDir}.`;
     } else if (chunk === "d" && state.overlay === "bookmarks" && state.currentBook) {
       const bookmarks = state.storage.listBookmarks(state.currentBook.id);
       const selected = bookmarks[state.overlayCursor];
@@ -724,11 +751,12 @@ export async function handleInput(
         redraw();
         return;
       }
+      const requiredStage = isMouseWheelDown(chunk) ? 4 : 3;
       if (!state.chapterTransition || state.chapterTransition.targetChapterIndex !== nextChapter.index) {
-        showChapterTransition(state, redraw, syncPos, `Chapter ${nextChapter.index + 1}: ${nextChapter.title}`, nextChapter.index);
+        showChapterTransition(state, redraw, syncPos, `Chapter ${nextChapter.index + 1}: ${nextChapter.title}`, nextChapter.index, requiredStage);
         return;
       }
-      showChapterTransition(state, redraw, syncPos, state.chapterTransition.message, state.chapterTransition.targetChapterIndex);
+      showChapterTransition(state, redraw, syncPos, state.chapterTransition.message, state.chapterTransition.targetChapterIndex, requiredStage);
       return;
     }
 
@@ -800,12 +828,13 @@ export async function handleInput(
       return;
     }
 
+    const requiredStage = isMouseWheelDown(chunk) ? 4 : 3;
     if (!state.chapterTransition || state.chapterTransition.targetChapterIndex !== nextChapter.index) {
-      showChapterTransition(state, redraw, syncPos, `Chapter ${nextChapter.index + 1}: ${nextChapter.title}`, nextChapter.index);
+      showChapterTransition(state, redraw, syncPos, `Chapter ${nextChapter.index + 1}: ${nextChapter.title}`, nextChapter.index, requiredStage);
       return;
     }
 
-    showChapterTransition(state, redraw, syncPos, state.chapterTransition.message, state.chapterTransition.targetChapterIndex);
+    showChapterTransition(state, redraw, syncPos, state.chapterTransition.message, state.chapterTransition.targetChapterIndex, requiredStage);
     return;
   } else if (chunk === "k" || isDownKey(chunk) || isMouseWheelDown(chunk)) {
     cancelChapterTransition();
@@ -876,13 +905,14 @@ export async function handleInput(
   }
   if (state.chapterTransition && state.currentBook && atChapterEnd && isForwardScrollIntent) {
     const nextChapter = state.currentBook.chapters[state.chapterTransition.targetChapterIndex];
-    if (nextChapter && state.chapterTransition.stage < 3 && state.chapterTransition.targetChapterIndex === state.chapterIndex + 1) {
+    if (nextChapter && state.chapterTransition.stage < 4 && state.chapterTransition.targetChapterIndex === state.chapterIndex + 1) {
       showChapterTransition(
         state,
         redraw,
         syncPos,
         `Chapter ${nextChapter.index + 1}: ${nextChapter.title}`,
-        nextChapter.index
+        nextChapter.index,
+        isMouseWheelDown(chunk) ? 4 : 3
       );
       return;
     }
