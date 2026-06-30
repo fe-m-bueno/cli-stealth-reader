@@ -257,13 +257,21 @@ function renderBottomRight(text: string, width: number, theme: ThemePreset): str
 function renderCommandSuggestions(suggestions: CommandSuggestion[], width: number, theme: ThemePreset, selectedIndex: number): string[] {
   const limit = Math.max(1, Math.min(7, suggestions.length));
   const start = clamp(selectedIndex - Math.floor(limit / 2), 0, Math.max(0, suggestions.length - limit));
-  return suggestions.slice(start, start + limit).map((suggestion, index) => {
+  const visible = suggestions.slice(start, start + limit);
+  const categoryWidth = Math.min(14, Math.max(8, ...visible.map((suggestion) => suggestion.category.length)));
+  const usageWidth = Math.max(12, Math.min(34, width - categoryWidth - 8));
+  const descriptionWidth = Math.max(10, width - categoryWidth - usageWidth - 8);
+  return visible.map((suggestion, index) => {
     const actualIndex = start + index;
     const marker = actualIndex === selectedIndex ? fg(theme.accent, ">") : " ";
     const usage = actualIndex === selectedIndex
       ? fg(theme.accent, suggestion.usage)
       : suggestion.usage;
-    return `${marker} ${padAnsi(truncate(usage, Math.max(1, width - 26)), Math.max(1, width - 26))} ${fg(theme.dim, truncate(suggestion.description, 22))}`;
+    const category = fg(actualIndex === selectedIndex ? theme.warning : theme.dim, suggestion.category.padEnd(categoryWidth));
+    const description = actualIndex === selectedIndex && suggestion.detail
+      ? `${suggestion.description} (${suggestion.detail})`
+      : suggestion.description;
+    return `${marker} ${category} ${padAnsi(truncate(usage, usageWidth), usageWidth)} ${fg(theme.dim, truncate(description, descriptionWidth))}`;
   });
 }
 
@@ -278,6 +286,8 @@ function renderCommandBox(state: AppState, width: number): string[] {
   const lines = [
     border(`╭${"─".repeat(innerWidth + 2)}╮`),
     `${border("│")} ${promptLine} ${border("│")}`,
+    border(`├${"─".repeat(innerWidth + 2)}┤`),
+    `${border("│")} ${padAnsi(fg(state.theme.dim, "Type to filter · ↑/↓ choose · Tab complete · Enter run · /help for manual"), innerWidth)} ${border("│")}`,
     border(`╰${"─".repeat(innerWidth + 2)}╯`)
   ];
 

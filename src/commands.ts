@@ -311,6 +311,41 @@ for (const command of COMMANDS) {
   }
 }
 
+const COMMAND_CATEGORIES: Record<string, string> = {
+  prev: "Navigation",
+  next: "Navigation",
+  chapters: "Navigation",
+  goto: "Navigation",
+  search: "Navigation",
+  changebook: "Library",
+  resume: "Library",
+  add: "Library",
+  remove: "Library",
+  removecurrent: "Library",
+  mark: "Annotations",
+  marks: "Annotations",
+  delmark: "Annotations",
+  note: "Annotations",
+  tag: "Annotations",
+  tags: "Annotations",
+  export: "Data",
+  import: "Data",
+  colorscheme: "Appearance",
+  theme: "Appearance",
+  toggleprogress: "Appearance",
+  mode: "Appearance",
+  highlight: "Appearance",
+  density: "Appearance",
+  mouse: "Settings",
+  settings: "Settings",
+  help: "Help",
+  keyboardshortcuts: "Help"
+};
+
+function commandCategory(command: CommandDefinition): string {
+  return COMMAND_CATEGORIES[command.name] ?? "Other";
+}
+
 function tokenize(input: string): string[] {
   const tokens: string[] = [];
   let current = "";
@@ -410,6 +445,22 @@ function formatArgument(arg: NonNullable<CommandDefinition["args"]>[number]): st
 function formatFlag(flag: NonNullable<CommandDefinition["flags"]>[number]): string {
   const names = [flag.alias ? `-${flag.alias}` : null, `--${flag.name}`].filter(Boolean).join(", ");
   return flag.takesValue ? `${names} <value>` : names;
+}
+
+function commandSuggestionDetail(command: CommandDefinition, matchedAlias?: string): string {
+  const parts: string[] = [];
+  if (matchedAlias && matchedAlias !== command.name) {
+    parts.push(`alias /${matchedAlias}`);
+  } else if (command.aliases?.length) {
+    parts.push(`alias ${command.aliases.map((alias) => `/${alias}`).join(", ")}`);
+  }
+  if (command.flags?.length) {
+    parts.push(`flags ${command.flags.map(formatFlag).join(", ")}`);
+  }
+  if (command.examples?.[0]) {
+    parts.push(`try ${command.examples[0]}`);
+  }
+  return parts.join(" · ");
 }
 
 function commandManual(command: CommandDefinition): string[] {
@@ -628,6 +679,8 @@ export function listCommandSuggestions(buffer: string): CommandSuggestion[] {
       name: command.name,
       usage: command.usage,
       description: command.description,
+      category: commandCategory(command),
+      detail: commandSuggestionDetail(command, matchedAlias),
       aliases: command.aliases ?? [],
       matchedAlias: matchedAlias === command.name ? undefined : matchedAlias
     });

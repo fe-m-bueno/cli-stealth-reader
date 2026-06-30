@@ -197,9 +197,12 @@ test("books overlay documents management actions and richer row metadata", () =>
     });
     const lines = renderOverlay(state, 100, 20).map(stripAnsi);
     assert.ok(lines[0]?.includes("Filter: #work"), `Expected tag filter affordance, got: ${lines[0]}`);
+    assert.ok(lines[1]?.includes("Enter continue/open"), `Expected continue action hint, got: ${lines[1]}`);
+    assert.ok(lines[1]?.includes("/resume latest"), `Expected resume action hint, got: ${lines[1]}`);
     assert.ok(lines[1]?.includes("b bookmarks"), `Expected bookmark action hint, got: ${lines[1]}`);
     assert.ok(lines[1]?.includes("n notes"), `Expected notes action hint, got: ${lines[1]}`);
     assert.ok(lines[1]?.includes("/book"), `Expected search affordance, got: ${lines[1]}`);
+    assert.ok(lines.some((line) => line.includes("[continue]")), `Expected continue marker, got: ${lines.join(" | ")}`);
     assert.ok(lines.some((line) => line.includes("42%")), `Expected progress metadata, got: ${lines.join(" | ")}`);
     assert.ok(lines.some((line) => line.includes("#work")), `Expected tag metadata, got: ${lines.join(" | ")}`);
   } finally { cleanup(); }
