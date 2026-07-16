@@ -89,4 +89,6 @@ test("shortcut modal exposes clickable close and row hit areas", () => {
     shortcutModalHitTest(app, 100, 30, geometry.x + 2, geometry.entriesY),
     { kind: "row", index: 0 }
   );
+  assert.equal(shortcutModalHitTest(app, 100, 30, geometry.x - 1, geometry.entriesY), null);
+  assert.equal(shortcutModalHitTest(app, 100, 30, geometry.x + geometry.width + 1, geometry.entriesY), null);
 });

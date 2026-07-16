@@ -18,6 +18,7 @@ import {
   renderFooter,
   renderScrollbar,
   renderStatusBar,
+  selectMainViewportLines,
   truncate
 } from "./screen.js";
 import {
@@ -303,24 +304,19 @@ function draw(state: AppState): void {
   if (state.overlay === "help") {
     state.overlayCursor = clamp(state.overlayCursor, 0, helpMaxOffset);
   }
+  const fixedOverlay = state.overlay === "settings" || state.overlay === "keys";
   const maxOffset = state.overlay === "help"
     ? helpMaxOffset
-    : state.overlay === "settings"
+    : fixedOverlay
     ? 0
     : state.focusMode
     ? 0
     : computeChapterMaxOffset(state, layout.contentWidth, layout.bodyHeight);
-  if (state.overlay !== "help" && !state.focusMode) {
+  if (state.overlay !== "help" && !fixedOverlay && !state.focusMode) {
     state.blockOffset = clamp(state.blockOffset, 0, maxOffset);
   }
-  const mainLines = state.overlay === "help"
-    ? allMainLines.slice(state.overlayCursor, state.overlayCursor + layout.bodyHeight)
-    : state.overlay === "settings"
-    ? allMainLines.slice(0, layout.bodyHeight)
-    : state.focusMode
-    ? allMainLines.slice(0, layout.bodyHeight)
-    : allMainLines.slice(state.blockOffset, state.blockOffset + layout.bodyHeight);
-  const transitionLine = chapterTransitionLine(state, layout.contentWidth);
+  const mainLines = selectMainViewportLines(state, allMainLines, layout.bodyHeight);
+  const transitionLine = state.overlay === "none" ? chapterTransitionLine(state, layout.contentWidth) : null;
   if (transitionLine) {
     const transitionRow = Math.min(mainLines.length, layout.bodyHeight - 1);
     const nextLines = [...mainLines];

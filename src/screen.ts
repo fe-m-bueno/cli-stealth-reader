@@ -88,7 +88,8 @@ export function getViewportLayout(state: AppState, width: number, height: number
   const baseContentWidth = Math.max(1, mainWidth - 2 - scrollbarWidth);
   const readingLayoutActive = Boolean(state.currentBook)
     && state.overlay !== "settings"
-    && state.overlay !== "help";
+    && state.overlay !== "help"
+    && state.overlay !== "keys";
   const requestedMargin = readingLayoutActive ? clamp(state.marginSize ?? 0, 0, 30) : 0;
   const maxMargin = Math.max(0, Math.floor((baseContentWidth - Math.min(20, baseContentWidth)) / 2));
   const appliedMargin = Math.min(requestedMargin, maxMargin);
@@ -117,6 +118,16 @@ export function computeWindowStart(length: number, visibleCount: number, cursor:
       Math.max(0, length - visibleCount)
     )
   );
+}
+
+export function selectMainViewportLines(state: AppState, lines: string[], bodyHeight: number): string[] {
+  if (state.overlay === "help") {
+    return lines.slice(state.overlayCursor, state.overlayCursor + bodyHeight);
+  }
+  if (state.overlay === "settings" || state.overlay === "keys" || state.focusMode) {
+    return lines.slice(0, bodyHeight);
+  }
+  return lines.slice(state.blockOffset, state.blockOffset + bodyHeight);
 }
 
 function ensureLayoutMetrics(state: AppState, mainWidth: number, bodyHeight: number) {
@@ -402,7 +413,13 @@ export function renderFooter(state: AppState, width: number, progress = ""): str
 
   const togglTimer = formatRunningTogglTimer(state.storage);
   const status = fg(theme.dim, togglTimer ? `${togglTimer} · ${state.status || "Ready"}` : state.status || "Ready");
-  const shortcuts = state.overlay && state.overlay !== "none"
+  const shortcuts = state.overlay === "keys"
+    ? [
+        shortcutHint(theme, "Esc", "close"),
+        shortcutHint(theme, "/", "search"),
+        shortcutHint(theme, "Ctrl+.", "close")
+      ].join(border("  │  "))
+    : state.overlay && state.overlay !== "none"
     ? [
         shortcutHint(theme, "Esc", "close"),
         shortcutHint(theme, "/", "commands"),

@@ -226,6 +226,9 @@ export function shortcutModalHitTest(
   if (y < geometry.entriesY || y >= geometry.entriesY + geometry.visibleRows) {
     return null;
   }
+  if (x <= geometry.x || x >= geometry.x + geometry.width - 1) {
+    return null;
+  }
   const rows = shortcutPanelRows(state);
   const start = computeWindowStart(rows.length, geometry.visibleRows, state.overlayCursor);
   const index = start + (y - geometry.entriesY);

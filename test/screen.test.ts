@@ -12,6 +12,7 @@ import {
   renderFrame,
   renderStatusBar,
   renderScrollbar,
+  selectMainViewportLines,
   scrollbarOffsetFromThumb,
   screenResetSequence,
   stripAnsi,
@@ -61,6 +62,32 @@ test("overlay window keeps the cursor visible", () => {
   assert.equal(computeWindowStart(50, 10, 0), 0);
   assert.equal(computeWindowStart(50, 10, 25), 20);
   assert.equal(computeWindowStart(50, 10, 49), 40);
+});
+
+test("shortcut modal viewport stays anchored while the book is scrolled", () => {
+  const state = {
+    overlay: "keys",
+    overlayCursor: 0,
+    blockOffset: 12,
+    focusMode: false
+  } as AppState;
+  const lines = ["Keyboard Shortcuts", "search", "Essentials", "Send"];
+
+  assert.deepEqual(selectMainViewportLines(state, lines, 3), lines.slice(0, 3));
+  assert.equal(state.blockOffset, 12);
+});
+
+test("shortcut modal ignores reader margins and font scale", () => {
+  const state = readingState({
+    overlay: "keys",
+    marginSize: 8,
+    fontScale: 1.3
+  });
+
+  const layout = getViewportLayout(state, 120, 40);
+
+  assert.equal(layout.contentPadding, 0);
+  assert.equal(layout.contentWidth, 118);
 });
 
 test("scrollbar offset mapping follows thumb geometry", () => {
@@ -157,7 +184,7 @@ test("normal footer keeps progress on a separate bottom-right line", () => {
   assert.ok(footer[1].startsWith(" "));
 });
 
-test("overlay footer advertises escape close hint", () => {
+test("shortcut overlay footer advertises its actual controls", () => {
   const state = {
     theme,
     commandMode: false,
@@ -174,7 +201,9 @@ test("overlay footer advertises escape close hint", () => {
 
   const footer = renderFooter(state, 100).map(stripAnsi);
   assert.match(footer[0], /Esc:close/);
-  assert.match(footer[0], /Ctrl\+\.\:shortcuts/);
+  assert.match(footer[0], /\/:search/);
+  assert.match(footer[0], /Ctrl\+\.\:close/);
+  assert.doesNotMatch(footer[0], /q:quit/);
 });
 
 test("focus mode footer advertises escape exit hint", () => {
