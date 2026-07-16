@@ -4,7 +4,6 @@ import { clampFocusBlockIndex, mapFocusIndexToBlockOffset, renderFocusBlock } fr
 import { handleInput } from "./input.js";
 import { bg, bold, fg } from "./color.js";
 import { discoverBooks } from "./discovery.js";
-import { KEYBOARD_SHORTCUTS } from "./help.js";
 import { renderBlocks } from "./renderers.js";
 import {
   clamp,
@@ -37,6 +36,7 @@ import {
   applyAppearanceTheme
 } from "./themes.js";
 import { renderSettingsPanel } from "./settings-panel.js";
+import { renderShortcutPanel } from "./shortcuts-panel.js";
 import type { AppState, PaceState } from "./types.js";
 
 function loadGlobalPace(storage: Storage): Pick<PaceState, "globalWpm" | "globalActiveMs"> {
@@ -65,6 +65,10 @@ export function currentLines(state: AppState, width: number, height: number): st
 
   if (state.overlay === "settings") {
     return renderSettingsPanel(state, width, height);
+  }
+
+  if (state.overlay === "keys") {
+    return renderShortcutPanel(state, width, height);
   }
 
   if (!state.currentBook) {
@@ -258,8 +262,6 @@ export function renderOverlay(state: AppState, width: number, height: number): s
       });
     case "help":
       return commandHelp().slice(0, Math.max(1, height));
-    case "keys":
-      return KEYBOARD_SHORTCUTS.slice(0, Math.max(1, height)).map((row) => `${row.key.padEnd(14)} ${row.description}`);
     case "diagnostics":
       if (state.integrationLines?.length) {
         return state.integrationLines.slice(0, Math.max(1, height));
@@ -334,13 +336,13 @@ function draw(state: AppState): void {
     : state.focusMode
     ? mapFocusIndexToBlockOffset(state, layout.contentWidth, state.focusBlockIndex)
     : state.blockOffset;
-  const scrollbar = state.currentBook && state.overlay !== "settings"
+  const scrollbar = state.currentBook && state.overlay !== "settings" && state.overlay !== "keys"
     ? renderScrollbar(allMainLines.length, layout.bodyHeight, effectiveOffset, state.theme, state.overlay === "help" ? false : state.focusMode)
     : state.overlay === "help"
       ? renderScrollbar(allMainLines.length, layout.bodyHeight, effectiveOffset, state.theme, false)
     : [];
   const originalOffset = state.blockOffset;
-  const progress = state.overlay === "help" || state.overlay === "settings"
+  const progress = state.overlay === "help" || state.overlay === "settings" || state.overlay === "keys"
     ? ""
     : (() => {
         state.blockOffset = effectiveOffset;
@@ -478,6 +480,9 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     booksTagMap: new Map(),
     helpCommand: null,
     mouseCapture: settings.mouseCapture,
+    shortcutCollapsedCategories: new Set(["navigation", "commands", "view"]),
+    shortcutSearchBuffer: "",
+    shortcutSearchMode: false,
     settingsDraft: null,
     settingsSearchBuffer: "",
     settingsSearchMode: false
@@ -504,7 +509,7 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
   process.stdin.setRawMode?.(true);
   process.stdin.resume();
   process.stdin.setEncoding("utf8");
-  process.stdout.write("\x1b[?1007h\x1b[?1049h\x1b[?25l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
+  process.stdout.write("\x1b[?1007h\x1b[?1049h\x1b[>1u\x1b[?25l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
 
   const redraw = () => draw(state);
   redraw();

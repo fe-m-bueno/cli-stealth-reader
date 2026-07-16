@@ -19,7 +19,7 @@ export const KEYBOARD_SHORTCUTS: Array<{ category: string; key: string; descript
   { category: "commands", key: "d", description: "Delete selected bookmark (inside bookmark overlay)" },
   { category: "commands", key: "s (books)", description: "Cycle sort key in book library" },
   { category: "commands", key: "r (books)", description: "Reverse sort direction in book library" },
-  { category: "commands", key: "?", description: "Open keyboard shortcuts" },
+  { category: "commands", key: "Ctrl+. / Ctrl+X", description: "Open keyboard shortcuts" },
   { category: "view", key: "m", description: "Cycle render mode (plain → typescript → python → rust)" },
   { category: "view", key: "f", description: "Toggle focus mode (single block centered)" },
   { category: "view", key: "c", description: "Open colorscheme picker" },

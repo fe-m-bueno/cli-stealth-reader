@@ -8,6 +8,7 @@ import { importFile } from "./parser/index.js";
 import { renderBlocks } from "./renderers.js";
 import { computeChapterMaxOffset, getViewportLayout } from "./screen.js";
 import { openSettingsPanel } from "./settings-panel.js";
+import { openShortcutHelp } from "./shortcuts-panel.js";
 import {
   connectToggl,
   disconnectToggl,
@@ -572,7 +573,7 @@ const handlers: Record<string, CommandHandler> = {
     state.storage.setSetting("mouseCapture", state.mouseCapture);
     state.mouseDrag = null;
     state.status = state.mouseCapture
-      ? "Mouse capture on: scrollbar drag enabled; use Shift-drag for terminal selection."
+      ? "Mouse capture on: clicks and scrollbar drag enabled; use Shift-drag for terminal selection."
       : "Mouse capture off: native selection enabled; wheel and keyboard scrolling remain active.";
   },
 
@@ -584,8 +585,7 @@ const handlers: Record<string, CommandHandler> = {
   },
 
   keyboardshortcuts: async (state) => {
-    state.overlay = "keys";
-    state.status = "Opened keyboard shortcuts";
+    openShortcutHelp(state);
   },
 
   settings: async (state) => {

@@ -6,7 +6,7 @@ import path from "node:path";
 import { executeCommand } from "../src/executor.js";
 import { handleInput } from "../src/input.js";
 import { createEmptyPaceState } from "../src/reading-pace.js";
-import { computeChapterMaxOffset, getScrollbarMetrics, getViewportLayout, stripAnsi } from "../src/screen.js";
+import { computeChapterMaxOffset, footerHeight, getScrollbarMetrics, getViewportLayout, renderFooter, stripAnsi } from "../src/screen.js";
 import { renderSettingsPanel } from "../src/settings-panel.js";
 import { APPEARANCE_THEMES, THEMES } from "../src/themes.js";
 import { renderOverlay } from "../src/tui.js";
@@ -122,6 +122,7 @@ function makeStorageBase() {
     getBook: () => currentBook,
     removeBook: () => {},
     getLatestBookId: () => null,
+    getSetting: () => null,
     setSetting: () => {},
     saveSettings: () => {},
     saveCommandHistory: () => {},
@@ -541,7 +542,7 @@ test("focus mode maps k forward and j backward", async () => {
   assert.equal(state.focusBlockIndex, 1);
 });
 
-test("focus mode escape closes shortcut aside without leaving focus", async () => {
+test("Ctrl+. opens shortcut help and escape closes it without leaving focus", async () => {
   const state = makeState({
     overlay: "none",
     currentBook: focusBook,
@@ -549,13 +550,55 @@ test("focus mode escape closes shortcut aside without leaving focus", async () =
     focusBlockIndex: 1
   });
 
-  await handleInput("?", state, redraw, noop, () => {}, noop);
+  await handleInput("\u001b[46;5u", state, redraw, noop, () => {}, noop);
   assert.equal(state.overlay, "keys");
 
   await handleInput("\u001b", state, redraw, noop, () => {}, noop);
   assert.equal(state.overlay, "none");
   assert.equal(state.focusMode, true);
   assert.equal(state.focusBlockIndex, 1);
+});
+
+test("Ctrl+X is a compatible shortcut-help fallback and ? remains ordinary input", async () => {
+  const state = makeState({ overlay: "none", currentBook: focusBook });
+
+  await handleInput("?", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "none");
+
+  await handleInput("\u0018", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "keys");
+  assert.equal(state.shortcutCollapsedCategories?.has("navigation"), true);
+
+  await handleInput("\u001b[120;5u", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "none");
+});
+
+test("Kitty-protocol Escape closes shortcut help", async () => {
+  const state = makeState({ overlay: "none" });
+  await handleInput("\u001b[46;5u", state, redraw, noop, () => {}, noop);
+  await handleInput("\u001b[27u", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "none");
+});
+
+test("clicking the Ctrl+. footer hint opens shortcut help", async () => {
+  const state = makeState({ overlay: "none", currentBook: null, progressVisibility: "hidden" });
+  const width = process.stdout.columns || 120;
+  const height = process.stdout.rows || 40;
+  const footer = stripAnsi(renderFooter(state, width)[0] ?? "");
+  const x = footer.indexOf("Ctrl+.:shortcuts") + 1;
+  const y = height - footerHeight(state, width);
+  assert.ok(x > 0);
+
+  await handleInput(`\u001b[<0;${x};${y}M`, state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "keys");
+});
+
+test("batched Ctrl+X and slash input closes shortcuts then opens the command bar", async () => {
+  const state = makeState({ overlay: "keys", commandMode: false });
+
+  await handleInput("\u0018/", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "none");
+  assert.equal(state.commandMode, true);
 });
 
 test("focus mode escape closes empty bookmark aside without leaving focus", async () => {

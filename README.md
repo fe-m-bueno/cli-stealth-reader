@@ -25,6 +25,7 @@ Além disso:
 - Posição de leitura sincronizada por livro
 - Picker interativo de arquivos no diretório atual
 - Scroll com mouse e barra lateral de progresso
+- Barra de atalhos clicável e modal pesquisável com `Ctrl+.`
 - Modo foco: visualização centralizada de bloco único para leitura imersiva
 - Busca com highlighting e ciclo de resultados
 - Bookmarks com overlay de navegação
@@ -75,7 +76,7 @@ Depois disso, você pode executar `stealth-reader` em qualquer diretório.
 4. Pressione `m` para ciclar entre os modos de renderização (plain, typescript, python, rust)
 5. Pressione `f` para ativar o modo foco (leitura de bloco único centralizado)
 6. Pressione `/` para abrir a barra de comandos
-7. Pressione `?` para ver todos os atalhos
+7. Pressione `Ctrl+.` (`Ctrl+X` em terminais sem suporte ao atalho) para ver todos os atalhos
 
 ### Exemplo: Trocar de Modo
 
@@ -200,7 +201,7 @@ livro', pensou Alice, 'sem figuras ou conversas?'
 | `C`   | Abrir picker de tema                                             |
 | `S`   | Abrir configurações em abas com preview ao vivo                  |
 | `p`   | Ciclar progresso (tempo restante capítulo/livro → % → hidden)    |
-| `?`   | Ver atalhos de teclado                                           |
+| `Ctrl+.` | Ver atalhos de teclado (`Ctrl+X` é o fallback compatível)     |
 | `q`   | Sair do leitor                                                   |
 
 

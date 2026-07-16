@@ -4,9 +4,12 @@ import { clampFocusBlockIndex, getChapterBlockCount, mapBlockOffsetToFocusIndex,
 import {
   clamp,
   computeChapterMaxOffset,
+  footerHeight,
   getScrollbarMetrics,
   getViewportLayout,
   MIN_PAGE_LINES,
+  renderFooter,
+  stripAnsi,
   scrollbarOffsetFromThumb
 } from "./screen.js";
 import {
@@ -18,6 +21,16 @@ import {
   openSettingsPanel
 } from "./settings-panel.js";
 import { APPEARANCE_THEMES, THEMES, applyAppearanceTheme } from "./themes.js";
+import {
+  CTRL_DOT_SEQUENCES,
+  CTRL_X_SEQUENCES,
+  isShortcutHelpKey,
+  openShortcutHelp,
+  shortcutModalGeometry,
+  shortcutModalHitTest,
+  shortcutPanelRows,
+  toggleShortcutCategory
+} from "./shortcuts-panel.js";
 import type { AppState, LibrarySortKey } from "./types.js";
 
 function moveChapter(state: AppState, delta: number): void {
@@ -168,6 +181,7 @@ function splitBufferedNavigationInput(chunk: string): string[] | null {
 type MouseEventKind = "press" | "release" | "drag";
 
 interface ParsedMouseEvent {
+  code: number;
   button: number;
   x: number;
   y: number;
@@ -191,11 +205,59 @@ function parseMouseEvent(chunk: string): ParsedMouseEvent | null {
       : "press";
 
   return {
+    code,
     button: code & 3,
     x,
     y,
     kind
   };
+}
+
+function applyUiPointer(state: AppState, mouse: ParsedMouseEvent): boolean {
+  if (mouse.kind !== "press" || mouse.button !== 0 || (mouse.code & 64) !== 0) {
+    return false;
+  }
+
+  const width = process.stdout.columns || 120;
+  const height = process.stdout.rows || 40;
+  const layout = getViewportLayout(state, width, height);
+
+  if (state.overlay === "keys") {
+    const hit = shortcutModalHitTest(state, layout.contentWidth, layout.bodyHeight, mouse.x - 1, mouse.y - 2);
+    if (!hit) {
+      return false;
+    }
+    if (hit.kind === "close") {
+      state.overlay = "none";
+      state.overlayCursor = 0;
+    } else if (hit.kind === "search") {
+      state.shortcutSearchMode = true;
+    } else {
+      state.overlayCursor = hit.index;
+      const row = shortcutPanelRows(state)[hit.index];
+      if (row?.kind === "header") {
+        toggleShortcutCategory(state, row.category);
+      }
+    }
+    return true;
+  }
+
+  if (state.commandMode) {
+    return false;
+  }
+
+  const footerRow = height - footerHeight(state, width);
+  if (mouse.y !== footerRow) {
+    return false;
+  }
+  const footer = stripAnsi(renderFooter(state, width)[0] ?? "");
+  const token = "Ctrl+.:shortcuts";
+  const tokenStart = footer.indexOf(token);
+  if (tokenStart < 0 || mouse.x < tokenStart + 1 || mouse.x > tokenStart + token.length) {
+    return false;
+  }
+  openShortcutHelp(state);
+  return true;
 }
 
 function isHomeKey(chunk: string): boolean {
@@ -229,7 +291,7 @@ function interactiveOverlayLength(state: AppState): number {
 
 function exitTui(): never {
   process.stdin.setRawMode?.(false);
-  process.stdout.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1007l\x1b[?25h\x1b[?1049l");
+  process.stdout.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1007l\x1b[<u\x1b[?25h\x1b[?1049l");
   process.exit(0);
 }
 
@@ -321,11 +383,26 @@ export async function handleInput(
   syncPos: (state: AppState) => void,
   confirmPicker: (paths: string[], force: boolean) => Promise<void>
 ): Promise<void> {
+  if (chunk === "\x1b[99;5u") {
+    chunk = "\u0003";
+  } else if (chunk === "\x1b[27u" || chunk === "\x1b[27;1u") {
+    chunk = "\u001b";
+  }
   if (chunk === "\u0003") {
     state.shouldQuit = true;
   }
   if (state.shouldQuit) {
     exitTui();
+  }
+
+  const embeddedShortcut = [...CTRL_X_SEQUENCES, ...CTRL_DOT_SEQUENCES].find((sequence) => chunk !== sequence && chunk.includes(sequence));
+  if (embeddedShortcut) {
+    const index = chunk.indexOf(embeddedShortcut);
+    const parts = [chunk.slice(0, index), embeddedShortcut, chunk.slice(index + embeddedShortcut.length)].filter(Boolean);
+    for (const part of parts) {
+      await handleInput(part, state, redraw, executeCmd, syncPos, confirmPicker);
+    }
+    return;
   }
 
   const bufferedNavigation = splitBufferedNavigationInput(chunk);
@@ -339,6 +416,21 @@ export async function handleInput(
   const mouseEvent = parseMouseEvent(chunk);
   if (mouseEvent && applyScrollbarPointer(state, mouseEvent)) {
     syncPos(state);
+    redraw();
+    return;
+  }
+  if (mouseEvent && applyUiPointer(state, mouseEvent)) {
+    redraw();
+    return;
+  }
+
+  if (isShortcutHelpKey(chunk)) {
+    if (state.overlay === "keys") {
+      state.overlay = "none";
+      state.overlayCursor = 0;
+    } else {
+      openShortcutHelp(state);
+    }
     redraw();
     return;
   }
@@ -379,16 +471,21 @@ export async function handleInput(
       state.commandCursor = Math.max(0, (state.commandCursor ?? state.commandBuffer.length) - 1);
     } else if (isRightKey(chunk)) {
       state.commandCursor = Math.min(state.commandBuffer.length, (state.commandCursor ?? state.commandBuffer.length) + 1);
-    } else if (isDownKey(chunk)) {
+    } else if (isDownKey(chunk) || isMouseWheelDown(chunk)) {
       const suggestions = listCommandSuggestions(state.commandBuffer, state.storage);
       if (suggestions.length > 0) {
         state.commandSuggestionIndex = clamp(state.commandSuggestionIndex + 1, 0, suggestions.length - 1);
       }
-    } else if (isUpKey(chunk)) {
+    } else if (isUpKey(chunk) || isMouseWheelUp(chunk)) {
       const suggestions = listCommandSuggestions(state.commandBuffer, state.storage);
       if (suggestions.length > 0) {
         state.commandSuggestionIndex = clamp(state.commandSuggestionIndex - 1, 0, suggestions.length - 1);
       }
+    } else if (isPageDownKey(chunk)) {
+      const suggestions = listCommandSuggestions(state.commandBuffer, state.storage);
+      state.commandSuggestionIndex = clamp(state.commandSuggestionIndex + 7, 0, Math.max(0, suggestions.length - 1));
+    } else if (isPageUpKey(chunk)) {
+      state.commandSuggestionIndex = clamp(state.commandSuggestionIndex - 7, 0, Number.MAX_SAFE_INTEGER);
     } else {
       const cursor = Math.max(0, Math.min(state.commandCursor ?? state.commandBuffer.length, state.commandBuffer.length));
       state.commandBuffer = `${state.commandBuffer.slice(0, cursor)}${chunk}${state.commandBuffer.slice(cursor)}`;
@@ -430,6 +527,54 @@ export async function handleInput(
     } else if (state.settingsSearchMode && chunk.length === 1 && chunk >= " ") {
       state.settingsSearchBuffer = `${state.settingsSearchBuffer ?? ""}${chunk}`;
       state.overlayCursor = 0;
+    }
+    redraw();
+    return;
+  }
+
+  if (state.overlay === "keys") {
+    const rows = shortcutPanelRows(state);
+    const maxIndex = Math.max(0, rows.length - 1);
+    state.overlayCursor = clamp(state.overlayCursor, 0, maxIndex);
+    const layout = getViewportLayout(state, process.stdout.columns || 120, process.stdout.rows || 40);
+    const pageSize = shortcutModalGeometry(layout.contentWidth, layout.bodyHeight).visibleRows;
+
+    if (state.shortcutSearchMode) {
+      if (chunk === "\u001b") {
+        state.shortcutSearchMode = false;
+        state.shortcutSearchBuffer = "";
+        state.overlayCursor = 0;
+      } else if (chunk === "\r") {
+        state.shortcutSearchMode = false;
+      } else if (chunk === "\u007f") {
+        state.shortcutSearchBuffer = (state.shortcutSearchBuffer ?? "").slice(0, -1);
+        state.overlayCursor = 0;
+      } else if (chunk.length === 1 && chunk >= " ") {
+        state.shortcutSearchBuffer = `${state.shortcutSearchBuffer ?? ""}${chunk}`;
+        state.overlayCursor = 0;
+      }
+    } else if (chunk === "\u001b") {
+      state.overlay = "none";
+      state.overlayCursor = 0;
+    } else if (chunk === "/") {
+      state.shortcutSearchMode = true;
+    } else if (isDownKey(chunk) || chunk === "j" || isMouseWheelDown(chunk)) {
+      state.overlayCursor = clamp(state.overlayCursor + 1, 0, maxIndex);
+    } else if (isUpKey(chunk) || chunk === "k" || isMouseWheelUp(chunk)) {
+      state.overlayCursor = clamp(state.overlayCursor - 1, 0, maxIndex);
+    } else if (isPageDownKey(chunk)) {
+      state.overlayCursor = clamp(state.overlayCursor + pageSize, 0, maxIndex);
+    } else if (isPageUpKey(chunk)) {
+      state.overlayCursor = clamp(state.overlayCursor - pageSize, 0, maxIndex);
+    } else if (isHomeKey(chunk)) {
+      state.overlayCursor = 0;
+    } else if (isEndKey(chunk)) {
+      state.overlayCursor = maxIndex;
+    } else if (chunk === "\r" || chunk === " ") {
+      const selected = rows[state.overlayCursor];
+      if (selected?.kind === "header") {
+        toggleShortcutCategory(state, selected.category);
+      }
     }
     redraw();
     return;
@@ -705,10 +850,6 @@ export async function handleInput(
       state.overlay = "none";
       state.helpCommand = null;
       state.overlayCursor = 0;
-    } else if (chunk === "?") {
-      state.overlay = "keys";
-      state.helpCommand = null;
-      state.overlayCursor = 0;
     } else if (chunk === "q") {
       state.shouldQuit = true;
       exitTui();
@@ -814,8 +955,6 @@ export async function handleInput(
       await executeCmd("/theme");
     } else if (chunk === "p") {
       await executeCmd("/toggleprogress");
-    } else if (chunk === "?") {
-      state.overlay = "keys";
     } else if (chunk === "q") {
       state.shouldQuit = true;
       exitTui();
@@ -913,8 +1052,6 @@ export async function handleInput(
     await executeCmd("/theme");
   } else if (chunk === "p") {
     await executeCmd("/toggleprogress");
-  } else if (chunk === "?") {
-    state.overlay = "keys";
   } else if (chunk === "q") {
     state.shouldQuit = true;
     exitTui();

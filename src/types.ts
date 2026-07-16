@@ -360,6 +360,9 @@ export interface AppState {
   helpCommand: string | null;
   integrationLines?: string[];
   mouseCapture: boolean;
+  shortcutCollapsedCategories?: Set<string>;
+  shortcutSearchBuffer?: string;
+  shortcutSearchMode?: boolean;
   settingsDraft?: AppSettings | null;
   settingsTab?: SettingsTab;
   settingsSearchBuffer?: string;

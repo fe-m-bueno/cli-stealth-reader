@@ -38,7 +38,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   fontScale: 1,
   marginSize: 0,
   lineSpacing: "normal",
-  mouseCapture: false
+  mouseCapture: true
 };
 
 export class Storage {

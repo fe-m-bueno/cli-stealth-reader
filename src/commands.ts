@@ -200,7 +200,7 @@ export const COMMANDS: CommandDefinition[] = [
       "--all is accepted for compatibility and shows the complete command manual."
     ],
     examples: ["/help", "/help mode", "/help theme", "/help --all"],
-    notes: ["Use ? or /keyboardshortcuts for keyboard shortcut help."]
+    notes: ["Use Ctrl+. (or Ctrl+X as a terminal fallback) or /keyboardshortcuts for keyboard shortcut help."]
   },
   {
     name: "keyboardshortcuts",
@@ -663,7 +663,7 @@ export function commandHelp(commandName?: string, width?: number, theme?: ThemeP
     "",
     "NAVIGATION",
     "  Scroll this page with j/k, arrow keys, Space, PageUp/PageDown, g, G, Home, and End.",
-    "  Press Esc to close it. Use ? or /keyboardshortcuts for key bindings.",
+    "  Press Esc to close it. Use Ctrl+. or /keyboardshortcuts for key bindings.",
     "",
     "COMMANDS",
     ...COMMANDS.map((command) => `  ${command.usage.padEnd(48)} ${command.description}`),

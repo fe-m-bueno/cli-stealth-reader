@@ -1,4 +1,4 @@
-import { fg, inverse, paintBackground } from "./color.js";
+import { bold, fg, inverse, paintBackground } from "./color.js";
 import { listCommandSuggestions } from "./commands.js";
 import {
   effectiveWpm,
@@ -15,6 +15,7 @@ export const OVERLAY_MAX_WIDTH = 42;
 export const MIN_MAIN_WIDTH = 24;
 export const PROGRESS_BAR_WIDTH = 12;
 export const MIN_PAGE_LINES = 5;
+export const COMMAND_SUGGESTION_ROWS = 7;
 
 // Utility functions
 export function clamp(v: number, min: number, max: number): number {
@@ -79,11 +80,11 @@ export function resetViewport(): void {
 export function getViewportLayout(state: AppState, width: number, height: number) {
   const reservedFooterHeight = footerHeight(state, width);
   const bodyHeight = Math.max(1, height - reservedFooterHeight - 2);
-  const overlayWidth = state.overlay === "none" || state.overlay === "help" || state.overlay === "settings"
+  const overlayWidth = state.overlay === "none" || state.overlay === "help" || state.overlay === "settings" || state.overlay === "keys"
     ? 0
     : Math.min(OVERLAY_MAX_WIDTH, Math.floor(width * 0.32));
   const mainWidth = Math.max(MIN_MAIN_WIDTH, width - overlayWidth - (overlayWidth ? 3 : 0));
-  const scrollbarWidth = state.currentBook && state.overlay !== "settings" ? 1 : 0;
+  const scrollbarWidth = state.currentBook && state.overlay !== "settings" && state.overlay !== "keys" ? 1 : 0;
   const baseContentWidth = Math.max(1, mainWidth - 2 - scrollbarWidth);
   const readingLayoutActive = Boolean(state.currentBook)
     && state.overlay !== "settings"
@@ -306,23 +307,42 @@ function renderBottomRight(text: string, width: number, theme: ThemePreset): str
 }
 
 function renderCommandSuggestions(suggestions: CommandSuggestion[], width: number, theme: ThemePreset, selectedIndex: number): string[] {
-  const limit = Math.max(1, Math.min(7, suggestions.length));
-  const start = clamp(selectedIndex - Math.floor(limit / 2), 0, Math.max(0, suggestions.length - limit));
-  const visible = suggestions.slice(start, start + limit);
-  const categoryWidth = Math.min(14, Math.max(8, ...visible.map((suggestion) => suggestion.category.length)));
-  const usageWidth = Math.max(12, Math.min(34, width - categoryWidth - 8));
-  const descriptionWidth = Math.max(10, width - categoryWidth - usageWidth - 8);
-  return visible.map((suggestion, index) => {
-    const actualIndex = start + index;
-    const marker = actualIndex === selectedIndex ? fg(theme.accent, ">") : " ";
-    const usage = actualIndex === selectedIndex
-      ? fg(theme.accent, suggestion.usage)
-      : suggestion.usage;
-    const category = fg(actualIndex === selectedIndex ? theme.warning : theme.dim, suggestion.category.padEnd(categoryWidth));
-    const description = actualIndex === selectedIndex && suggestion.detail
+  const contentWidth = Math.max(1, width - 2);
+  const start = computeWindowStart(suggestions.length, COMMAND_SUGGESTION_ROWS, selectedIndex);
+  const visible = suggestions.slice(start, start + COMMAND_SUGGESTION_ROWS);
+  const columnWidth = Math.max(3, contentWidth - 4);
+  const categoryWidth = Math.min(
+    Math.max(3, Math.floor(columnWidth * 0.22)),
+    Math.max(3, ...visible.map((suggestion) => suggestion.category.length)),
+    14
+  );
+  const usageWidth = Math.min(34, Math.max(3, Math.min(Math.floor(columnWidth * 0.44), columnWidth - categoryWidth - 1)));
+  const descriptionWidth = Math.max(1, columnWidth - categoryWidth - usageWidth);
+  const metrics = getScrollbarMetrics(suggestions.length, COMMAND_SUGGESTION_ROWS, start);
+
+  return Array.from({ length: COMMAND_SUGGESTION_ROWS }, (_, visibleIndex) => {
+    const suggestion = visible[visibleIndex];
+    const actualIndex = start + visibleIndex;
+    const scrollbar = suggestions.length > COMMAND_SUGGESTION_ROWS
+      ? visibleIndex >= metrics.thumbOffset && visibleIndex < metrics.thumbOffset + metrics.thumbHeight ? "█" : "│"
+      : " ";
+    if (!suggestion) {
+      const emptyLabel = visibleIndex === 0 && suggestions.length === 0 ? fg(theme.subtle, "  No matching commands") : "";
+      return `${padAnsi(emptyLabel, contentWidth)} ${fg(theme.border, scrollbar)}`;
+    }
+
+    const selected = actualIndex === selectedIndex;
+    const category = suggestion.category.padEnd(categoryWidth);
+    const usage = padAnsi(truncate(suggestion.usage, usageWidth), usageWidth);
+    const description = truncate(selected && suggestion.detail
       ? `${suggestion.description} (${suggestion.detail})`
-      : suggestion.description;
-    return `${marker} ${category} ${padAnsi(truncate(usage, usageWidth), usageWidth)} ${fg(theme.dim, truncate(description, descriptionWidth))}`;
+      : suggestion.description, descriptionWidth);
+    const plainRow = `  ${category} ${usage} ${description}`;
+    const padded = padAnsi(truncate(plainRow, contentWidth), contentWidth);
+    const styled = selected
+      ? paintBackground(theme.border, fg(theme.foreground, padded))
+      : `  ${fg(theme.subtle, category)} ${usage} ${fg(theme.dim, description)}${" ".repeat(Math.max(0, contentWidth - stripAnsi(plainRow).length))}`;
+    return `${styled} ${fg(scrollbar === "█" ? theme.foreground : theme.border, scrollbar)}`;
   });
 }
 
@@ -331,25 +351,38 @@ function renderCommandBox(state: AppState, width: number): string[] {
   const innerWidth = Math.max(1, width - 4);
   const suggestions = listCommandSuggestions(state.commandBuffer, state.storage);
   const selectedIndex = suggestions.length === 0 ? 0 : clamp(state.commandSuggestionIndex, 0, suggestions.length - 1);
-  const promptText = `/${state.commandBuffer}`;
   const cursor = Math.max(0, Math.min(state.commandCursor ?? state.commandBuffer.length, state.commandBuffer.length));
   const beforeCursor = state.commandBuffer.slice(0, cursor);
   const cursorChar = state.commandBuffer[cursor] ?? " ";
   const afterCursor = cursor < state.commandBuffer.length ? state.commandBuffer.slice(cursor + 1) : "";
   const prompt = fg(state.theme.accent, "/") + beforeCursor + inverse(cursorChar) + afterCursor;
   const promptLine = padAnsi(truncate(prompt, innerWidth), innerWidth);
-  const lines = [
+  return [
     border(`╭${"─".repeat(innerWidth + 2)}╮`),
-    `${border("│")} ${promptLine} ${border("│")}`,
+    ...renderCommandSuggestions(suggestions, innerWidth, state.theme, selectedIndex)
+      .map((line) => `${border("│")} ${line} ${border("│")}`),
     border(`├${"─".repeat(innerWidth + 2)}┤`),
-    `${border("│")} ${padAnsi(fg(state.theme.dim, "Type to filter · ↑/↓ choose · Tab complete · Enter run · /help for manual"), innerWidth)} ${border("│")}`,
+    `${border("│")} ${promptLine} ${border("│")}`,
     border(`╰${"─".repeat(innerWidth + 2)}╯`)
   ];
+}
 
-  if (!promptText.trim() || suggestions.length > 0) {
-    lines.push(...renderCommandSuggestions(suggestions, width, state.theme, selectedIndex));
-  }
-  return lines;
+function shortcutHint(theme: ThemePreset, key: string, label: string): string {
+  return `${bold(fg(theme.foreground, key))}${fg(theme.dim, `:${label}`)}`;
+}
+
+function renderCommandHintBar(state: AppState, width: number): string {
+  const hints = [
+    shortcutHint(state.theme, "↑/↓", "nav"),
+    shortcutHint(state.theme, "Tab", "complete"),
+    shortcutHint(state.theme, "Enter", "run"),
+    shortcutHint(state.theme, "Esc", "close")
+  ].join(fg(state.theme.border, "  │  "));
+  const togglTimer = formatRunningTogglTimer(state.storage);
+  const statusText = togglTimer ? `${togglTimer} · ${state.status || "Ready"}` : state.status || "Ready";
+  const status = fg(state.theme.dim, truncate(statusText, Math.max(8, Math.floor(width * 0.3))));
+  const gap = " ".repeat(Math.max(1, width - stripAnsi(hints).length - stripAnsi(status).length - 2));
+  return ` ${hints}${gap}${status} `;
 }
 
 // Footer rendering
@@ -362,24 +395,33 @@ export function renderFooter(state: AppState, width: number, progress = ""): str
 
   if (state.commandMode) {
     const lines = renderCommandBox(state, width);
-    const togglTimer = formatRunningTogglTimer(state.storage);
-    const status = fg(theme.dim, togglTimer ? `${togglTimer} · ${state.status || "Ready"}` : state.status || "Ready");
-    const statusPlain = stripAnsi(status);
-    const fixedLen = prefix.length + statusPlain.length + suffix.length;
-    const fill = "─".repeat(Math.max(minFill, width - fixedLen));
     return progress
-      ? [...lines, border(prefix) + status + border(fill + suffix), renderBottomRight(progress, width, theme)]
-      : [...lines, border(prefix) + status + border(fill + suffix)];
+      ? [...lines, renderCommandHintBar(state, width), renderBottomRight(progress, width, theme)]
+      : [...lines, renderCommandHintBar(state, width)];
   }
 
   const togglTimer = formatRunningTogglTimer(state.storage);
   const status = fg(theme.dim, togglTimer ? `${togglTimer} · ${state.status || "Ready"}` : state.status || "Ready");
   const shortcuts = state.overlay && state.overlay !== "none"
-    ? "Esc close  / commands  ? shortcuts  q quit"
+    ? [
+        shortcutHint(theme, "Esc", "close"),
+        shortcutHint(theme, "/", "commands"),
+        shortcutHint(theme, "Ctrl+.", "shortcuts"),
+        shortcutHint(theme, "q", "quit")
+      ].join(border("  │  "))
     : state.focusMode
-    ? "Esc exit focus  / commands  ? shortcuts  q quit"
-    : "/ commands  ? shortcuts  q quit";
-  const right = fg(theme.dim, shortcuts);
+    ? [
+        shortcutHint(theme, "Esc", "exit focus"),
+        shortcutHint(theme, "/", "commands"),
+        shortcutHint(theme, "Ctrl+.", "shortcuts"),
+        shortcutHint(theme, "q", "quit")
+      ].join(border("  │  "))
+    : [
+        shortcutHint(theme, "/", "commands"),
+        shortcutHint(theme, "Ctrl+.", "shortcuts"),
+        shortcutHint(theme, "q", "quit")
+      ].join(border("  │  "));
+  const right = shortcuts;
   const sep = " ─";
   const statusPlain = stripAnsi(status);
   const rightPlain = stripAnsi(right);

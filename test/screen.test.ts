@@ -100,8 +100,29 @@ test("command footer renders a boxed prompt with command suggestions", () => {
 
   const footer = renderFooter(state, 80, "book ███ 50%").map(stripAnsi);
   assert.match(footer[0], /╭/);
-  assert.match(footer[1], /\/mo/);
+  assert.match(footer[9], /\/mo/);
   assert.ok(footer.some((line) => line.includes("/mode")));
+  assert.equal(footer.length, 13);
+  assert.match(footer.at(-2) ?? "", /Enter:run/);
+});
+
+test("command footer keeps a fixed suggestion viewport when filtering finds nothing", () => {
+  const state = {
+    theme,
+    commandMode: true,
+    commandBuffer: "no-such-command",
+    commandCursor: 15,
+    commandSuggestionIndex: 0,
+    currentBook: null,
+    progressVisibility: "hidden",
+    status: "Ready",
+    chapterIndex: 0,
+    blockOffset: 0
+  } as AppState;
+
+  const footer = renderFooter(state, 80).map(stripAnsi);
+  assert.equal(footer.length, 12);
+  assert.ok(footer.some((line) => line.includes("No matching commands")));
 });
 
 test("normal footer keeps progress on a separate bottom-right line", () => {
@@ -152,7 +173,8 @@ test("overlay footer advertises escape close hint", () => {
   } as AppState;
 
   const footer = renderFooter(state, 100).map(stripAnsi);
-  assert.match(footer[0], /Esc close/);
+  assert.match(footer[0], /Esc:close/);
+  assert.match(footer[0], /Ctrl\+\.\:shortcuts/);
 });
 
 test("focus mode footer advertises escape exit hint", () => {
@@ -172,7 +194,7 @@ test("focus mode footer advertises escape exit hint", () => {
   } as AppState;
 
   const footer = renderFooter(state, 100).map(stripAnsi);
-  assert.match(footer[0], /Esc exit focus/);
+  assert.match(footer[0], /Esc:exit focus/);
 });
 
 test("overlay footer close hint takes precedence over focus mode exit hint", () => {
@@ -192,8 +214,8 @@ test("overlay footer close hint takes precedence over focus mode exit hint", () 
   } as AppState;
 
   const footer = renderFooter(state, 100).map(stripAnsi);
-  assert.match(footer[0], /Esc close/);
-  assert.doesNotMatch(footer[0], /Esc exit focus/);
+  assert.match(footer[0], /Esc:close/);
+  assert.doesNotMatch(footer[0], /Esc:exit focus/);
 });
 
 test("normal footer does not show escape close hint", () => {
@@ -212,8 +234,8 @@ test("normal footer does not show escape close hint", () => {
   } as AppState;
 
   const footer = renderFooter(state, 100).map(stripAnsi);
-  assert.doesNotMatch(footer[0], /Esc close/);
-  assert.doesNotMatch(footer[0], /Esc exit focus/);
+  assert.doesNotMatch(footer[0], /Esc:close/);
+  assert.doesNotMatch(footer[0], /Esc:exit focus/);
 });
 
 test("status bar includes chapter title and focus block cue", () => {
