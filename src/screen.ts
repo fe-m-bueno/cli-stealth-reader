@@ -414,11 +414,17 @@ export function renderFooter(state: AppState, width: number, progress = ""): str
   const togglTimer = formatRunningTogglTimer(state.storage);
   const status = fg(theme.dim, togglTimer ? `${togglTimer} · ${state.status || "Ready"}` : state.status || "Ready");
   const shortcuts = state.overlay === "keys"
-    ? [
-        shortcutHint(theme, "Esc", "close"),
-        shortcutHint(theme, "/", "search"),
-        shortcutHint(theme, "Ctrl+.", "close")
-      ].join(border("  │  "))
+    ? state.shortcutSearchMode
+      ? [
+          shortcutHint(theme, "Esc", "exit search"),
+          shortcutHint(theme, "Esc Esc", "close"),
+          shortcutHint(theme, "Ctrl+.", "close")
+        ].join(border("  │  "))
+      : [
+          shortcutHint(theme, "Esc", "close"),
+          shortcutHint(theme, "/", "search"),
+          shortcutHint(theme, "Ctrl+.", "close")
+        ].join(border("  │  "))
     : state.overlay && state.overlay !== "none"
     ? [
         shortcutHint(theme, "Esc", "close"),

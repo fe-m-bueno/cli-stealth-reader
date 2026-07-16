@@ -39,7 +39,7 @@ import {
   applyAppearanceTheme
 } from "./themes.js";
 import { renderSettingsPanel } from "./settings-panel.js";
-import { renderShortcutPanel } from "./shortcuts-panel.js";
+import { composeShortcutPanel } from "./shortcuts-panel.js";
 import type { AppState, PaceState } from "./types.js";
 
 function loadGlobalPace(storage: Storage): Pick<PaceState, "globalWpm" | "globalActiveMs"> {
@@ -71,7 +71,9 @@ export function currentLines(state: AppState, width: number, height: number): st
   }
 
   if (state.overlay === "keys") {
-    return renderShortcutPanel(state, width, height);
+    const backgroundState = { ...state, overlay: "none" } as AppState;
+    const backgroundLines = currentLines(backgroundState, width, height);
+    return composeShortcutPanel(state, backgroundLines, width, height);
   }
 
   if (!state.currentBook) {

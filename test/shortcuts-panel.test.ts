@@ -47,7 +47,11 @@ test("shortcut help opens as a centered modal with Grok-style grouped rows", () 
   assert.match(rendered, /Keyboard Shortcuts/);
   assert.match(rendered, /Essentials/);
   assert.match(rendered, /Ctrl\+\. \/ Ctrl\+X/);
+  assert.match(rendered, /Open tabbed reader settings with live preview/);
+  assert.match(rendered, /Shift\+S/);
+  assert.doesNotMatch(rendered, /\sS\s/);
   assert.match(rendered, /Navigation \(13\)/);
+  assert.match(rendered, /View \(6\)/);
   assert.match(rendered, /↑\/↓:nav/);
   assert.match(rendered, /Enter\/Space:expand/);
 });
@@ -74,6 +78,16 @@ test("shortcut search filters descriptions and ignores collapsed groups", () => 
   const rows = shortcutPanelRows(app);
   assert.equal(rows.some((row) => row.label.includes("Toggle focus mode")), true);
   assert.equal(rows.some((row) => row.kind === "shortcut" && row.category === "navigation"), false);
+});
+
+test("shortcut search footer explains that Escape exits search before closing", () => {
+  const app = state();
+  openShortcutHelp(app);
+  app.shortcutSearchMode = true;
+
+  const rendered = renderShortcutPanel(app, 100, 30).map(stripAnsi).join("\n");
+  assert.match(rendered, /Esc:exit search/);
+  assert.match(rendered, /Esc again:close/);
 });
 
 test("shortcut modal exposes clickable close and row hit areas", () => {
