@@ -1,5 +1,5 @@
 import { bold, fg } from "./color.js";
-import { getTogglCache } from "./toggl.js";
+import { formatTogglQuota, getTogglCache } from "./toggl.js";
 import type { Storage } from "./storage.js";
 import type { CommandDefinition, CommandSuggestion, ParsedCommandResult, ThemePreset } from "./types.js";
 
@@ -170,24 +170,27 @@ export const COMMANDS: CommandDefinition[] = [
   },
   {
     name: "toggl",
-    description: "Log reading time directly to Toggl Track.",
+    description: "Log reading time directly to Toggl 2.0.",
     args: [{ name: "action" }, { name: "description" }],
-    flags: [{ name: "project", takesValue: true }, { name: "duration", takesValue: true }, { name: "open" }, { name: "disconnect" }],
-    usage: "/toggl auth|sync|recent|start|stop|log [description] [--project name] [--duration 25m]",
+    flags: [{ name: "organization", takesValue: true }, { name: "project", takesValue: true }, { name: "duration", takesValue: true }, { name: "open" }, { name: "disconnect" }],
+    usage: "/toggl auth|sync|recent|start|stop|log [description] [--organization id] [--project name] [--duration 25m]",
     details: [
-      "auth opens the Toggl API token page; paste the token as /toggl auth <token> to connect.",
-      "sync caches recent projects and descriptions from Toggl for fuzzy project lookup.",
+      "auth opens the Toggl 2.0 key page; connect with /toggl auth <toggl_sk_...> --organization <id>.",
+      "sync caches recent projects and descriptions from Focus for fuzzy project lookup.",
       "start creates a running timer, stop stops the current timer, and log creates a finished entry ending now."
     ],
     examples: [
       "/toggl auth",
-      "/toggl auth <api-token>",
+      "/toggl auth <toggl_sk_...> --organization 123456",
       "/toggl sync",
       "/toggl start \"O Nome do Vento\" --project \"Reading books\"",
       "/toggl log \"Choujin X\" --project \"Reading manga\" --duration 45m",
       "/toggl stop"
     ],
-    notes: ["Uses Toggl Track API v9 with API-token basic auth. The token is stored in the local app settings database."]
+    notes: [
+      "Uses the Toggl 2.0 Focus API with Bearer authentication. The key is stored in the local app settings database.",
+      "Quota is per user and organization: Free 30/h, Starter 240/h, Premium 600/h. Remaining requests and reset time come from response headers."
+    ]
   },
   {
     name: "help",
@@ -461,6 +464,64 @@ export function parseSlashCommand(input: string): ParsedCommandResult {
 
 function findCommand(commandName: string): CommandDefinition | undefined {
   return COMMANDS.find((item) => item.name === commandName || item.aliases?.includes(commandName));
+}
+
+export function commandContextHelp(buffer: string, storage?: Storage): string[] {
+  const tokens = buffer.trim().replace(/^\//, "").split(/\s+/).filter(Boolean);
+  const command = tokens[0] ? findCommand(tokens[0].toLowerCase()) : undefined;
+  if (!command) return [];
+
+  if (command.name === "toggl") {
+    const action = tokens[1]?.toLowerCase();
+    const quota = storage ? formatTogglQuota(storage) : null;
+    const quotaLine = quota ? `API      ${quota}` : null;
+    if (action === "auth") {
+      return [
+        "Connect  Toggl 2.0 / Focus",
+        "Usage    /toggl auth <toggl_sk_...> --organization <id>",
+        "API key  https://focus.toggl.com/settings",
+        "Org ID   copy the organization number from your Focus workspace URL",
+        "Next     run /toggl sync after connecting",
+        ...(quotaLine ? [quotaLine] : [])
+      ];
+    }
+    if (action === "start") {
+      return [
+        "Usage    /toggl start <description> [--project name]",
+        "Tip      type a recent description, then press Tab",
+        "Example  /toggl start \"Reading\" --project \"Books\"",
+        ...(quotaLine ? [quotaLine] : [])
+      ];
+    }
+    if (action === "log") {
+      return [
+        "Usage    /toggl log <description> --duration 25m [--project name]",
+        "Duration accepts 25m, 1.5h, or 900s",
+        ...(quotaLine ? [quotaLine] : [])
+      ];
+    }
+    if (["sync", "recent", "stop"].includes(action ?? "")) {
+      return [
+        `Run      /toggl ${action}`,
+        action === "sync" ? "Fetches projects, recent entries, and the running timer" : `Executes Toggl ${action}`,
+        ...(quotaLine ? [quotaLine] : [])
+      ];
+    }
+    if (action) {
+      return [
+        `Unknown  Toggl action \"${action}\"`,
+        "Actions  auth · sync · recent · start · stop · log",
+        "Help     /help toggl"
+      ];
+    }
+  }
+
+  const example = command.examples?.[0];
+  return [
+    `Usage    ${command.usage}`,
+    ...(example ? [`Example  ${example}`] : []),
+    `Help     /help ${command.name}`
+  ];
 }
 
 function formatArgument(arg: NonNullable<CommandDefinition["args"]>[number]): string {

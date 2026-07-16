@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseSlashCommand, listCommandSuggestions, applyCommandAutocomplete } from "../src/commands.js";
-import { connectToggl, formatRunningTogglTimer, formatTogglRecents, logTogglEntry, refreshCurrentTogglEntry, resolveTogglProject, startTogglEntry, stopTogglEntry, syncToggl } from "../src/toggl.js";
+import { parseSlashCommand, listCommandSuggestions, applyCommandAutocomplete, commandContextHelp } from "../src/commands.js";
+import { connectToggl, formatRunningTogglTimer, formatTogglRecents, getTogglQuota, logTogglEntry, refreshCurrentTogglEntry, resolveTogglProject, startTogglEntry, stopTogglEntry, syncToggl } from "../src/toggl.js";
 import type { Storage } from "../src/storage.js";
 
 class FakeStorage {
@@ -14,6 +14,7 @@ function fakeStorageWithCache(): Storage {
   const storage = new FakeStorage();
   storage.setRawSetting("togglApiToken", "test-token");
   storage.setRawSetting("togglCache", JSON.stringify({
+    defaultOrganizationId: 7,
     defaultWorkspaceId: 1,
     syncedAt: "2026-06-30T12:00:00.000Z",
     projects: [
@@ -28,12 +29,13 @@ function fakeStorageWithCache(): Storage {
   return storage as unknown as Storage;
 }
 
-test("starting a Toggl timer sends the complete Track API v9 workspace payload", async (t) => {
-  const requests: Array<{ url: string; method: string; body: Record<string, unknown> }> = [];
+test("starting a Toggl timer uses Focus tracking with Bearer auth", async (t) => {
+  const requests: Array<{ url: string; method: string; authorization: string; body: Record<string, unknown> }> = [];
   t.mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
     requests.push({
       url: String(input),
       method: init?.method ?? "GET",
+      authorization: String((init?.headers as Record<string, string> | undefined)?.Authorization ?? ""),
       body: JSON.parse(String(init?.body)) as Record<string, unknown>
     });
     return new Response(JSON.stringify({
@@ -49,13 +51,13 @@ test("starting a Toggl timer sends the complete Track API v9 workspace payload",
 
   await startTogglEntry(fakeStorageWithCache(), "O Nome do Vento", "Reading books");
 
-  assert.equal(requests[0]?.url, "https://api.track.toggl.com/api/v9/workspaces/1/time_entries");
+  assert.equal(requests[0]?.url, "https://focus.toggl.com/api/organizations/7/workspaces/1/tracking/start");
   assert.equal(requests[0]?.method, "POST");
-  assert.equal(requests[0]?.body.workspace_id, 1);
+  assert.equal(requests[0]?.authorization, "Bearer test-token");
   assert.equal(requests[0]?.body.project_id, 10);
-  assert.equal(requests[0]?.body.duration, -1);
+  assert.equal(requests[0]?.body.type, "activity");
   assert.equal(typeof requests[0]?.body.start, "string");
-  assert.equal(requests[0]?.body.created_with, "cli-stealth-reader");
+  assert.equal(requests[0]?.body.created_with, undefined);
 });
 
 test("starting a Toggl timer rejects an unknown requested project", async (t) => {
@@ -70,7 +72,7 @@ test("starting a Toggl timer rejects an unknown requested project", async (t) =>
   assert.equal(fetchMock.mock.callCount(), 0);
 });
 
-test("logging completed Toggl time sends the complete Track API v9 workspace payload", async (t) => {
+test("logging completed Toggl time uses the Focus taskless time-entry payload", async (t) => {
   let url = "";
   let method = "";
   let body: Record<string, unknown> | undefined;
@@ -79,21 +81,21 @@ test("logging completed Toggl time sends the complete Track API v9 workspace pay
     method = init?.method ?? "GET";
     body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     return new Response(JSON.stringify({ id: 43, workspace_id: 1, duration: 1500 }), {
-      status: 200,
+      status: 201,
       headers: { "Content-Type": "application/json" }
     });
   });
 
   await logTogglEntry(fakeStorageWithCache(), "Choujin X", "25m", "Reading manga");
 
-  assert.equal(url, "https://api.track.toggl.com/api/v9/workspaces/1/time_entries");
+  assert.equal(url, "https://focus.toggl.com/api/organizations/7/workspaces/1/time-entries");
   assert.equal(method, "POST");
-  assert.equal(body?.workspace_id, 1);
   assert.equal(body?.project_id, 11);
   assert.equal(body?.duration, 1500);
+  assert.equal(body?.type, "activity");
   assert.equal(typeof body?.start, "string");
-  assert.equal(typeof body?.stop, "string");
-  assert.equal(body?.created_with, "cli-stealth-reader");
+  assert.equal(typeof body?.tracked_at, "string");
+  assert.equal(body?.stop, undefined);
 });
 
 test("logging completed Toggl time rejects an unknown requested project", async (t) => {
@@ -114,38 +116,40 @@ test("failed Toggl authentication does not persist an invalid token", async (t) 
 
   await assert.rejects(
     connectToggl(storage as unknown as Storage, "invalid-token"),
-    /Toggl API 401/
+    /authentication failed \(401\).*toggl_sk_/i
   );
 
   assert.equal(storage.getSetting("togglApiToken"), null);
 });
 
-test("successful Toggl authentication uses API-token Basic Auth before persisting", async (t) => {
+test("successful Toggl authentication uses a Focus Bearer key before persisting", async (t) => {
   const storage = new FakeStorage();
   let authorization = "";
   t.mock.method(globalThis, "fetch", async (_input: string | URL | Request, init?: RequestInit) => {
     authorization = String((init?.headers as Record<string, string> | undefined)?.Authorization ?? "");
-    return new Response(JSON.stringify({ fullname: "Reader", default_workspace_id: 1, workspaces: [] }), {
+    return new Response(JSON.stringify({ current_workspace_id: 1, theme: "dark" }), {
       status: 200,
       headers: { "Content-Type": "application/json" }
     });
   });
 
-  await connectToggl(storage as unknown as Storage, "valid-token");
+  const result = await connectToggl(storage as unknown as Storage, "toggl_sk_valid", 7);
 
-  assert.equal(authorization, `Basic ${Buffer.from("valid-token:api_token").toString("base64")}`);
-  assert.equal(storage.getSetting("togglApiToken"), "valid-token");
+  assert.equal(authorization, "Bearer toggl_sk_valid");
+  assert.equal(storage.getSetting("togglApiToken"), "toggl_sk_valid");
+  assert.equal(result.defaultWorkspaceId, 1);
+  assert.equal(result.defaultOrganizationId, 7);
 });
 
 test("Toggl sync reconciles the account's current running timer", async (t) => {
   const storage = fakeStorageWithCache();
   t.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
     const url = String(input);
-    const payload = url.endsWith("/me/time_entries/current")
+    const payload = url.endsWith("/tracking/current")
       ? { id: 99, workspace_id: 1, description: "External timer", start: "2026-06-30T12:00:00.000Z", stop: null, duration: -1 }
-      : url.endsWith("/me/time_entries")
-        ? []
-        : { default_workspace_id: 1, workspaces: [] };
+      : url.includes("/time-entries?")
+        ? { data: [], page: 1, per_page: 25 }
+        : { data: [], page: 1, per_page: 200 };
     return new Response(JSON.stringify(payload), {
       status: 200,
       headers: { "Content-Type": "application/json" }
@@ -180,15 +184,13 @@ test("stopping with no remote timer clears a stale local footer timer", async (t
   assert.equal(formatRunningTogglTimer(storage), null);
 });
 
-test("stopping a Toggl timer uses the Track API v9 PATCH endpoint", async (t) => {
+test("stopping a Toggl timer uses the Focus tracking stop endpoint", async (t) => {
   const storage = fakeStorageWithCache();
   const requests: Array<{ url: string; method: string }> = [];
   t.mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     requests.push({ url, method: init?.method ?? "GET" });
-    const payload = url.endsWith("/current")
-      ? { id: 99, workspace_id: 1, description: "Reading", start: "2026-06-30T12:00:00.000Z", stop: null }
-      : { id: 99, workspace_id: 1, description: "Reading", start: "2026-06-30T12:00:00.000Z", stop: "2026-06-30T12:42:00.000Z" };
+    const payload = { id: 99, workspace_id: 1, description: "Reading", start: "2026-06-30T12:00:00.000Z", stop: "2026-06-30T12:42:00.000Z" };
     return new Response(JSON.stringify(payload), {
       status: 200,
       headers: { "Content-Type": "application/json" }
@@ -198,8 +200,7 @@ test("stopping a Toggl timer uses the Track API v9 PATCH endpoint", async (t) =>
   await stopTogglEntry(storage);
 
   assert.deepEqual(requests, [
-    { url: "https://api.track.toggl.com/api/v9/me/time_entries/current", method: "GET" },
-    { url: "https://api.track.toggl.com/api/v9/workspaces/1/time_entries/99/stop", method: "PATCH" }
+    { url: "https://focus.toggl.com/api/organizations/7/workspaces/1/tracking/stop", method: "POST" }
   ]);
   assert.equal(formatRunningTogglTimer(storage), null);
 });
@@ -365,4 +366,34 @@ test("running Toggl timer is formatted for the footer", () => {
   const storage = new FakeStorage();
   storage.setRawSetting("togglCurrentEntry", JSON.stringify({ description: "O Nome do Vento", start: "2026-06-30T12:00:00.000Z" }));
   assert.equal(formatRunningTogglTimer(storage as unknown as Storage, new Date("2026-06-30T12:42:00.000Z")), "Toggl 42m · O Nome do Vento");
+});
+
+test("Toggl quota headers are persisted and explain a 402 reset", async (t) => {
+  const storage = fakeStorageWithCache();
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({ error: "quota_exhausted" }), {
+    status: 402,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Toggl-Quota-Remaining": "0",
+      "X-Toggl-Quota-Resets-In": "125"
+    }
+  }));
+
+  await assert.rejects(syncToggl(storage), /quota exhausted.*2m 5s/i);
+  assert.deepEqual(getTogglQuota(storage), {
+    remaining: 0,
+    resetsInSeconds: 125,
+    observedAt: getTogglQuota(storage)?.observedAt
+  });
+});
+
+test("recognized Toggl commands show contextual next-step help", () => {
+  const authHelp = commandContextHelp("toggl auth", fakeStorageWithCache());
+  assert.ok(authHelp.some((line) => line.includes("toggl_sk_")));
+  assert.ok(authHelp.some((line) => line.includes("--organization")));
+  assert.ok(authHelp.some((line) => line.includes("focus.toggl.com/settings")));
+
+  const startHelp = commandContextHelp("toggl start ", fakeStorageWithCache());
+  assert.ok(startHelp.some((line) => line.includes("<description>")));
+  assert.ok(startHelp.some((line) => line.includes("Tab")));
 });

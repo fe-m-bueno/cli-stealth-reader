@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
 import type { Storage } from "./storage.js";
 
-const API_BASE = "https://api.track.toggl.com/api/v9";
-const TOKEN_PAGE = "https://track.toggl.com/profile";
+const API_BASE = "https://focus.toggl.com/api";
+const TOKEN_PAGE = "https://focus.toggl.com/settings";
 
 export interface TogglProject {
   id: number;
@@ -19,7 +19,14 @@ export interface TogglRecentDescription {
   lastUsedAt: string;
 }
 
+export interface TogglQuota {
+  remaining: number;
+  resetsInSeconds: number;
+  observedAt: string;
+}
+
 export interface TogglCache {
+  defaultOrganizationId: number | null;
   defaultWorkspaceId: number | null;
   projects: TogglProject[];
   descriptions: TogglRecentDescription[];
@@ -29,13 +36,25 @@ export interface TogglCache {
 export interface TogglTimeEntry {
   id: number;
   workspace_id?: number;
-  wid?: number;
   project_id?: number | null;
-  pid?: number | null;
   description?: string;
   start?: string;
-  stop?: string | null;
   duration?: number;
+  stop?: string | null;
+}
+
+interface FocusPage<T> {
+  data?: T[];
+  page?: number;
+  per_page?: number;
+  total?: number;
+}
+
+class TogglApiError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+    this.name = "TogglApiError";
+  }
 }
 
 export function togglTokenPage(): string {
@@ -48,48 +67,24 @@ export function openTogglTokenPage(): void {
   execFile(opener, args, () => {});
 }
 
-function authHeader(token: string): string {
-  return `Basic ${Buffer.from(`${token}:api_token`).toString("base64")}`;
-}
-
-async function togglRequest<T>(storage: Storage, path: string, init: RequestInit = {}, tokenOverride?: string): Promise<T> {
-  const token = tokenOverride ?? storage.getSetting("togglApiToken");
-  if (!token) {
-    throw new Error(`Toggl is not connected. Run /toggl auth and paste your API token from ${TOKEN_PAGE}.`);
-  }
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": authHeader(token),
-      ...(init.headers ?? {})
-    }
-  });
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`Toggl API ${response.status}: ${text || response.statusText}`);
-  }
-  if (response.status === 204) {
-    return undefined as T;
-  }
-  return await response.json() as T;
+function emptyCache(): TogglCache {
+  return { defaultOrganizationId: null, defaultWorkspaceId: null, projects: [], descriptions: [], syncedAt: null };
 }
 
 function readCache(storage: Storage): TogglCache {
   const raw = storage.getSetting("togglCache");
-  if (!raw) {
-    return { defaultWorkspaceId: null, projects: [], descriptions: [], syncedAt: null };
-  }
+  if (!raw) return emptyCache();
   try {
-    const parsed = JSON.parse(raw) as TogglCache;
+    const parsed = JSON.parse(raw) as Partial<TogglCache>;
     return {
+      defaultOrganizationId: parsed.defaultOrganizationId ?? null,
       defaultWorkspaceId: parsed.defaultWorkspaceId ?? null,
       projects: Array.isArray(parsed.projects) ? parsed.projects : [],
       descriptions: Array.isArray(parsed.descriptions) ? parsed.descriptions : [],
       syncedAt: parsed.syncedAt ?? null
     };
   } catch {
-    return { defaultWorkspaceId: null, projects: [], descriptions: [], syncedAt: null };
+    return emptyCache();
   }
 }
 
@@ -101,35 +96,150 @@ export function getTogglCache(storage: Storage): TogglCache {
   return readCache(storage);
 }
 
-export async function connectToggl(storage: Storage, token: string): Promise<{ fullName?: string; defaultWorkspaceId: number | null }> {
+function saveQuota(storage: Storage, response: Response): void {
+  const remainingHeader = response.headers.get("X-Toggl-Quota-Remaining");
+  const resetHeader = response.headers.get("X-Toggl-Quota-Resets-In");
+  if (remainingHeader === null || resetHeader === null) return;
+  const remaining = Number(remainingHeader);
+  const resetsInSeconds = Number(resetHeader);
+  if (!Number.isFinite(remaining) || !Number.isFinite(resetsInSeconds)) return;
+  const quota: TogglQuota = {
+    remaining: Math.max(0, remaining),
+    resetsInSeconds: Math.max(0, resetsInSeconds),
+    observedAt: new Date().toISOString()
+  };
+  storage.setRawSetting("togglQuota", JSON.stringify(quota));
+}
+
+export function getTogglQuota(storage: Storage): TogglQuota | null {
+  const raw = storage.getSetting("togglQuota");
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as TogglQuota;
+    if (!Number.isFinite(parsed.remaining) || !Number.isFinite(parsed.resetsInSeconds) || !parsed.observedAt) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function formatSeconds(seconds: number): string {
+  const rounded = Math.max(0, Math.ceil(seconds));
+  const hours = Math.floor(rounded / 3600);
+  const minutes = Math.floor((rounded % 3600) / 60);
+  const remainder = rounded % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${remainder}s`;
+  return `${remainder}s`;
+}
+
+export function formatTogglQuota(storage: Storage, now = new Date()): string | null {
+  const quota = getTogglQuota(storage);
+  if (!quota) return null;
+  const elapsed = Math.max(0, (now.getTime() - new Date(quota.observedAt).getTime()) / 1000);
+  const resetsIn = Math.max(0, quota.resetsInSeconds - elapsed);
+  return `quota ${quota.remaining} · resets in ${formatSeconds(resetsIn)}`;
+}
+
+function errorDetail(raw: string): string {
+  if (!raw.trim()) return "";
+  try {
+    const parsed = JSON.parse(raw) as { error?: unknown; message?: unknown; details?: unknown };
+    const value = parsed.message ?? parsed.error ?? parsed.details;
+    return typeof value === "string" ? value : "";
+  } catch {
+    return raw.trim().slice(0, 180);
+  }
+}
+
+function apiError(storage: Storage, status: number, raw: string, statusText: string): TogglApiError {
+  const detail = errorDetail(raw);
+  if (status === 401) {
+    return new TogglApiError(status, `Toggl authentication failed (401). Create a Toggl 2.0 key at ${TOKEN_PAGE}, then run /toggl auth <toggl_sk_...> --organization <id>.`);
+  }
+  if (status === 402) {
+    const quota = getTogglQuota(storage);
+    const reset = quota ? formatSeconds(quota.resetsInSeconds) : "the quota window resets";
+    return new TogglApiError(status, `Toggl quota exhausted (402). Try again in ${reset}.`);
+  }
+  if (status === 403) {
+    return new TogglApiError(status, `Toggl denied this request (403). Check --organization <id> and your workspace permissions${detail ? `: ${detail}` : "."}`);
+  }
+  return new TogglApiError(status, `Toggl Focus API ${status}: ${detail || statusText}`);
+}
+
+async function togglRequest<T>(storage: Storage, path: string, init: RequestInit = {}, tokenOverride?: string): Promise<T> {
+  const token = tokenOverride ?? storage.getSetting("togglApiToken");
+  if (!token) {
+    throw new Error(`Toggl is not connected. Run /toggl auth <toggl_sk_...> --organization <id>. Key: ${TOKEN_PAGE}`);
+  }
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+      ...(init.headers ?? {})
+    }
+  });
+  saveQuota(storage, response);
+  if (!response.ok) {
+    const raw = await response.text().catch(() => "");
+    throw apiError(storage, response.status, raw, response.statusText);
+  }
+  if (response.status === 204) return undefined as T;
+  return await response.json() as T;
+}
+
+function positiveId(value: number | undefined): number | null {
+  return Number.isInteger(value) && Number(value) > 0 ? Number(value) : null;
+}
+
+export async function connectToggl(
+  storage: Storage,
+  token: string,
+  organizationId?: number
+): Promise<{ defaultOrganizationId: number | null; defaultWorkspaceId: number | null }> {
   const candidateToken = token.trim();
-  const me = await togglRequest<{ fullname?: string; default_workspace_id?: number; workspaces?: Array<{ id: number }> }>(
-    storage,
-    "/me?with_related_data=true",
-    {},
-    candidateToken
-  );
-  storage.setRawSetting("togglApiToken", candidateToken);
-  const defaultWorkspaceId = me.default_workspace_id ?? me.workspaces?.[0]?.id ?? null;
+  const settings = await togglRequest<{ current_workspace_id?: number }>(storage, "/users/me/settings", {}, candidateToken);
   const cache = readCache(storage);
-  cache.defaultWorkspaceId = defaultWorkspaceId;
+  cache.defaultOrganizationId = positiveId(organizationId) ?? cache.defaultOrganizationId;
+  cache.defaultWorkspaceId = positiveId(settings.current_workspace_id) ?? cache.defaultWorkspaceId;
+  storage.setRawSetting("togglApiToken", candidateToken);
   writeCache(storage, cache);
-  return { fullName: me.fullname, defaultWorkspaceId };
+  return {
+    defaultOrganizationId: cache.defaultOrganizationId,
+    defaultWorkspaceId: cache.defaultWorkspaceId
+  };
 }
 
 export function disconnectToggl(storage: Storage): void {
   storage.setRawSetting("togglApiToken", "");
   storage.setRawSetting("togglCurrentEntry", "");
-  writeCache(storage, { defaultWorkspaceId: null, projects: [], descriptions: [], syncedAt: null });
+  storage.setRawSetting("togglQuota", "");
+  writeCache(storage, emptyCache());
 }
 
 function saveCurrentEntry(storage: Storage, entry: TogglTimeEntry | null): void {
   storage.setRawSetting("togglCurrentEntry", entry ? JSON.stringify(entry) : "");
 }
 
+function scope(storage: Storage, workspaceOverride?: number): { organizationId: number; workspaceId: number } {
+  const cache = readCache(storage);
+  const organizationId = cache.defaultOrganizationId;
+  const workspaceId = workspaceOverride ?? cache.defaultWorkspaceId;
+  if (!organizationId) throw new Error("Toggl organization is not configured. Run /toggl auth --organization <id>.");
+  if (!workspaceId) throw new Error("No Toggl workspace found. Reconnect with /toggl auth <toggl_sk_...> --organization <id>.");
+  return { organizationId, workspaceId };
+}
+
+function scopedPath(storage: Storage, suffix: string, workspaceOverride?: number): string {
+  const { organizationId, workspaceId } = scope(storage, workspaceOverride);
+  return `/organizations/${organizationId}/workspaces/${workspaceId}${suffix}`;
+}
+
 export async function refreshCurrentTogglEntry(storage: Storage): Promise<TogglTimeEntry | null> {
   const previousEntry = storage.getSetting("togglCurrentEntry") ?? "";
-  const current = await togglRequest<TogglTimeEntry | null>(storage, "/me/time_entries/current");
+  const current = await togglRequest<TogglTimeEntry | undefined>(storage, scopedPath(storage, "/tracking/current"));
   if ((storage.getSetting("togglCurrentEntry") ?? "") === previousEntry) {
     saveCurrentEntry(storage, current?.id ? current : null);
   }
@@ -158,12 +268,12 @@ function uniqueDescriptions(entries: TogglTimeEntry[]): TogglRecentDescription[]
   const seen = new Map<string, TogglRecentDescription>();
   for (const entry of entries) {
     const description = entry.description?.trim();
-    const workspaceId = entry.workspace_id ?? entry.wid;
+    const workspaceId = entry.workspace_id;
     if (!description || !workspaceId) continue;
     if (!seen.has(description.toLowerCase())) {
       seen.set(description.toLowerCase(), {
         description,
-        projectId: entry.project_id ?? entry.pid ?? undefined,
+        projectId: entry.project_id ?? undefined,
         workspaceId,
         lastUsedAt: entry.start ?? new Date().toISOString()
       });
@@ -173,31 +283,43 @@ function uniqueDescriptions(entries: TogglTimeEntry[]): TogglRecentDescription[]
 }
 
 export async function syncToggl(storage: Storage): Promise<TogglCache> {
-  const me = await togglRequest<{ default_workspace_id?: number; workspaces?: Array<{ id: number }> }>(storage, "/me?with_related_data=true");
-  const workspaceIds = (me.workspaces ?? []).map((workspace) => workspace.id);
-  const defaultWorkspaceId = me.default_workspace_id ?? workspaceIds[0] ?? null;
-  const projects: TogglProject[] = [];
-  for (const workspaceId of workspaceIds) {
-    const workspaceProjects = await togglRequest<Array<{ id: number; wid?: number; workspace_id?: number; name: string; client_name?: string; color?: string; active?: boolean }>>(
-      storage,
-      `/workspaces/${workspaceId}/projects`
-    );
-    for (const project of workspaceProjects) {
-      if (project.active === false) continue;
-      projects.push({
-        id: project.id,
-        workspaceId: project.workspace_id ?? project.wid ?? workspaceId,
-        name: project.name,
-        clientName: project.client_name,
-        color: project.color
-      });
-    }
-  }
-  const recentEntries = await togglRequest<TogglTimeEntry[]>(storage, "/me/time_entries");
+  const { workspaceId } = scope(storage);
+  const projectPage = await togglRequest<FocusPage<{
+    id: number;
+    workspace_id: number;
+    name: string;
+    client?: { name?: string };
+    color?: string;
+    active?: boolean;
+  }>>(storage, `${scopedPath(storage, "/projects")}?page=1&per_page=200`);
+  const projects = (projectPage.data ?? [])
+    .filter((project) => project.active !== false)
+    .map((project) => ({
+      id: project.id,
+      workspaceId: project.workspace_id ?? workspaceId,
+      name: project.name,
+      clientName: project.client?.name,
+      color: project.color
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const now = new Date();
+  const from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const query = new URLSearchParams({
+    date_from: from.toISOString(),
+    date_to: now.toISOString(),
+    page: "1",
+    per_page: "25",
+    order_by: "-start",
+    include_taskless: "true"
+  });
+  const entriesPage = await togglRequest<FocusPage<TogglTimeEntry>>(storage, `${scopedPath(storage, "/time-entries")}?${query}`);
+  const previous = readCache(storage);
   const cache: TogglCache = {
-    defaultWorkspaceId,
-    projects: projects.sort((a, b) => a.name.localeCompare(b.name)),
-    descriptions: uniqueDescriptions(recentEntries),
+    defaultOrganizationId: previous.defaultOrganizationId,
+    defaultWorkspaceId: workspaceId,
+    projects,
+    descriptions: uniqueDescriptions(entriesPage.data ?? []),
     syncedAt: new Date().toISOString()
   };
   writeCache(storage, cache);
@@ -238,18 +360,14 @@ function parseDurationToSeconds(input: string): number {
 
 export async function startTogglEntry(storage: Storage, description: string, projectQuery?: string): Promise<TogglTimeEntry> {
   const project = resolveRequestedProject(storage, projectQuery);
-  const cache = readCache(storage);
-  const workspaceId = project?.workspaceId ?? cache.defaultWorkspaceId;
-  if (!workspaceId) throw new Error("No Toggl workspace found. Run /toggl sync after connecting.");
-  const entry = await togglRequest<TogglTimeEntry>(storage, `/workspaces/${workspaceId}/time_entries`, {
+  const { workspaceId } = scope(storage, project?.workspaceId);
+  const entry = await togglRequest<TogglTimeEntry>(storage, scopedPath(storage, "/tracking/start", workspaceId), {
     method: "POST",
     body: JSON.stringify({
       description,
-      workspace_id: workspaceId,
       project_id: project?.id,
       start: new Date().toISOString(),
-      duration: -1,
-      created_with: "cli-stealth-reader"
+      type: "activity"
     })
   });
   saveCurrentEntry(storage, entry);
@@ -258,42 +376,51 @@ export async function startTogglEntry(storage: Storage, description: string, pro
 
 export async function logTogglEntry(storage: Storage, description: string, duration: string, projectQuery?: string): Promise<TogglTimeEntry> {
   const project = resolveRequestedProject(storage, projectQuery);
-  const cache = readCache(storage);
-  const workspaceId = project?.workspaceId ?? cache.defaultWorkspaceId;
-  if (!workspaceId) throw new Error("No Toggl workspace found. Run /toggl sync after connecting.");
+  const { workspaceId } = scope(storage, project?.workspaceId);
   const seconds = parseDurationToSeconds(duration);
-  const stop = new Date();
-  const start = new Date(stop.getTime() - seconds * 1000);
-  return await togglRequest<TogglTimeEntry>(storage, `/workspaces/${workspaceId}/time_entries`, {
+  const trackedAt = new Date();
+  const start = new Date(trackedAt.getTime() - seconds * 1000);
+  return await togglRequest<TogglTimeEntry>(storage, scopedPath(storage, "/time-entries", workspaceId), {
     method: "POST",
     body: JSON.stringify({
       description,
-      workspace_id: workspaceId,
       project_id: project?.id,
       start: start.toISOString(),
-      stop: stop.toISOString(),
+      tracked_at: trackedAt.toISOString(),
       duration: seconds,
-      created_with: "cli-stealth-reader"
+      type: "activity"
     })
   });
 }
 
 export async function stopTogglEntry(storage: Storage): Promise<TogglTimeEntry | null> {
-  const current = await refreshCurrentTogglEntry(storage);
-  if (!current) return null;
-  const workspaceId = current.workspace_id ?? current.wid;
-  if (!workspaceId) throw new Error("Current Toggl entry has no workspace id.");
-  const stopped = await togglRequest<TogglTimeEntry>(storage, `/workspaces/${workspaceId}/time_entries/${current.id}/stop`, { method: "PATCH" });
-  saveCurrentEntry(storage, null);
-  return stopped;
+  try {
+    const stopped = await togglRequest<TogglTimeEntry>(storage, scopedPath(storage, "/tracking/stop"), {
+      method: "POST",
+      body: JSON.stringify({ end: new Date().toISOString() })
+    });
+    saveCurrentEntry(storage, null);
+    return stopped;
+  } catch (error) {
+    if (error instanceof TogglApiError && error.status === 404) {
+      saveCurrentEntry(storage, null);
+      return null;
+    }
+    throw error;
+  }
 }
 
 export function formatTogglRecents(storage: Storage): string[] {
   const cache = readCache(storage);
-  const lines = [`Projects (${cache.projects.length})`];
+  const lines = [
+    `Organization ${cache.defaultOrganizationId ?? "not configured"} · Workspace ${cache.defaultWorkspaceId ?? "not configured"}`,
+    `Projects (${cache.projects.length})`
+  ];
   lines.push(...cache.projects.slice(0, 10).map((project) => `  ${project.clientName ? `${project.clientName} / ` : ""}${project.name}`));
   lines.push(`Descriptions (${cache.descriptions.length})`);
   lines.push(...cache.descriptions.slice(0, 10).map((item) => `  ${item.description}`));
+  const quota = formatTogglQuota(storage);
+  if (quota) lines.push(`API ${quota}`);
   if (cache.syncedAt) lines.push(`Synced ${cache.syncedAt}`);
   return lines;
 }

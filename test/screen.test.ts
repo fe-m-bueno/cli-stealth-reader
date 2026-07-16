@@ -170,6 +170,27 @@ test("command footer keeps a fixed suggestion viewport when filtering finds noth
   assert.ok(footer.some((line) => line.includes("No matching commands")));
 });
 
+test("command footer replaces an empty Toggl result with contextual help", () => {
+  const state = {
+    theme,
+    commandMode: true,
+    commandBuffer: "toggl auth",
+    commandCursor: 10,
+    commandSuggestionIndex: 0,
+    currentBook: null,
+    progressVisibility: "hidden",
+    status: "Ready",
+    chapterIndex: 0,
+    blockOffset: 0,
+    storage: { getSetting: () => null }
+  } as unknown as AppState;
+
+  const footer = renderFooter(state, 100).map(stripAnsi);
+  assert.ok(footer.some((line) => line.includes("/toggl auth <toggl_sk_...> --organization <id>")));
+  assert.ok(footer.some((line) => line.includes("focus.toggl.com/settings")));
+  assert.ok(!footer.some((line) => line.includes("No matching commands")));
+});
+
 test("normal footer keeps progress on a separate bottom-right line", () => {
   const state = {
     theme,
