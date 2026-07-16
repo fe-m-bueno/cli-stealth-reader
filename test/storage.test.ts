@@ -124,3 +124,27 @@ test("global pace settings round-trip via raw settings", () => {
     cleanup();
   }
 });
+
+test("reading layout settings persist with numeric validation", () => {
+  const { storage, cleanup } = makeTempStorage();
+  try {
+    storage.setSetting("fontScale", 1.3);
+    storage.setSetting("marginSize", 12);
+    storage.setSetting("lineSpacing", "relaxed");
+
+    const settings = storage.getSettings();
+    assert.equal(settings.fontScale, 1.3);
+    assert.equal(settings.marginSize, 12);
+    assert.equal(settings.lineSpacing, "relaxed");
+
+    storage.setRawSetting("fontScale", "not-a-number");
+    storage.setRawSetting("marginSize", "99");
+    storage.setRawSetting("lineSpacing", "huge");
+    const fallback = storage.getSettings();
+    assert.equal(fallback.fontScale, 1);
+    assert.equal(fallback.marginSize, 0);
+    assert.equal(fallback.lineSpacing, "normal");
+  } finally {
+    cleanup();
+  }
+});

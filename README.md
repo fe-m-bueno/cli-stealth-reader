@@ -197,7 +197,7 @@ livro', pensou Alice, 'sem figuras ou conversas?'
 | `d`   | Ciclar densidade do código stealth (1 → 3 → 5)                   |
 | `c`   | Abrir picker de colorscheme                                      |
 | `C`   | Abrir picker de tema                                             |
-| `S`   | Abrir painel de configurações                                    |
+| `S`   | Abrir configurações em abas com preview ao vivo                  |
 | `p`   | Ciclar progresso (tempo restante capítulo/livro → % → hidden)    |
 | `?`   | Ver atalhos de teclado                                           |
 | `q`   | Sair do leitor                                                   |
@@ -317,7 +317,8 @@ O arquivo exportado é indexado por `importHash` — sem dependência de caminho
   time-chapter | time-book | book | both | chapter | hidden
 
 /settings              # Abrir painel pesquisável de configurações do leitor
-                       # Space altera, Enter salva, / pesquisa, Esc cancela
+                       # ←/→ muda aba, ↑/↓ seleciona, Space altera
+                       # Enter salva, / pesquisa na aba, Esc cancela
 ```
 
 ### Sistema
@@ -492,6 +493,8 @@ type CanonicalBlock =
 - Posição de leitura é persistida por livro automaticamente
 - Modos stealth (TypeScript, Python, Rust) são persistidos via `settings`; a tecla `m` cicla entre eles
 - A densidade do código stealth (1–5) é persistida via `settings`; a tecla `d` cicla entre 1→3→5
+- O painel de configurações usa abas `Themes`, `Reading`, `Layout` e `More`, com preview transacional
+- `Text size`, `Page margins` e `Line spacing` ajustam a coluna de leitura sem depender do emulador de terminal
 - O modo foco preserva a posição equivalente ao retornar ao scroll normal
 - Export/import usa `importHash` como chave, sem dependência de caminho do arquivo no sistema
 - Tags são case-insensitive no banco (LOWER); notas são indexadas por `book_id`

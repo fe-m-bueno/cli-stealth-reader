@@ -115,7 +115,10 @@ export function currentLines(state: AppState, width: number, height: number): st
     state.codeLanguage,
     state.codeDensity,
     state.searchState?.query,
-    state.plainHighlight
+    state.plainHighlight,
+    0,
+    true,
+    state.lineSpacing
   );
 }
 
@@ -352,7 +355,9 @@ function draw(state: AppState): void {
   const footerProgress = [progress, focusProgress].filter(Boolean).join(` ${fg(state.theme.border, "·")} `);
   const footerLines = renderFooter(state, width, footerProgress);
   const body = renderBody(
-    mainLines,
+    layout.contentPadding > 0
+      ? mainLines.map((line) => `${" ".repeat(layout.contentPadding)}${line}`)
+      : mainLines,
     overlayLines,
     layout.bodyHeight,
     layout.mainWidth,
@@ -438,6 +443,9 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     codeLanguage: settings.codeLanguage,
     codeDensity: settings.codeDensity,
     plainHighlight: settings.plainHighlight,
+    fontScale: settings.fontScale,
+    marginSize: settings.marginSize,
+    lineSpacing: settings.lineSpacing,
     progressVisibility: settings.progressVisibility,
     readingPace: createEmptyPaceState(loadGlobalPace(storage)),
     currentBook: null,

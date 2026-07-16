@@ -6,6 +6,7 @@ import {
   computeChapterProgress,
   computeWindowStart,
   formatProgress,
+  getViewportLayout,
   getScrollbarMetrics,
   renderFooter,
   renderFrame,
@@ -278,6 +279,15 @@ test("progress uses rendered viewport lines instead of raw block count", () => {
   assert.ok(bookProgressNextChapterStart >= bookProgressNearChapterEnd);
 });
 
+test("text size and page margins narrow and center the reading column", () => {
+  const standard = getViewportLayout(readingState({ fontScale: 1, marginSize: 0 }), 120, 40);
+  const comfortable = getViewportLayout(readingState({ fontScale: 1.3, marginSize: 8 }), 120, 40);
+
+  assert.ok(comfortable.contentWidth < standard.contentWidth);
+  assert.ok(comfortable.contentPadding >= 8);
+  assert.ok(comfortable.contentPadding + comfortable.contentWidth <= comfortable.mainWidth);
+});
+
 test("time progress modes render chapter and book estimates", () => {
   const state = readingState({
     progressVisibility: "time-chapter",
@@ -313,6 +323,9 @@ function readingState(overrides: Partial<AppState> = {}): AppState {
     codeLanguage: "typescript",
     codeDensity: 3,
     plainHighlight: true,
+    fontScale: 1,
+    marginSize: 0,
+    lineSpacing: "normal",
     commandMode: false,
     commandBuffer: "",
     commandCursor: 0,

@@ -188,7 +188,10 @@ function firstLineOfBlock(
     state.codeLanguage,
     state.codeDensity,
     undefined,
-    state.plainHighlight
+    state.plainHighlight,
+    0,
+    true,
+    state.lineSpacing
   ).length;
 }
 

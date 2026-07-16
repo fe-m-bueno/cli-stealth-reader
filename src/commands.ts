@@ -159,11 +159,11 @@ export const COMMANDS: CommandDefinition[] = [
   {
     name: "settings",
     aliases: ["config"],
-    description: "Open the reader settings panel.",
+    description: "Open tabbed reader settings with a live preview.",
     usage: "/settings",
     details: [
-      "Opens a searchable settings panel for reader-specific options.",
-      "Inside the panel, Space changes the selected setting, Enter saves, / searches, and Esc cancels."
+      "Opens Kindle-style Themes, Reading, Layout, and More tabs.",
+      "Use Left/Right to change tabs, Up/Down to select, Space to change, Enter to save, / to search, and Esc to cancel."
     ],
     examples: ["/settings", "/config"],
     notes: ["Shortcut: press S from the reader to open settings."]

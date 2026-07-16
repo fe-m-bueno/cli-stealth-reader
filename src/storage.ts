@@ -33,7 +33,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   renderMode: "code",
   codeLanguage: "typescript",
   codeDensity: 3,
-  plainHighlight: true
+  plainHighlight: true,
+  fontScale: 1,
+  marginSize: 0,
+  lineSpacing: "normal"
 };
 
 export class Storage {
@@ -147,6 +150,20 @@ export class Storage {
         }
       } else if (row.key === "plainHighlight") {
         settings.plainHighlight = row.value === "true";
+      } else if (row.key === "fontScale") {
+        const parsed = Number(row.value);
+        if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 2) {
+          settings.fontScale = parsed;
+        }
+      } else if (row.key === "marginSize") {
+        const parsed = Number(row.value);
+        if (Number.isInteger(parsed) && parsed >= 0 && parsed <= 30) {
+          settings.marginSize = parsed;
+        }
+      } else if (row.key === "lineSpacing") {
+        if (["compact", "normal", "relaxed"].includes(row.value)) {
+          settings.lineSpacing = row.value as AppSettings["lineSpacing"];
+        }
       } else if (row.key in settings) {
         (settings as Record<string, unknown>)[row.key] = row.value;
       }

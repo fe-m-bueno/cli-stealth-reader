@@ -150,3 +150,50 @@ test("supports disabling dialogue highlight in plain mode", () => {
   const line = renderPlainLine('Ela disse: "Oi".', false);
   assert.equal(line, fg(DEFAULT_THEME.foreground, 'Ela disse: "Oi".'));
 });
+
+test("line spacing changes the rendered distance between blocks", () => {
+  const blocks: CanonicalBlock[] = [
+    { id: "b1", type: "paragraph", text: "First" },
+    { id: "b2", type: "paragraph", text: "Second" }
+  ];
+  const render = (lineSpacing: "compact" | "normal" | "relaxed") => renderBlocks(
+    blocks,
+    "plain",
+    80,
+    DEFAULT_THEME,
+    "typescript",
+    3,
+    undefined,
+    true,
+    0,
+    true,
+    lineSpacing
+  );
+
+  assert.equal(render("compact").length, 2);
+  assert.equal(render("normal").length, 4);
+  assert.equal(render("relaxed").length, 6);
+});
+
+test("relaxed line spacing separates wrapped lines inside a paragraph", () => {
+  const blocks: CanonicalBlock[] = [
+    { id: "b1", type: "paragraph", text: "one two three four five six seven eight" }
+  ];
+  const normal = renderBlocks(blocks, "plain", 12, DEFAULT_THEME);
+  const relaxed = renderBlocks(
+    blocks,
+    "plain",
+    12,
+    DEFAULT_THEME,
+    "typescript",
+    3,
+    undefined,
+    true,
+    0,
+    true,
+    "relaxed"
+  );
+
+  assert.ok(relaxed.length > normal.length);
+  assert.equal(stripAnsi(relaxed[1] ?? ""), "");
+});

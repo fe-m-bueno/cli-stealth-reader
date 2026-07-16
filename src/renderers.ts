@@ -1,4 +1,4 @@
-import type { CanonicalBlock, CodeDensity, CodeLanguage, RenderMode, ThemePreset } from "./types.js";
+import type { CanonicalBlock, CodeDensity, CodeLanguage, LineSpacing, RenderMode, ThemePreset } from "./types.js";
 import { bold, fg, highlightPreservingCSI } from "./color.js";
 import { wrapText, lineHash } from "./renderers/shared.js";
 import { renderCodeTypescript } from "./renderers/typescript.js";
@@ -272,7 +272,8 @@ export function renderBlocks(
   searchQuery?: string | null,
   plainHighlight = true,
   blockIndexOffset = 0,
-  includeTrailingSpacing = true
+  includeTrailingSpacing = true,
+  lineSpacing: LineSpacing = "normal"
 ): string[] {
   const lines: string[] = [];
   blocks.forEach((block, index) => {
@@ -280,19 +281,32 @@ export function renderBlocks(
     const rendered = mode === "plain"
       ? renderPlain(block, width, theme, plainHighlight)
       : renderCode(block, width, theme, absoluteIndex, codeLanguage, codeDensity);
-    lines.push(...rendered);
+    rendered.forEach((line, lineIndex) => {
+      lines.push(line);
+      if (lineSpacing === "relaxed" && lineIndex < rendered.length - 1) {
+        lines.push("");
+      }
+    });
 
     if (includeTrailingSpacing || index < blocks.length - 1) {
+      let normalSpacing = 1;
       if (mode === "code") {
         // Vary blank lines: 70% → 1 blank, 20% → 0 blanks, 10% → 2 blanks
         const r = lineHash(absoluteIndex, 999) % 10;
         if (r < 7) {
-          lines.push("");
+          normalSpacing = 1;
         } else if (r >= 9) {
-          lines.push("", "");
+          normalSpacing = 2;
+        } else {
+          normalSpacing = 0;
         }
-        // r === 7 or 8: no blank line (20%)
-      } else {
+      }
+      const spacing = lineSpacing === "compact"
+        ? Math.max(0, normalSpacing - 1)
+        : lineSpacing === "relaxed"
+        ? normalSpacing + 1
+        : normalSpacing;
+      for (let blank = 0; blank < spacing; blank += 1) {
         lines.push("");
       }
     }

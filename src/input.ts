@@ -14,6 +14,7 @@ import {
   closeSettingsPanel,
   cycleSelectedSetting,
   filteredSettingsItems,
+  moveSettingsTab,
   openSettingsPanel
 } from "./settings-panel.js";
 import { APPEARANCE_THEMES, THEMES, applyAppearanceTheme } from "./themes.js";
@@ -403,7 +404,11 @@ export async function handleInput(
     const maxIndex = Math.max(0, items.length - 1);
     state.overlayCursor = clamp(state.overlayCursor, 0, maxIndex);
 
-    if (chunk === "\u001b") {
+    if (isRightKey(chunk) || (chunk === "l" && !state.settingsSearchMode)) {
+      moveSettingsTab(state, 1);
+    } else if (isLeftKey(chunk) || (chunk === "h" && !state.settingsSearchMode)) {
+      moveSettingsTab(state, -1);
+    } else if (chunk === "\u001b") {
       closeSettingsPanel(state);
       state.status = "Settings cancelled.";
     } else if (chunk === "\r") {

@@ -132,7 +132,10 @@ function makeStorageBase() {
       renderMode: "plain",
       codeLanguage: "typescript",
       codeDensity: 3,
-      plainHighlight: true
+      plainHighlight: true,
+      fontScale: 1,
+      marginSize: 0,
+      lineSpacing: "normal"
     }),
     listBookmarks: () => [],
     addBookmark: () => ({ id: "", bookId: "", chapterIndex: 0, blockOffset: 0, label: null, createdAt: 0 }),
@@ -158,6 +161,9 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     codeLanguage: "typescript",
     codeDensity: 3,
     plainHighlight: true,
+    fontScale: 1,
+    marginSize: 0,
+    lineSpacing: "normal",
     progressVisibility: "book",
     readingPace: createEmptyPaceState(),
     currentBook: null,
@@ -756,21 +762,96 @@ test("/settings and S open the settings panel", async () => {
   assert.equal(shortcutState.overlay, "settings");
 });
 
+test("settings opens on the Themes tab and shows only theme controls", async () => {
+  const state = makeState({ overlay: "none" });
+
+  await executeCommand(state, "/settings");
+  const lines = renderSettingsPanel(state, 80, 20).map(stripAnsi);
+  const panel = lines.join("\n");
+
+  assert.match(panel, /Themes.*Reading.*Layout.*More/);
+  assert.match(panel, /Appearance theme/);
+  assert.match(panel, /Colorscheme/);
+  assert.doesNotMatch(panel, /Reading mode/);
+  assert.doesNotMatch(panel, /Progress display/);
+});
+
+test("right arrow moves settings from Themes to Reading", async () => {
+  const state = makeState({ overlay: "none" });
+  await executeCommand(state, "/settings");
+  state.overlayCursor = 1;
+
+  await handleInput("\u001b[C", state, redraw, noop, () => {}, noop);
+  const panel = renderSettingsPanel(state, 80, 20).map(stripAnsi).join("\n");
+
+  assert.equal(state.settingsTab, "reading");
+  assert.equal(state.overlayCursor, 0);
+  assert.match(panel, /Reading mode/);
+  assert.match(panel, /Dialogue highlight/);
+  assert.doesNotMatch(panel, /Appearance theme/);
+});
+
+test("Layout tab exposes text size, margins, spacing, and code density", async () => {
+  const state = makeState({ overlay: "none" });
+  await executeCommand(state, "/settings");
+  await handleInput("\u001b[C", state, redraw, noop, () => {}, noop);
+  await handleInput("\u001b[C", state, redraw, noop, () => {}, noop);
+
+  const panel = renderSettingsPanel(state, 80, 24).map(stripAnsi).join("\n");
+
+  assert.equal(state.settingsTab, "layout");
+  assert.match(panel, /Text size/);
+  assert.match(panel, /Page margins/);
+  assert.match(panel, /Line spacing/);
+  assert.match(panel, /Code density/);
+});
+
+test("settings preview follows the draft without applying it to the reader", async () => {
+  const state = makeState({ overlay: "none", renderMode: "plain", codeLanguage: "typescript" });
+  await executeCommand(state, "/settings");
+  await handleInput("\u001b[C", state, redraw, noop, () => {}, noop);
+
+  await handleInput(" ", state, redraw, noop, () => {}, noop);
+  const panel = renderSettingsPanel(state, 80, 24).map(stripAnsi).join("\n");
+
+  assert.equal(state.renderMode, "plain");
+  assert.equal(state.settingsDraft?.renderMode, "code");
+  assert.match(panel, /Preview/);
+  assert.match(panel, /const fragment/);
+});
+
+test("settings stays within a small terminal and omits an incomplete preview", async () => {
+  const state = makeState({ overlay: "none" });
+  await executeCommand(state, "/settings");
+  await handleInput("\u001b[C", state, redraw, noop, () => {}, noop);
+  await handleInput("\u001b[C", state, redraw, noop, () => {}, noop);
+
+  const lines = renderSettingsPanel(state, 36, 12).map(stripAnsi);
+
+  assert.ok(lines.length <= 12);
+  assert.ok(lines.every((line) => line.length <= 36));
+  assert.ok(!lines.some((line) => line.includes("Preview")));
+});
+
 test("settings panel labels both reading-time progress modes", async () => {
   const chapterState = makeState({ overlay: "none", progressVisibility: "time-chapter" });
   await executeCommand(chapterState, "/settings");
+  await handleInput("\u001b[D", chapterState, redraw, noop, () => {}, noop);
   const chapterLines = renderSettingsPanel(chapterState, 80, 20).map(stripAnsi);
   assert.ok(chapterLines.some((line) => line.includes("Time left in chapter")));
 
   const bookState = makeState({ overlay: "none", progressVisibility: "time-book" });
   await executeCommand(bookState, "/settings");
+  await handleInput("\u001b[D", bookState, redraw, noop, () => {}, noop);
   const bookLines = renderSettingsPanel(bookState, 80, 20).map(stripAnsi);
   assert.ok(bookLines.some((line) => line.includes("Time left in book")));
 });
 
-test("settings panel filters reader settings with its own search field", async () => {
+test("settings search filters controls inside the active tab", async () => {
   const state = makeState({ overlay: "none" });
   await executeCommand(state, "/config");
+  await handleInput("\u001b[C", state, redraw, noop, () => {}, noop);
+  await handleInput("\u001b[C", state, redraw, noop, () => {}, noop);
   await handleInput("/", state, redraw, noop, () => {}, noop);
   await handleInput("d", state, redraw, noop, () => {}, noop);
   await handleInput("e", state, redraw, noop, () => {}, noop);
@@ -785,9 +866,46 @@ test("settings panel filters reader settings with its own search field", async (
   assert.ok(!lines.some((line) => line.includes("Mouse capture")));
 });
 
+test("Enter applies and persists the complete Layout draft", async () => {
+  const saved: Array<[string, unknown]> = [];
+  const storage = makeStorage({
+    setSetting: (key: string, value: unknown) => saved.push([key, value])
+  });
+  const state = makeState({
+    overlay: "none",
+    storage,
+    fontScale: 1,
+    marginSize: 0,
+    lineSpacing: "normal"
+  });
+  await executeCommand(state, "/settings");
+  await handleInput("\u001b[C", state, redraw, noop, () => {}, noop);
+  await handleInput("\u001b[C", state, redraw, noop, () => {}, noop);
+
+  await handleInput(" ", state, redraw, noop, () => {}, noop);
+  await handleInput("\u001b[B", state, redraw, noop, () => {}, noop);
+  await handleInput(" ", state, redraw, noop, () => {}, noop);
+  await handleInput("\u001b[B", state, redraw, noop, () => {}, noop);
+  await handleInput(" ", state, redraw, noop, () => {}, noop);
+
+  assert.equal(state.fontScale, 1);
+  assert.equal(state.marginSize, 0);
+  assert.equal(state.lineSpacing, "normal");
+
+  await handleInput("\r", state, redraw, noop, () => {}, noop);
+
+  assert.equal(state.fontScale, 1.15);
+  assert.equal(state.marginSize, 4);
+  assert.equal(state.lineSpacing, "relaxed");
+  assert.ok(saved.some(([key, value]) => key === "fontScale" && value === 1.15));
+  assert.ok(saved.some(([key, value]) => key === "marginSize" && value === 4));
+  assert.ok(saved.some(([key, value]) => key === "lineSpacing" && value === "relaxed"));
+});
+
 test("space stages a settings change and escape cancels it", async () => {
   const state = makeState({ overlay: "none", renderMode: "plain", codeLanguage: "typescript" });
   await executeCommand(state, "/settings");
+  await handleInput("\u001b[C", state, redraw, noop, () => {}, noop);
   await handleInput(" ", state, redraw, noop, () => {}, noop);
 
   assert.equal(state.settingsDraft?.renderMode, "code");
@@ -810,6 +928,7 @@ test("enter saves staged settings and persists app settings", async () => {
   const state = makeState({ overlay: "none", storage, renderMode: "plain", codeLanguage: "typescript" });
 
   await executeCommand(state, "/settings");
+  await handleInput("\u001b[C", state, redraw, noop, () => {}, noop);
   await handleInput(" ", state, redraw, noop, () => {}, noop);
   await handleInput("\r", state, redraw, noop, () => {}, noop);
 

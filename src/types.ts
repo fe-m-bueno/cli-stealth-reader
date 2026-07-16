@@ -3,6 +3,7 @@ export type RenderMode = "code" | "plain";
 export type CodeLanguage = "typescript" | "python" | "rust";
 
 export type CodeDensity = 1 | 2 | 3 | 4 | 5;
+export type LineSpacing = "compact" | "normal" | "relaxed";
 
 export type ProgressVisibility =
   | "time-chapter"
@@ -167,6 +168,9 @@ export interface AppSettings {
   codeLanguage: CodeLanguage;
   codeDensity: CodeDensity;
   plainHighlight: boolean;
+  fontScale: number;
+  marginSize: number;
+  lineSpacing: LineSpacing;
 }
 
 export interface CommandArgSpec {
@@ -294,6 +298,9 @@ export interface AppState {
   codeLanguage: CodeLanguage;
   codeDensity: CodeDensity;
   plainHighlight: boolean;
+  fontScale: number;
+  marginSize: number;
+  lineSpacing: LineSpacing;
   progressVisibility: ProgressVisibility;
   /** Runtime reading-pace tracker; see reading-pace.ts */
   readingPace: PaceState;
@@ -334,6 +341,7 @@ export interface AppState {
         renderMode: RenderMode;
         codeLanguage: CodeLanguage;
         codeDensity: CodeDensity;
+        lineSpacing: LineSpacing;
         width: number;
         bodyHeight: number;
         chapterLineCounts: number[];
@@ -351,6 +359,7 @@ export interface AppState {
   integrationLines?: string[];
   mouseCapture: boolean;
   settingsDraft?: import("./settings-panel.js").SettingsPanelDraft | null;
+  settingsTab?: import("./settings-panel.js").SettingsTab;
   settingsSearchBuffer?: string;
   settingsSearchMode?: boolean;
 }

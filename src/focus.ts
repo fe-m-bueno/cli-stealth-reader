@@ -28,7 +28,8 @@ export function getFocusBlockLineCounts(state: AppState, contentWidth: number): 
       undefined,
       state.plainHighlight,
       blockIndex,
-      true
+      true,
+      state.lineSpacing
     ).length
   ));
 }
@@ -83,6 +84,7 @@ export function renderFocusBlock(state: AppState, contentWidth: number): string[
     state.searchState?.query,
     state.plainHighlight,
     index,
-    false
+    false,
+    state.lineSpacing
   );
 }

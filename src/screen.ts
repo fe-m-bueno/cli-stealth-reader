@@ -84,14 +84,27 @@ export function getViewportLayout(state: AppState, width: number, height: number
     : Math.min(OVERLAY_MAX_WIDTH, Math.floor(width * 0.32));
   const mainWidth = Math.max(MIN_MAIN_WIDTH, width - overlayWidth - (overlayWidth ? 3 : 0));
   const scrollbarWidth = state.currentBook && state.overlay !== "settings" ? 1 : 0;
-  const contentWidth = Math.max(1, mainWidth - 2 - scrollbarWidth);
+  const baseContentWidth = Math.max(1, mainWidth - 2 - scrollbarWidth);
+  const readingLayoutActive = Boolean(state.currentBook)
+    && state.overlay !== "settings"
+    && state.overlay !== "help";
+  const requestedMargin = readingLayoutActive ? clamp(state.marginSize ?? 0, 0, 30) : 0;
+  const maxMargin = Math.max(0, Math.floor((baseContentWidth - Math.min(20, baseContentWidth)) / 2));
+  const appliedMargin = Math.min(requestedMargin, maxMargin);
+  const widthInsideMargins = Math.max(1, baseContentWidth - appliedMargin * 2);
+  const fontScale = readingLayoutActive ? clamp(state.fontScale ?? 1, 1, 2) : 1;
+  const contentWidth = Math.max(1, Math.floor(widthInsideMargins / fontScale));
+  const contentPadding = readingLayoutActive
+    ? Math.max(0, Math.floor((baseContentWidth - contentWidth) / 2))
+    : 0;
   return {
     reservedFooterHeight,
     bodyHeight,
     overlayWidth,
     mainWidth,
     scrollbarWidth,
-    contentWidth
+    contentWidth,
+    contentPadding
   };
 }
 
@@ -116,6 +129,7 @@ function ensureLayoutMetrics(state: AppState, mainWidth: number, bodyHeight: num
     && cached.renderMode === state.renderMode
     && cached.codeLanguage === state.codeLanguage
     && cached.codeDensity === state.codeDensity
+    && cached.lineSpacing === state.lineSpacing
     && cached.width === mainWidth
     && cached.bodyHeight === bodyHeight
   ) {
@@ -123,7 +137,19 @@ function ensureLayoutMetrics(state: AppState, mainWidth: number, bodyHeight: num
   }
 
   const chapterLineCounts = state.currentBook.chapters.map((chapter) => (
-    renderBlocks(chapter.blocks, state.renderMode, mainWidth, state.theme, state.codeLanguage, state.codeDensity).length
+    renderBlocks(
+      chapter.blocks,
+      state.renderMode,
+      mainWidth,
+      state.theme,
+      state.codeLanguage,
+      state.codeDensity,
+      undefined,
+      state.plainHighlight,
+      0,
+      true,
+      state.lineSpacing
+    ).length
   ));
   const chapterViewCounts = chapterLineCounts.map((lineCount) => Math.max(1, Math.max(0, lineCount - bodyHeight) + 1));
   state.layoutMetrics = {
@@ -131,6 +157,7 @@ function ensureLayoutMetrics(state: AppState, mainWidth: number, bodyHeight: num
     renderMode: state.renderMode,
     codeLanguage: state.codeLanguage,
     codeDensity: state.codeDensity,
+    lineSpacing: state.lineSpacing,
     width: mainWidth,
     bodyHeight,
     chapterLineCounts,
