@@ -431,6 +431,9 @@ export async function handleInput(
   }
 
   if (chunk === "/") {
+    // Command entry is not active reading. Break the current timing window so
+    // time spent typing (including navigation commands) cannot enter a sample.
+    state.readingPace.lastSampleAt = null;
     state.commandMode = true;
     state.commandBuffer = "";
     state.commandCursor = 0;

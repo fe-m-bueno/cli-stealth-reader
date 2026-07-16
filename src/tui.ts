@@ -1,5 +1,5 @@
 import { commandHelp } from "./commands.js";
-import { executeCommand, importAndOpen, openBook } from "./executor.js";
+import { executeCommand, importAndOpen, openBook, persistReadingPace } from "./executor.js";
 import { clampFocusBlockIndex, mapFocusIndexToBlockOffset, renderFocusBlock } from "./focus.js";
 import { handleInput } from "./input.js";
 import { bg, bold, fg } from "./color.js";
@@ -26,8 +26,7 @@ import {
   absoluteWordCursor,
   applySample,
   createEmptyPaceState,
-  prepareSample,
-  type PaceState
+  prepareSample
 } from "./reading-pace.js";
 import { Storage } from "./storage.js";
 import {
@@ -38,7 +37,7 @@ import {
   applyAppearanceTheme
 } from "./themes.js";
 import { renderSettingsPanel } from "./settings-panel.js";
-import type { AppState } from "./types.js";
+import type { AppState, PaceState } from "./types.js";
 
 function loadGlobalPace(storage: Storage): Pick<PaceState, "globalWpm" | "globalActiveMs"> {
   const wpm = Number(storage.getSetting("globalWpm"));
@@ -47,19 +46,6 @@ function loadGlobalPace(storage: Storage): Pick<PaceState, "globalWpm" | "global
     globalWpm: Number.isFinite(wpm) && wpm > 0 ? wpm : DEFAULT_WPM,
     globalActiveMs: Number.isFinite(activeMs) && activeMs >= 0 ? activeMs : 0
   };
-}
-
-function persistPace(state: AppState): void {
-  state.storage.setRawSetting("globalWpm", String(state.readingPace.globalWpm));
-  state.storage.setRawSetting("globalActiveMs", String(state.readingPace.globalActiveMs));
-  if (state.readingPace.bookId) {
-    state.storage.saveReadingPace({
-      bookId: state.readingPace.bookId,
-      wpm: state.readingPace.bookWpm,
-      activeMs: state.readingPace.bookActiveMs,
-      updatedAt: Date.now()
-    });
-  }
 }
 
 let mouseCaptureEnabled = false;
@@ -422,7 +408,7 @@ function syncPosition(state: AppState): void {
     pace = { ...applySample(pace, sample), ...nextMeta };
   }
   state.readingPace = pace;
-  persistPace(state);
+  persistReadingPace(state);
 
   state.storage.savePosition({
     bookId: state.currentBook.id,

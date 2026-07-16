@@ -36,6 +36,7 @@ A full-screen terminal EPUB reader in TypeScript. Two rendering modes: `plain` (
 | `src/themes.ts` | Built-in color schemes and appearance themes |
 | `src/help.ts` | Keyboard shortcut definitions |
 | `src/color.ts` | ANSI color formatting utilities |
+| `src/reading-pace.ts` | Learned reading pace, remaining-word estimates, and duration formatting |
 | `src/parser/epub.ts` | EPUB import pipeline (JSZip → canonical blocks) |
 | `src/parser/html.ts` | HTML → canonical block extraction (uses parse5) |
 | `src/parser/xml.ts` | XML parsing utilities |
@@ -61,7 +62,7 @@ EPUB file → epub.ts (JSZip + XML/HTML parsing) → CanonicalBook (chapters →
 
 ### Storage (`storage.ts`)
 
-SQLite database in `$XDG_DATA_HOME/cli-stealth-reader/` (WAL mode). Tables: `books`, `chapters` (blocks as JSON), `positions`, `diagnostics`, `settings`, `command_history`. Book JSON cache lives in `$XDG_CACHE_HOME/cli-stealth-reader/`.
+SQLite database in `$XDG_DATA_HOME/cli-stealth-reader/` (WAL mode). Tables: `books`, `chapters` (blocks as JSON), `positions`, `diagnostics`, `settings`, `command_history`, `reading_pace`. Book JSON cache lives in `$XDG_CACHE_HOME/cli-stealth-reader/`.
 
 ### EPUB Import Pipeline (`parser/epub.ts`)
 

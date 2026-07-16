@@ -36,16 +36,21 @@ import type {
   SearchHit
 } from "./types.js";
 
-function persistReadingPace(state: AppState): void {
-  state.storage.setRawSetting("globalWpm", String(state.readingPace.globalWpm));
-  state.storage.setRawSetting("globalActiveMs", String(state.readingPace.globalActiveMs));
-  if (state.readingPace.bookId) {
-    state.storage.saveReadingPace({
-      bookId: state.readingPace.bookId,
-      wpm: state.readingPace.bookWpm,
-      activeMs: state.readingPace.bookActiveMs,
-      updatedAt: Date.now()
-    });
+export function persistReadingPace(state: AppState): void {
+  try {
+    state.storage.setRawSetting("globalWpm", String(state.readingPace.globalWpm));
+    state.storage.setRawSetting("globalActiveMs", String(state.readingPace.globalActiveMs));
+    if (state.readingPace.bookId) {
+      state.storage.saveReadingPace({
+        bookId: state.readingPace.bookId,
+        wpm: state.readingPace.bookWpm,
+        activeMs: state.readingPace.bookActiveMs,
+        updatedAt: Date.now()
+      });
+    }
+  } catch {
+    // Estimates remain usable from memory; persistence must never interrupt
+    // navigation or prevent a book switch.
   }
 }
 

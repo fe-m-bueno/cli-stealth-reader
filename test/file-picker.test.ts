@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { executeCommand } from "../src/executor.js";
 import { handleInput } from "../src/input.js";
+import { createEmptyPaceState } from "../src/reading-pace.js";
 import { computeChapterMaxOffset, getScrollbarMetrics, getViewportLayout, stripAnsi } from "../src/screen.js";
 import { renderSettingsPanel } from "../src/settings-panel.js";
 import { APPEARANCE_THEMES, THEMES } from "../src/themes.js";
@@ -158,6 +159,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     codeDensity: 3,
     plainHighlight: true,
     progressVisibility: "book",
+    readingPace: createEmptyPaceState(),
     currentBook: null,
     chapterIndex: 0,
     blockOffset: 0,
@@ -341,6 +343,19 @@ test("slash opens command mode and tab autocompletes commands", async () => {
   await handleInput("d", state, redraw, noop, () => {}, noop);
   await handleInput("\t", state, redraw, noop, () => {}, noop);
   assert.equal(state.commandBuffer, "mode");
+});
+
+test("entering slash command mode breaks the reading pace timing window", async () => {
+  const state = makeState({
+    overlay: "none",
+    readingPace: createEmptyPaceState({ lastWordCursor: 100, lastSampleAt: 1_000 })
+  });
+
+  await handleInput("/", state, redraw, noop, () => {}, noop);
+
+  assert.equal(state.commandMode, true);
+  assert.equal(state.readingPace.lastSampleAt, null);
+  assert.equal(state.readingPace.lastWordCursor, 100);
 });
 
 test("command mode left arrow moves cursor and backspace deletes before cursor", async () => {
@@ -741,6 +756,18 @@ test("/settings and S open the settings panel", async () => {
   assert.equal(shortcutState.overlay, "settings");
 });
 
+test("settings panel labels both reading-time progress modes", async () => {
+  const chapterState = makeState({ overlay: "none", progressVisibility: "time-chapter" });
+  await executeCommand(chapterState, "/settings");
+  const chapterLines = renderSettingsPanel(chapterState, 80, 20).map(stripAnsi);
+  assert.ok(chapterLines.some((line) => line.includes("Time left in chapter")));
+
+  const bookState = makeState({ overlay: "none", progressVisibility: "time-book" });
+  await executeCommand(bookState, "/settings");
+  const bookLines = renderSettingsPanel(bookState, 80, 20).map(stripAnsi);
+  assert.ok(bookLines.some((line) => line.includes("Time left in book")));
+});
+
 test("settings panel filters reader settings with its own search field", async () => {
   const state = makeState({ overlay: "none" });
   await executeCommand(state, "/config");
@@ -798,6 +825,12 @@ test("p key cycles progress visibility to the next value", async () => {
   const state = makeState({ overlay: "none", progressVisibility: "book" });
   await handleInput("p", state, redraw, async (cmd) => { await executeCommand(state, cmd); }, () => {}, noop);
   assert.equal(state.progressVisibility, "both");
+});
+
+test("p key cycles chapter time to book time", async () => {
+  const state = makeState({ overlay: "none", progressVisibility: "time-chapter" });
+  await handleInput("p", state, redraw, async (cmd) => { await executeCommand(state, cmd); }, () => {}, noop);
+  assert.equal(state.progressVisibility, "time-book");
 });
 
 test("p key wraps progress visibility back to time left in chapter after hidden", async () => {

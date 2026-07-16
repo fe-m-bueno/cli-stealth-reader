@@ -19,6 +19,26 @@ export interface BookReadingPace {
   updatedAt: number;
 }
 
+export interface PaceState {
+  globalWpm: number;
+  globalActiveMs: number;
+  bookId: string | null;
+  bookWpm: number;
+  bookActiveMs: number;
+  /** Absolute word cursor at last sample (for forward-only delta). */
+  lastWordCursor: number | null;
+  lastSampleAt: number | null;
+}
+
+export interface PaceSample {
+  wordsAdvanced: number;
+  activeMs: number;
+}
+
+export interface ChapterWordInfo {
+  wordCount: number;
+}
+
 export type LibrarySortKey = "lastOpened" | "title" | "author" | "progress";
 export type SortDirection = "asc" | "desc";
 
@@ -276,7 +296,7 @@ export interface AppState {
   plainHighlight: boolean;
   progressVisibility: ProgressVisibility;
   /** Runtime reading-pace tracker; see reading-pace.ts */
-  readingPace: import("./reading-pace.js").PaceState;
+  readingPace: PaceState;
   currentBook: CanonicalBook | null;
   chapterIndex: number;
   blockOffset: number;

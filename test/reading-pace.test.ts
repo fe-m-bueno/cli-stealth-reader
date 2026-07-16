@@ -14,10 +14,9 @@ import {
   formatDuration,
   formatTimeLeft,
   absoluteWordCursor,
-  prepareSample,
-  type PaceState,
-  type ChapterWordInfo
+  prepareSample
 } from "../src/reading-pace.js";
+import type { ChapterWordInfo, PaceState } from "../src/types.js";
 
 test("formatDuration ceils sub-minute and formats hours", () => {
   assert.equal(formatDuration(0), "1 min");
@@ -138,4 +137,33 @@ test("prepareSample excludes time spent outside the reading view", () => {
   });
   assert.equal(resumed.sample, null);
   assert.equal(resumed.nextMeta.lastSampleAt, 62_000);
+});
+
+test("prepareSample keeps a high-water cursor across backward navigation and re-reading", () => {
+  const backward = prepareSample({
+    state: createEmptyPaceState({ lastWordCursor: 500, lastSampleAt: 1_000 }),
+    now: 2_000,
+    wordCursor: 300,
+    readingActive: true
+  });
+  assert.equal(backward.sample?.wordsAdvanced, 0);
+  assert.equal(backward.nextMeta.lastWordCursor, 500);
+
+  const reread = prepareSample({
+    state: createEmptyPaceState({ ...backward.nextMeta }),
+    now: 3_000,
+    wordCursor: 450,
+    readingActive: true
+  });
+  assert.equal(reread.sample?.wordsAdvanced, 0);
+  assert.equal(reread.nextMeta.lastWordCursor, 500);
+
+  const newProgress = prepareSample({
+    state: createEmptyPaceState({ ...reread.nextMeta }),
+    now: 4_000,
+    wordCursor: 550,
+    readingActive: true
+  });
+  assert.equal(newProgress.sample?.wordsAdvanced, 50);
+  assert.equal(newProgress.nextMeta.lastWordCursor, 550);
 });

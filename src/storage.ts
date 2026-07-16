@@ -47,6 +47,7 @@ export class Storage {
     this.db = new Database(paths.dbPath);
     this.db.exec(`
       PRAGMA journal_mode = WAL;
+      PRAGMA foreign_keys = ON;
       CREATE TABLE IF NOT EXISTS books (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
@@ -115,7 +116,8 @@ export class Storage {
         book_id TEXT PRIMARY KEY,
         wpm REAL NOT NULL,
         active_ms INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (book_id) REFERENCES books(id)
       );
       CREATE INDEX IF NOT EXISTS idx_book_tags_tag ON book_tags(tag);
       CREATE INDEX IF NOT EXISTS idx_notes_book_id ON notes(book_id);
@@ -334,6 +336,7 @@ export class Storage {
   removeBook(bookId: string): void {
     this.db.exec("BEGIN");
     try {
+      this.db.prepare("DELETE FROM reading_pace WHERE book_id = ?").run(bookId);
       this.db.prepare("DELETE FROM books WHERE id = ?").run(bookId);
       this.db.prepare("DELETE FROM chapters WHERE book_id = ?").run(bookId);
       this.db.prepare("DELETE FROM diagnostics WHERE book_id = ?").run(bookId);
@@ -341,7 +344,6 @@ export class Storage {
       this.db.prepare("DELETE FROM bookmarks WHERE book_id = ?").run(bookId);
       this.db.prepare("DELETE FROM book_tags WHERE book_id = ?").run(bookId);
       this.db.prepare("DELETE FROM notes WHERE book_id = ?").run(bookId);
-      this.db.prepare("DELETE FROM reading_pace WHERE book_id = ?").run(bookId);
       fs.rmSync(path.join(this.chapterCacheDir, bookId), { recursive: true, force: true });
       this.db.exec("COMMIT");
     } catch (error) {

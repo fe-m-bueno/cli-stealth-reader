@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { openBook } from "../src/executor.js";
+import { openBook, persistReadingPace } from "../src/executor.js";
 import { createEmptyPaceState } from "../src/reading-pace.js";
 import { Storage } from "../src/storage.js";
 import type { AppState, CanonicalBook } from "../src/types.js";
@@ -81,4 +81,21 @@ test("opening another book flushes the previous pace and loads the target pace",
     storage.db.close();
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("pace persistence failures do not escape into input handling", () => {
+  const state = {
+    storage: {
+      setRawSetting: () => {
+        throw new Error("database unavailable");
+      },
+      saveReadingPace: () => {
+        throw new Error("database unavailable");
+      }
+    },
+    readingPace: createEmptyPaceState({ bookId: "book" })
+  } as unknown as AppState;
+
+  assert.doesNotThrow(() => persistReadingPace(state));
+  assert.equal(state.readingPace.bookId, "book");
 });

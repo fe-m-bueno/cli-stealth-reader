@@ -91,6 +91,10 @@ test("getReadingPace returns null when missing and upserts book pace", () => {
   const { storage, cleanup } = makeTempStorage();
   try {
     assert.equal(storage.getReadingPace("book-1"), null);
+    storage.db.prepare(`
+      INSERT INTO books (id, title, author, source_path, import_hash, parser_version, last_opened_at, render_mode)
+      VALUES (?, ?, ?, ?, ?, 1, ?, 'plain')
+    `).run("book-1", "Book", "Author", "/tmp/book.epub", "hash", Date.now());
     storage.saveReadingPace({
       bookId: "book-1",
       wpm: 210.5,
@@ -102,6 +106,8 @@ test("getReadingPace returns null when missing and upserts book pace", () => {
     assert.equal(row.bookId, "book-1");
     assert.ok(Math.abs(row.wpm - 210.5) < 0.001);
     assert.equal(row.activeMs, 90_000);
+    storage.removeBook("book-1");
+    assert.equal(storage.getReadingPace("book-1"), null);
   } finally {
     cleanup();
   }

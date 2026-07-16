@@ -1,29 +1,11 @@
+import type { ChapterWordInfo, PaceSample, PaceState } from "./types.js";
+
 export const DEFAULT_WPM = 230;
 export const IDLE_MS = 120_000;
 export const COLD_START_MS = 240_000;
 export const BOOK_BLEND_MS = 600_000;
 export const MIN_INSTANT_WPM = 50;
 export const MAX_INSTANT_WPM = 800;
-
-export interface PaceState {
-  globalWpm: number;
-  globalActiveMs: number;
-  bookId: string | null;
-  bookWpm: number;
-  bookActiveMs: number;
-  /** Absolute word cursor at last sample (for forward-only delta). */
-  lastWordCursor: number | null;
-  lastSampleAt: number | null;
-}
-
-export interface PaceSample {
-  wordsAdvanced: number;
-  activeMs: number;
-}
-
-export interface ChapterWordInfo {
-  wordCount: number;
-}
 
 export function createEmptyPaceState(partial?: Partial<PaceState>): PaceState {
   return {
@@ -173,19 +155,31 @@ export function prepareSample(args: {
       sample: null,
       // Break the timing window so time spent in overlays/commands cannot be
       // charged to the next forward navigation sample.
-      nextMeta: { lastWordCursor: wordCursor, lastSampleAt: null }
+      nextMeta: {
+        lastWordCursor: state.lastWordCursor === null
+          ? wordCursor
+          : Math.max(state.lastWordCursor, wordCursor),
+        lastSampleAt: null
+      }
     };
   }
   if (state.lastWordCursor === null || state.lastSampleAt === null) {
     return {
       sample: null,
-      nextMeta: { lastWordCursor: wordCursor, lastSampleAt: now }
+      nextMeta: {
+        lastWordCursor: state.lastWordCursor === null
+          ? wordCursor
+          : Math.max(state.lastWordCursor, wordCursor),
+        lastSampleAt: now
+      }
     };
   }
   const wordsAdvanced = Math.max(0, wordCursor - state.lastWordCursor);
   const activeMs = Math.max(0, now - state.lastSampleAt);
   return {
     sample: { wordsAdvanced, activeMs },
-    nextMeta: { lastWordCursor: wordCursor, lastSampleAt: now }
+    // Keep a high-water cursor: moving backward and then re-reading the same
+    // text must not train the pace model a second time.
+    nextMeta: { lastWordCursor: Math.max(state.lastWordCursor, wordCursor), lastSampleAt: now }
   };
 }
