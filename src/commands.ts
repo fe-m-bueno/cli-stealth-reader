@@ -771,9 +771,10 @@ function listTogglSuggestions(buffer: string, storage?: Storage, cursor = buffer
     const start = action?.start ?? position;
     const fullAction = action ? fullTokens.find((token) => token.start === action.start) : undefined;
     const end = fullAction?.end ?? action?.end ?? position;
+    const separator = action || activeBuffer.endsWith(" ") ? "" : " ";
     return subcommands
       .filter((subcommand) => fuzzyStarts(subcommand, query))
-      .map((subcommand) => makeTogglSuggestion(subcommand, `Toggl ${subcommand}`, subcommand, start, end));
+      .map((subcommand) => makeTogglSuggestion(subcommand, `Toggl ${subcommand}`, `${separator}${subcommand}`, start, end));
   }
   if (!storage || !["start", "log"].includes(action.text)) return [];
 
@@ -887,6 +888,12 @@ export function commandAutocompleteIndex(buffer: string, selectedIndex: number, 
   const currentSuggestion = suggestions[currentIndex];
   const parts = buffer.trimStart().split(/\s+/).filter(Boolean);
   const currentCommand = parts[0] ?? "";
+  if (
+    currentSuggestion?.completionStart !== undefined
+    && currentSuggestion.completionStart >= buffer.length
+  ) {
+    return currentIndex;
+  }
   if (parts.length > 1) {
     return currentIndex;
   }
