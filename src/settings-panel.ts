@@ -25,7 +25,14 @@ interface SettingsItem {
 }
 
 const CODE_DENSITIES: CodeDensity[] = [1, 2, 3, 4, 5];
-const PROGRESS_VALUES: AppSettings["progressVisibility"][] = ["book", "both", "chapter", "hidden"];
+const PROGRESS_VALUES: AppSettings["progressVisibility"][] = [
+  "time-chapter",
+  "time-book",
+  "book",
+  "both",
+  "chapter",
+  "hidden"
+];
 
 type ReadingMode = "plain" | "typescript" | "python" | "rust";
 
@@ -53,12 +60,16 @@ function readingModeLabel(mode: ReadingMode): string {
 
 function progressLabel(value: AppSettings["progressVisibility"]): string {
   switch (value) {
+    case "time-chapter":
+      return "Time left in chapter";
+    case "time-book":
+      return "Time left in book";
     case "book":
-      return "Book";
+      return "Book %";
     case "both":
-      return "Book + chapter";
+      return "Book + chapter %";
     case "chapter":
-      return "Chapter";
+      return "Chapter %";
     case "hidden":
       return "Hidden";
   }

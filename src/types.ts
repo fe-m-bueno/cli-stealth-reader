@@ -4,7 +4,20 @@ export type CodeLanguage = "typescript" | "python" | "rust";
 
 export type CodeDensity = 1 | 2 | 3 | 4 | 5;
 
-export type ProgressVisibility = "book" | "both" | "chapter" | "hidden";
+export type ProgressVisibility =
+  | "time-chapter"
+  | "time-book"
+  | "book"
+  | "both"
+  | "chapter"
+  | "hidden";
+
+export interface BookReadingPace {
+  bookId: string;
+  wpm: number;
+  activeMs: number;
+  updatedAt: number;
+}
 
 export type LibrarySortKey = "lastOpened" | "title" | "author" | "progress";
 export type SortDirection = "asc" | "desc";

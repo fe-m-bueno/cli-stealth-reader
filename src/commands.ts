@@ -117,12 +117,13 @@ export const COMMANDS: CommandDefinition[] = [
     name: "toggleprogress",
     description: "Set progress display mode.",
     args: [{ name: "mode" }],
-    usage: "/toggleprogress [book|both|chapter|hidden]",
+    usage: "/toggleprogress [time-chapter|time-book|book|both|chapter|hidden]",
     details: [
       "With no argument, cycles through progress display modes.",
-      "book shows whole-book progress, chapter shows current-chapter progress, both shows both, and hidden disables the footer progress line."
+      "time-chapter and time-book show estimated remaining reading time from learned pace.",
+      "book/chapter/both show percentage bars; hidden disables the footer progress line."
     ],
-    examples: ["/toggleprogress", "/toggleprogress both", "/toggleprogress hidden"]
+    examples: ["/toggleprogress", "/toggleprogress time-chapter", "/toggleprogress both", "/toggleprogress hidden"]
   },
   {
     name: "mode",

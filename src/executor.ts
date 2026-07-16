@@ -465,7 +465,14 @@ const handlers: Record<string, CommandHandler> = {
   },
 
   toggleprogress: async (state, parsed) => {
-    const values: ProgressVisibility[] = ["book", "both", "chapter", "hidden"];
+    const values: ProgressVisibility[] = [
+      "time-chapter",
+      "time-book",
+      "book",
+      "both",
+      "chapter",
+      "hidden"
+    ];
     if (parsed.args[0] && values.includes(parsed.args[0] as ProgressVisibility)) {
       state.progressVisibility = parsed.args[0] as ProgressVisibility;
     } else {
