@@ -10,10 +10,12 @@ import { computeChapterMaxOffset, getViewportLayout } from "./screen.js";
 import { openSettingsPanel } from "./settings-panel.js";
 import { openShortcutHelp } from "./shortcuts-panel.js";
 import {
+  completeTogglSetup,
   connectToggl,
   disconnectToggl,
   formatTogglQuota,
   formatTogglRecents,
+  getTogglCache,
   logTogglEntry,
   openTogglTokenPage,
   startTogglEntry,
@@ -597,14 +599,16 @@ const handlers: Record<string, CommandHandler> = {
     const action = parsed.args[0]?.toLowerCase() ?? "recent";
     const rest = parsed.args.slice(1).join(" ").trim();
     const project = typeof parsed.flags.project === "string" ? parsed.flags.project : undefined;
-    const organizationRaw = typeof parsed.flags.organization === "string" ? parsed.flags.organization : undefined;
-    const organizationId = organizationRaw === undefined ? undefined : Number(organizationRaw);
-    if (organizationRaw !== undefined && (!Number.isInteger(organizationId) || Number(organizationId) <= 0)) {
-      throw new Error("Toggl organization must be a positive numeric ID. Use --organization <id>.");
-    }
     const withQuota = (message: string): string => {
       const quota = formatTogglQuota(state.storage);
       return quota ? `${message} · ${quota}` : message;
+    };
+    const openSetupPrompt = (message: string): void => {
+      state.commandMode = true;
+      state.commandBuffer = "toggl setup ";
+      state.commandCursor = state.commandBuffer.length;
+      state.commandSuggestionIndex = 0;
+      state.status = withQuota(message);
     };
 
     if (parsed.flags.disconnect) {
@@ -615,15 +619,15 @@ const handlers: Record<string, CommandHandler> = {
 
     if (action === "auth") {
       const token = rest || state.storage.getSetting("togglApiToken") || "";
-      if (parsed.flags.open || (!rest && organizationId === undefined)) {
+      if (parsed.flags.open || !rest) {
         openTogglTokenPage();
-        state.status = `Opened Toggl 2.0 settings. Create an API key, then run /toggl auth <toggl_sk_...> --organization <id>. Link: ${togglTokenPage()}`;
+        state.status = `Opened Toggl 2.0 settings. Create an API key, then run /toggl auth <toggl_sk_...>. Link: ${togglTokenPage()}`;
         return;
       }
-      if (!token) throw new Error("Paste a Toggl 2.0 key: /toggl auth <toggl_sk_...> --organization <id>");
-      const result = await connectToggl(state.storage, token, organizationId);
+      if (!token) throw new Error("Paste a Toggl 2.0 key: /toggl auth <toggl_sk_...>");
+      const result = await connectToggl(state.storage, token);
       if (!result.defaultOrganizationId) {
-        state.status = withQuota("Toggl key connected. Finish setup with /toggl auth --organization <id>.");
+        openSetupPrompt("Toggl key connected. Paste your Focus workspace URL once to finish setup.");
         return;
       }
       const cache = await syncToggl(state.storage);
@@ -634,6 +638,25 @@ const handlers: Record<string, CommandHandler> = {
     if (action === "sync") {
       const cache = await syncToggl(state.storage);
       state.status = withQuota(`Synced Toggl: ${cache.projects.length} projects, ${cache.descriptions.length} recent names.`);
+      return;
+    }
+
+    if (action === "setup") {
+      if (!rest) {
+        openSetupPrompt("Paste your Focus workspace URL to finish Toggl setup.");
+        return;
+      }
+      try {
+        const cache = await completeTogglSetup(state.storage, rest);
+        state.status = withQuota(`Connected Toggl 2.0. Cached ${cache.projects.length} projects and ${cache.descriptions.length} recent names.`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Could not finish Toggl setup.";
+        if (getTogglCache(state.storage).defaultOrganizationId) {
+          state.status = withQuota(`Organization saved. Initial sync failed: ${message} Run /toggl sync later.`);
+        } else {
+          openSetupPrompt(message);
+        }
+      }
       return;
     }
 
@@ -668,7 +691,7 @@ const handlers: Record<string, CommandHandler> = {
       return;
     }
 
-    throw new Error("Use /toggl auth|sync|recent|start|stop|log");
+    throw new Error("Use /toggl auth|setup|sync|recent|start|stop|log");
   },
 
   density: async (state, parsed) => {

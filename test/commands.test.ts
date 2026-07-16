@@ -97,6 +97,14 @@ test("applies autocomplete to the command token only", () => {
   assert.equal(applyCommandAutocomplete("re current-book", suggestion), "remove current-book");
 });
 
+test("tab completes long flags after a recognized command", () => {
+  const suggestions = listCommandSuggestions("search --");
+
+  assert.deepEqual(suggestions.map((item) => item.usage), ["--global"]);
+  assert.equal(applyCommandAutocomplete("search --", suggestions[0]), "search --global ");
+  assert.ok(listCommandSuggestions("search --global ").every((item) => item.usage !== "--global"));
+});
+
 test("tab completes the highlighted prefix before cycling command suggestions", () => {
   const suggestions = listCommandSuggestions("toggl start");
   assert.deepEqual(suggestions.map((item) => item.name), ["toggl", "toggleprogress"]);

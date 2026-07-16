@@ -40,7 +40,7 @@ A full-screen terminal EPUB reader in TypeScript. Two rendering modes: `plain` (
 | `src/reading-pace.ts` | Learned reading pace, remaining-word estimates, and duration formatting |
 | `src/settings-panel.ts` | Tabbed reader settings, draft lifecycle, live preview, and setting definitions |
 | `src/shortcuts-panel.ts` | Grouped keyboard-shortcut modal, search, scrolling, and mouse hit-testing |
-| `src/toggl.ts` | Toggl Track API v9 client, local cache, project resolution, and timer lifecycle |
+| `src/toggl.ts` | Toggl 2.0 Focus client, guided organization setup, quota cache, project resolution, and timer lifecycle |
 | `src/parser/epub.ts` | EPUB import pipeline (JSZip → canonical blocks) |
 | `src/parser/html.ts` | HTML → canonical block extraction (uses parse5) |
 | `src/parser/xml.ts` | XML parsing utilities |

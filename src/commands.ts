@@ -172,16 +172,17 @@ export const COMMANDS: CommandDefinition[] = [
     name: "toggl",
     description: "Log reading time directly to Toggl 2.0.",
     args: [{ name: "action" }, { name: "description" }],
-    flags: [{ name: "organization", takesValue: true }, { name: "project", takesValue: true }, { name: "duration", takesValue: true }, { name: "open" }, { name: "disconnect" }],
-    usage: "/toggl auth|sync|recent|start|stop|log [description] [--organization id] [--project name] [--duration 25m]",
+    flags: [{ name: "project", takesValue: true }, { name: "duration", takesValue: true }, { name: "open" }, { name: "disconnect" }],
+    usage: "/toggl auth|setup|sync|recent|start|stop|log [description] [--project name] [--duration 25m]",
     details: [
-      "auth opens the Toggl 2.0 key page; connect with /toggl auth <toggl_sk_...> --organization <id>.",
+      "auth opens the Toggl 2.0 key page; connect with /toggl auth <toggl_sk_...>.",
+      "If Focus cannot return the organization ID, setup asks once for the workspace URL and stores the extracted ID.",
       "sync caches recent projects and descriptions from Focus for fuzzy project lookup.",
       "start creates a running timer, stop stops the current timer, and log creates a finished entry ending now."
     ],
     examples: [
       "/toggl auth",
-      "/toggl auth <toggl_sk_...> --organization 123456",
+      "/toggl auth <toggl_sk_...>",
       "/toggl sync",
       "/toggl start \"O Nome do Vento\" --project \"Reading books\"",
       "/toggl log \"Choujin X\" --project \"Reading manga\" --duration 45m",
@@ -478,10 +479,18 @@ export function commandContextHelp(buffer: string, storage?: Storage): string[] 
     if (action === "auth") {
       return [
         "Connect  Toggl 2.0 / Focus",
-        "Usage    /toggl auth <toggl_sk_...> --organization <id>",
+        "Usage    /toggl auth <toggl_sk_...>",
         "API key  https://focus.toggl.com/settings",
-        "Org ID   copy the organization number from your Focus workspace URL",
-        "Next     run /toggl sync after connecting",
+        "Setup    if needed, the next prompt asks for your workspace URL once",
+        "Next     authentication syncs Toggl automatically",
+        ...(quotaLine ? [quotaLine] : [])
+      ];
+    }
+    if (action === "setup") {
+      return [
+        "Setup    paste your Focus workspace URL and press Enter",
+        "Example  https://focus.toggl.com/organizations/123/workspaces/456",
+        "Saved    organization is validated and remembered locally",
         ...(quotaLine ? [quotaLine] : [])
       ];
     }
@@ -510,7 +519,7 @@ export function commandContextHelp(buffer: string, storage?: Storage): string[] 
     if (action) {
       return [
         `Unknown  Toggl action \"${action}\"`,
-        "Actions  auth · sync · recent · start · stop · log",
+        "Actions  auth · setup · sync · recent · start · stop · log",
         "Help     /help toggl"
       ];
     }
@@ -817,6 +826,50 @@ function makeTogglSuggestion(usage: string, description: string, completion: str
   };
 }
 
+function listFlagSuggestions(buffer: string, cursor = buffer.length): CommandSuggestion[] {
+  const position = Math.max(0, Math.min(cursor, buffer.length));
+  const activeBuffer = buffer.slice(0, position);
+  if (/\s$/.test(activeBuffer)) return [];
+  const tokens = bufferTokens(activeBuffer);
+  const commandToken = tokens[0];
+  const activeToken = tokens.at(-1);
+  if (!commandToken || !activeToken || activeToken === commandToken || !activeToken.text.startsWith("--")) return [];
+  const command = findCommand(commandToken.text.replace(/^\//, "").toLowerCase());
+  if (!command?.flags?.length) return [];
+
+  const query = activeToken.text.slice(2).toLowerCase();
+  const fullToken = bufferTokens(buffer).find((token) => token.start === activeToken.start);
+  const usedFlags = new Set(tokens
+    .slice(1, -1)
+    .filter((token) => token.text.startsWith("--"))
+    .map((token) => token.text.slice(2).split("=", 1)[0]));
+
+  const togglFlagsByAction: Record<string, string[]> = {
+    auth: ["open"],
+    start: ["project"],
+    log: ["project", "duration"],
+    recent: ["disconnect"]
+  };
+  const togglAction = tokens[1]?.text.startsWith("--") ? "recent" : tokens[1]?.text;
+  const allowedFlags = command.name === "toggl" && togglAction
+    ? command.flags.filter((flag) => (togglFlagsByAction[togglAction] ?? []).includes(flag.name))
+    : command.flags;
+
+  return allowedFlags
+    .filter((flag) => !usedFlags.has(flag.name) && flag.name.startsWith(query))
+    .map((flag) => ({
+      name: command.name,
+      usage: `--${flag.name}`,
+      description: flag.takesValue ? `Set ${flag.name}` : `Enable ${flag.name}`,
+      category: commandCategory(command),
+      detail: flag.takesValue ? "expects a value" : "boolean flag",
+      aliases: flag.alias ? [flag.alias] : [],
+      completion: `--${flag.name} `,
+      completionStart: activeToken.start,
+      completionEnd: fullToken?.end ?? activeToken.end
+    }));
+}
+
 function listTogglSuggestions(buffer: string, storage?: Storage, cursor = buffer.length): CommandSuggestion[] {
   const position = Math.max(0, Math.min(cursor, buffer.length));
   const activeBuffer = buffer.slice(0, position);
@@ -824,7 +877,7 @@ function listTogglSuggestions(buffer: string, storage?: Storage, cursor = buffer
   const fullTokens = bufferTokens(buffer);
   const command = tokens[0];
   if (command?.text !== "toggl") return [];
-  const subcommands = ["auth", "sync", "recent", "start", "stop", "log"];
+  const subcommands = ["auth", "setup", "sync", "recent", "start", "stop", "log"];
   const action = tokens[1];
   if (!storage && !action) return [];
   if (!action || (tokens.length === 2 && !activeBuffer.endsWith(" ") && !subcommands.includes(action.text))) {
@@ -890,6 +943,10 @@ export function listCommandSuggestions(buffer: string, storage?: Storage, cursor
   const togglSuggestions = listTogglSuggestions(buffer, storage, position);
   if (togglSuggestions.length > 0) {
     return togglSuggestions;
+  }
+  const flagSuggestions = listFlagSuggestions(buffer, position);
+  if (flagSuggestions.length > 0) {
+    return flagSuggestions;
   }
   if (storage && /^\s*toggl\s+/.test(activeBuffer)) {
     return [];

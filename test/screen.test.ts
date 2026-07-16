@@ -186,7 +186,8 @@ test("command footer replaces an empty Toggl result with contextual help", () =>
   } as unknown as AppState;
 
   const footer = renderFooter(state, 100).map(stripAnsi);
-  assert.ok(footer.some((line) => line.includes("/toggl auth <toggl_sk_...> --organization <id>")));
+  assert.ok(footer.some((line) => line.includes("/toggl auth <toggl_sk_...>")));
+  assert.ok(!footer.some((line) => line.includes("--organization")));
   assert.ok(footer.some((line) => line.includes("focus.toggl.com/settings")));
   assert.ok(!footer.some((line) => line.includes("No matching commands")));
 });
