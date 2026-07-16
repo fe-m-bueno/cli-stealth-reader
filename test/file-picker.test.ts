@@ -370,6 +370,24 @@ test("slash opens command mode and tab autocompletes commands", async () => {
   assert.equal(state.commandBuffer, "mode");
 });
 
+test("a second Tab completes the highlighted Toggl subcommand with a separator", async () => {
+  const state = makeState({
+    overlay: "none",
+    commandMode: true,
+    commandBuffer: "togg",
+    commandCursor: 4,
+    commandSuggestionIndex: 0
+  });
+
+  await handleInput("\t", state, redraw, noop, () => {}, noop);
+  assert.equal(state.commandBuffer, "toggl");
+  assert.equal(state.commandCursor, 5);
+
+  await handleInput("\t", state, redraw, noop, () => {}, noop);
+  assert.equal(state.commandBuffer, "toggl auth");
+  assert.equal(state.commandCursor, 10);
+});
+
 test("entering slash command mode breaks the reading pace timing window", async () => {
   const state = makeState({
     overlay: "none",
