@@ -2,6 +2,7 @@ import { commandHelp } from "./commands.js";
 import { executeCommand, importAndOpen, openBook, persistReadingPace } from "./executor.js";
 import { clampFocusBlockIndex, mapFocusIndexToBlockOffset, renderFocusBlock } from "./focus.js";
 import { handleInput } from "./input.js";
+import { discoveredBookLabel, libraryPickerItems } from "./library-picker.js";
 import { bg, bold, fg } from "./color.js";
 import { discoverBooks } from "./discovery.js";
 import { renderBlocks } from "./renderers.js";
@@ -177,7 +178,7 @@ export function renderOverlay(state: AppState, width: number, height: number): s
           return `${marker} ${String(chapter.index + 1).padStart(2, "0")} ${truncate(chapter.title, width - 6)}`;
         });
     case "books": {
-      const books = state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir, state.booksTagFilter ?? undefined);
+      const items = libraryPickerItems(state);
       const latestBookId = state.storage.getLatestBookId();
       const tagsByBookId = state.booksTagMap;
       const sortKeyLabels: Record<string, string> = {
@@ -205,8 +206,14 @@ export function renderOverlay(state: AppState, width: number, height: number): s
       return [
         header,
         actionHint,
-        ...books.map((book, index) => {
+        ...items.map((item, index) => {
           const marker = index === state.overlayCursor ? ">" : " ";
+          if (item.kind === "discovered") {
+            const right = "  [local · Enter to import]";
+            const title = truncate(discoveredBookLabel(item.discovery), Math.max(1, width - 2 - right.length));
+            return `${marker} ${title}${right}`;
+          }
+          const book = item.book;
           const isLatest = book.id === latestBookId;
           const progressTag = book.bookProgress !== null
             ? `[Ch.${(book.chapterIndex ?? 0) + 1} · ${Math.round(book.bookProgress * 100)}%]`

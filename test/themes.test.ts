@@ -21,13 +21,14 @@ test("dark appearance preserves the selected colorscheme", () => {
   assert.deepEqual(applyAppearanceTheme(colorScheme, appearance("dark")), colorScheme);
 });
 
-test("codex matches the installed CLI's monochrome and blue visual tokens", () => {
+test("codex matches the installed CLI's monochrome and terminal-cyan visual tokens", () => {
   const codex = scheme("codex");
 
-  assert.equal(codex.accent, "#3b82f6");
+  assert.equal(codex.accent, "ansi:cyan");
   assert.equal(codex.foreground, "#ffffff");
   assert.equal(codex.background, "#0d0d0d");
   assert.equal(codex.border, "#5d5d5d");
+  assert.match(fg(codex.accent, "x"), /\x1b\[36m/);
 });
 
 test("claude uses Claude Code's dark truecolor role palette", () => {

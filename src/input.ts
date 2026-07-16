@@ -1,6 +1,7 @@
 import { applyCommandAutocomplete, commandAutocompleteIndex, commandHelp, listCommandSuggestions } from "./commands.js";
 import { applySearchHit, pushNavHistory } from "./executor.js";
 import { clampFocusBlockIndex, getChapterBlockCount, mapBlockOffsetToFocusIndex, mapFocusIndexToBlockOffset } from "./focus.js";
+import { libraryPickerItems } from "./library-picker.js";
 import {
   clamp,
   computeChapterMaxOffset,
@@ -273,7 +274,7 @@ function interactiveOverlayLength(state: AppState): number {
     case "chapters":
       return state.currentBook?.chapters.length ?? 0;
     case "books":
-      return state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir, state.booksTagFilter ?? undefined).length;
+      return libraryPickerItems(state).length;
     case "bookmarks":
       return state.currentBook ? state.storage.listBookmarks(state.currentBook.id).length : 0;
     case "notes":
@@ -388,12 +389,12 @@ export async function handleInput(
   syncPos: (state: AppState) => void,
   confirmPicker: (paths: string[], force: boolean) => Promise<void>
 ): Promise<void> {
-  if (chunk === "\x1b[99;5u") {
-    chunk = "\u0003";
-  } else if (chunk === "\x1b[27u" || chunk === "\x1b[27;1u") {
-    chunk = "\u001b";
+  const normalizedChunk = normalizeTerminalKey(chunk);
+  if (normalizedChunk === null) {
+    return;
   }
-  if (chunk === "\u0003") {
+  chunk = normalizedChunk;
+  if (chunk === "\u0003" || chunk === "\u0004") {
     state.shouldQuit = true;
   }
   if (state.shouldQuit) {
@@ -429,7 +430,7 @@ export async function handleInput(
     return;
   }
 
-  if (isShortcutHelpKey(chunk)) {
+  if (isShortcutHelpKey(chunk) && (chunk !== "?" || !state.commandMode)) {
     if (state.overlay === "keys") {
       state.overlay = "none";
       state.overlayCursor = 0;
@@ -651,10 +652,11 @@ export async function handleInput(
         pushNavHistory(state);
         state.status = `Moved to chapter ${state.chapterIndex + 1}`;
       } else if (state.overlay === "books") {
-        const books = state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir, state.booksTagFilter ?? undefined);
-        const selected = books[state.overlayCursor];
-        if (selected) {
-          const book = state.storage.getBook(selected.id);
+        const selected = libraryPickerItems(state)[state.overlayCursor];
+        if (selected?.kind === "discovered") {
+          await confirmPicker([selected.discovery.path], false);
+        } else if (selected) {
+          const book = state.storage.getBook(selected.book.id);
           if (book) {
             state.currentBook = book;
             state.searchState = null;
@@ -709,9 +711,8 @@ export async function handleInput(
       state.overlay = "none";
       state.booksTagFilter = null;
     } else if ((chunk === "b" || chunk === "n") && state.overlay === "books") {
-      const books = state.storage.listBooksWithProgress(state.librarySortKey, state.librarySortDir, state.booksTagFilter ?? undefined);
-      const selected = books[state.overlayCursor];
-      const book = selected ? state.storage.getBook(selected.id) : null;
+      const selected = libraryPickerItems(state)[state.overlayCursor];
+      const book = selected?.kind === "stored" ? state.storage.getBook(selected.book.id) : null;
       if (book) {
         state.currentBook = book;
         state.searchState = null;
@@ -1080,4 +1081,38 @@ export async function handleInput(
   }
   syncPos(state);
   redraw();
+}
+
+export function normalizeTerminalKey(chunk: string): string | null {
+  const kittyMatch = chunk.match(/^\x1b\[(\d+)(?:;(\d+)(?::(\d+))?)?u$/)
+    ?? chunk.match(/^\x1b\[(\d+);(\d+);(\d+)u$/);
+  if (!kittyMatch) {
+    return chunk;
+  }
+
+  const keyCode = Number(kittyMatch[1]);
+  const modifiers = Number(kittyMatch[2] ?? 1);
+  const eventType = Number(kittyMatch[3] ?? 1);
+  if (eventType === 3) {
+    return null;
+  }
+  if (keyCode === 27 && modifiers === 1) {
+    return "\u001b";
+  }
+  if (modifiers !== 5) {
+    return chunk;
+  }
+
+  switch (keyCode) {
+    case 46:
+      return CTRL_DOT_SEQUENCES[0];
+    case 99:
+      return "\u0003";
+    case 100:
+      return "\u0004";
+    case 120:
+      return CTRL_X_SEQUENCES[0];
+    default:
+      return chunk;
+  }
 }

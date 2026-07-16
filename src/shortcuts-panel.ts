@@ -11,7 +11,7 @@ const CATEGORY_META = [
 ] as const;
 
 const DEFAULT_COLLAPSED_CATEGORIES = ["navigation", "commands", "view"];
-const ESSENTIAL_KEYS = new Set(["/", "Enter", "Esc", "Ctrl+. / Ctrl+X", "q"]);
+const ESSENTIAL_KEYS = new Set(["/", "Enter", "Esc", "? / Ctrl+. / Ctrl+X", "q"]);
 
 export const CTRL_DOT_SEQUENCES = ["\x1b[46;5u", "\x1b[27;5;46~"] as const;
 export const CTRL_X_SEQUENCES = ["\x18", "\x1b[120;5u"] as const;
@@ -41,7 +41,8 @@ export type ShortcutModalHit =
   | null;
 
 export function isShortcutHelpKey(chunk: string): boolean {
-  return CTRL_X_SEQUENCES.some((sequence) => chunk === sequence)
+  return chunk === "?"
+    || CTRL_X_SEQUENCES.some((sequence) => chunk === sequence)
     || CTRL_DOT_SEQUENCES.some((sequence) => chunk === sequence);
 }
 

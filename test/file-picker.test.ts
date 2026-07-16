@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { executeCommand } from "../src/executor.js";
-import { handleInput } from "../src/input.js";
+import { handleInput, normalizeTerminalKey } from "../src/input.js";
 import { createEmptyPaceState } from "../src/reading-pace.js";
 import { computeChapterMaxOffset, footerHeight, getScrollbarMetrics, getViewportLayout, renderFooter, stripAnsi } from "../src/screen.js";
 import { renderSettingsPanel } from "../src/settings-panel.js";
@@ -386,6 +386,38 @@ test("command mode inserts text at cursor", async () => {
   assert.equal(state.commandCursor, 2);
 });
 
+test("question mark remains typable inside command mode", async () => {
+  const state = makeState({ overlay: "none", commandMode: true, commandBuffer: "search ", commandCursor: 7 });
+
+  await handleInput("?", state, redraw, noop, () => {}, noop);
+
+  assert.equal(state.commandMode, true);
+  assert.equal(state.commandBuffer, "search ?");
+  assert.equal(state.overlay, "none");
+});
+
+test("Kitty-protocol Escape with an event type closes command mode", async () => {
+  const state = makeState({
+    overlay: "none",
+    commandMode: true,
+    commandBuffer: "commands",
+    commandCursor: 8
+  });
+
+  await handleInput("\u001b[27;1:1u", state, redraw, noop, () => {}, noop);
+
+  assert.equal(state.commandMode, false);
+  assert.equal(state.commandBuffer, "commands");
+});
+
+test("event-typed Kitty control keys normalize without leaking terminal escapes", () => {
+  assert.equal(normalizeTerminalKey("\u001b[27;1:1u"), "\u001b");
+  assert.equal(normalizeTerminalKey("\u001b[46;5:1u"), "\u001b[46;5u");
+  assert.equal(normalizeTerminalKey("\u001b[99;5:1u"), "\u0003");
+  assert.equal(normalizeTerminalKey("\u001b[100;5:1u"), "\u0004");
+  assert.equal(normalizeTerminalKey("\u001b[46;5:3u"), null);
+});
+
 test("command mode autocomplete replaces the token under the cursor and keeps the suffix", async () => {
   const state = makeState({
     overlay: "none",
@@ -573,8 +605,11 @@ test("Ctrl+. opens shortcut help and escape closes it without leaving focus", as
   assert.equal(state.focusBlockIndex, 1);
 });
 
-test("Ctrl+X is a compatible shortcut-help fallback and ? remains ordinary input", async () => {
+test("?, Ctrl+X, and event-typed Ctrl+. open shortcut help", async () => {
   const state = makeState({ overlay: "none", currentBook: focusBook });
+
+  await handleInput("?", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "keys");
 
   await handleInput("?", state, redraw, noop, () => {}, noop);
   assert.equal(state.overlay, "none");
@@ -585,6 +620,9 @@ test("Ctrl+X is a compatible shortcut-help fallback and ? remains ordinary input
 
   await handleInput("\u001b[120;5u", state, redraw, noop, () => {}, noop);
   assert.equal(state.overlay, "none");
+
+  await handleInput("\u001b[46;5:1u", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "keys");
 });
 
 test("Kitty-protocol Escape closes shortcut help", async () => {
@@ -780,6 +818,28 @@ test("books overlay shows [not started] for a book with no saved position", () =
   const state = makeState({ overlay: "books", overlayCursor: 0 });
   const lines = renderOverlay(state, 60, 10).map(stripAnsi);
   assert.ok(lines.some((line) => line.includes("[not started]")));
+});
+
+test("books overlay includes discovered EPUBs that have not been imported yet", () => {
+  const jane = { path: "/tmp/Jane Eyre (Brontë Charlotte) (Z-Library).epub", fileName: "Jane Eyre (Brontë Charlotte) (Z-Library).epub" };
+  const state = makeState({ overlay: "books", overlayCursor: 0, discoveries: [jane] });
+
+  const lines = renderOverlay(state, 100, 12).map(stripAnsi);
+
+  assert.ok(lines.some((line) => line.includes("Jane Eyre")), `Expected discovered Jane Eyre in: ${lines.join(" | ")}`);
+});
+
+test("enter on a discovered EPUB in the books overlay imports the selected file", async () => {
+  const jane = { path: "/tmp/Jane Eyre.epub", fileName: "Jane Eyre.epub" };
+  const state = makeState({ overlay: "books", overlayCursor: 1, discoveries: [jane] });
+  let confirmed: { paths: string[]; force: boolean } | null = null;
+
+  await handleInput("\r", state, redraw, noop, () => {}, async (paths, force) => {
+    confirmed = { paths, force };
+  });
+
+  assert.deepEqual(confirmed, { paths: [jane.path], force: false });
+  assert.equal(state.overlay, "none");
 });
 
 test("books overlay shows chapter and progress for a book with a saved position", () => {
