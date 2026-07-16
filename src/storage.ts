@@ -41,6 +41,17 @@ const DEFAULT_SETTINGS: AppSettings = {
   mouseCapture: true
 };
 
+function redactSensitiveCommand(rawCommand: string, normalizedName: string): string {
+  if (normalizedName.toLowerCase() !== "toggl") {
+    return rawCommand;
+  }
+  const match = rawCommand.match(/^(\s*\/?toggl\s+auth)\s+(.+?)\s*$/i);
+  if (!match || match[2] === "<redacted>" || match[2].startsWith("--")) {
+    return rawCommand;
+  }
+  return `${match[1]} <redacted>`;
+}
+
 export class Storage {
   readonly db: Database.Database;
   readonly chapterCacheDir: string;
@@ -131,7 +142,26 @@ export class Storage {
     if (!columns.some((column) => column.name === "parser_version")) {
       this.db.exec("ALTER TABLE books ADD COLUMN parser_version INTEGER NOT NULL DEFAULT 1");
     }
+    this.redactSensitiveCommandHistory();
     this.seedSettings();
+  }
+
+  private redactSensitiveCommandHistory(): void {
+    const rows = this.db.prepare("SELECT id, raw_command, normalized_name FROM command_history WHERE lower(normalized_name) = 'toggl'").all() as Array<{
+      id: number;
+      raw_command: string;
+      normalized_name: string;
+    }>;
+    const update = this.db.prepare("UPDATE command_history SET raw_command = ? WHERE id = ?");
+    const migrate = this.db.transaction(() => {
+      for (const row of rows) {
+        const redacted = redactSensitiveCommand(row.raw_command, row.normalized_name);
+        if (redacted !== row.raw_command) {
+          update.run(redacted, row.id);
+        }
+      }
+    });
+    migrate();
   }
 
   private seedSettings(): void {
@@ -439,7 +469,11 @@ export class Storage {
   }
 
   saveCommandHistory(rawCommand: string, normalizedName: string): void {
-    this.db.prepare("INSERT INTO command_history (raw_command, normalized_name, created_at) VALUES (?, ?, ?)").run(rawCommand, normalizedName, Date.now());
+    this.db.prepare("INSERT INTO command_history (raw_command, normalized_name, created_at) VALUES (?, ?, ?)").run(
+      redactSensitiveCommand(rawCommand, normalizedName),
+      normalizedName,
+      Date.now()
+    );
   }
 
   addBookmark(bookId: string, chapterIndex: number, blockOffset: number, label?: string): Bookmark {

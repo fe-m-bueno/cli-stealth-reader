@@ -386,6 +386,20 @@ test("command mode inserts text at cursor", async () => {
   assert.equal(state.commandCursor, 2);
 });
 
+test("command mode autocomplete replaces the token under the cursor and keeps the suffix", async () => {
+  const state = makeState({
+    overlay: "none",
+    commandMode: true,
+    commandBuffer: "modx foo",
+    commandCursor: 3
+  });
+
+  await handleInput("\t", state, redraw, noop, () => {}, noop);
+
+  assert.equal(state.commandBuffer, "mode foo");
+  assert.equal(state.commandCursor, 4);
+});
+
 test("down arrow cycles command suggestions and keeps the selection visible", async () => {
   const state = makeState({ overlay: "none" });
   await handleInput("/", state, redraw, noop, () => {}, noop);

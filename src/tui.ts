@@ -5,6 +5,7 @@ import { handleInput } from "./input.js";
 import { bg, bold, fg } from "./color.js";
 import { discoverBooks } from "./discovery.js";
 import { renderBlocks } from "./renderers.js";
+import { refreshCurrentTogglEntry } from "./toggl.js";
 import {
   clamp,
   computeWindowStart,
@@ -509,6 +510,24 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
 
   const redraw = () => draw(state);
   redraw();
+
+  let togglRefreshInFlight = false;
+  const refreshTogglTimer = async () => {
+    if (togglRefreshInFlight || !storage.getSetting("togglApiToken")) {
+      return;
+    }
+    togglRefreshInFlight = true;
+    try {
+      await refreshCurrentTogglEntry(storage);
+      redraw();
+    } catch {
+      // Reading remains available while Toggl is offline; explicit commands surface API errors.
+    } finally {
+      togglRefreshInFlight = false;
+    }
+  };
+  void refreshTogglTimer();
+  setInterval(() => void refreshTogglTimer(), 60_000).unref();
 
   process.stdin.on("data", async (chunk: string) => {
     await handleInput(chunk, state, redraw, async (cmd) => {

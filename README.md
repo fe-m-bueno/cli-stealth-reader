@@ -294,6 +294,21 @@ Tags aparecem na biblioteca ao lado do progresso. Filtre por tag usando `/change
 
 O arquivo exportado é indexado por `importHash` — sem dependência de caminho, ideal para sincronizar leitura entre máquinas.
 
+### Toggl Track
+
+```bash
+/toggl auth                         # Abrir a página do token da API
+/toggl auth <token>                 # Conectar e sincronizar a conta
+/toggl sync                         # Atualizar projetos, descrições e timer ativo
+/toggl recent                       # Ver projetos e descrições recentes
+/toggl start "Livro" --project "Reading books"
+/toggl stop
+/toggl log "Livro" --duration 45m --project "Reading books"
+/toggl --disconnect
+```
+
+Durações aceitam formatos como `25m`, `1.5h` e `900s`. O token fica no banco local de configurações; o histórico de comandos sempre substitui credenciais por `<redacted>`.
+
 ### Visualização
 
 ```bash

@@ -375,6 +375,11 @@ function exitFocusMode(state: AppState, contentWidth: number): void {
   state.status = "Focus mode disabled";
 }
 
+function currentCommandSuggestions(state: AppState) {
+  const cursor = clamp(state.commandCursor ?? state.commandBuffer.length, 0, state.commandBuffer.length);
+  return listCommandSuggestions(state.commandBuffer, state.storage, cursor);
+}
+
 export async function handleInput(
   chunk: string,
   state: AppState,
@@ -437,7 +442,7 @@ export async function handleInput(
 
   if (state.commandMode) {
     if (chunk === "\r") {
-      const suggestions = listCommandSuggestions(state.commandBuffer, state.storage);
+      const suggestions = currentCommandSuggestions(state);
       if (suggestions.length > 0) {
         const suggestion = suggestions[clamp(state.commandSuggestionIndex, 0, suggestions.length - 1)];
         state.commandBuffer = applyCommandAutocomplete(state.commandBuffer, suggestion);
@@ -459,12 +464,15 @@ export async function handleInput(
       }
       state.commandSuggestionIndex = 0;
     } else if (chunk === "\t") {
-      const suggestions = listCommandSuggestions(state.commandBuffer, state.storage);
+      const suggestions = currentCommandSuggestions(state);
       if (suggestions.length > 0) {
-        const appliedIndex = commandAutocompleteIndex(state.commandBuffer, state.commandSuggestionIndex, suggestions);
+        const cursor = clamp(state.commandCursor ?? state.commandBuffer.length, 0, state.commandBuffer.length);
+        const appliedIndex = commandAutocompleteIndex(state.commandBuffer.slice(0, cursor), state.commandSuggestionIndex, suggestions);
         const suggestion = suggestions[clamp(appliedIndex, 0, suggestions.length - 1)];
         state.commandBuffer = applyCommandAutocomplete(state.commandBuffer, suggestion);
-        state.commandCursor = state.commandBuffer.length;
+        state.commandCursor = suggestion.completion !== undefined && suggestion.completionStart !== undefined
+          ? suggestion.completionStart + suggestion.completion.length
+          : state.commandBuffer.length;
         state.commandSuggestionIndex = appliedIndex;
       }
     } else if (isLeftKey(chunk)) {
@@ -472,17 +480,17 @@ export async function handleInput(
     } else if (isRightKey(chunk)) {
       state.commandCursor = Math.min(state.commandBuffer.length, (state.commandCursor ?? state.commandBuffer.length) + 1);
     } else if (isDownKey(chunk) || isMouseWheelDown(chunk)) {
-      const suggestions = listCommandSuggestions(state.commandBuffer, state.storage);
+      const suggestions = currentCommandSuggestions(state);
       if (suggestions.length > 0) {
         state.commandSuggestionIndex = clamp(state.commandSuggestionIndex + 1, 0, suggestions.length - 1);
       }
     } else if (isUpKey(chunk) || isMouseWheelUp(chunk)) {
-      const suggestions = listCommandSuggestions(state.commandBuffer, state.storage);
+      const suggestions = currentCommandSuggestions(state);
       if (suggestions.length > 0) {
         state.commandSuggestionIndex = clamp(state.commandSuggestionIndex - 1, 0, suggestions.length - 1);
       }
     } else if (isPageDownKey(chunk)) {
-      const suggestions = listCommandSuggestions(state.commandBuffer, state.storage);
+      const suggestions = currentCommandSuggestions(state);
       state.commandSuggestionIndex = clamp(state.commandSuggestionIndex + 7, 0, Math.max(0, suggestions.length - 1));
     } else if (isPageUpKey(chunk)) {
       state.commandSuggestionIndex = clamp(state.commandSuggestionIndex - 7, 0, Number.MAX_SAFE_INTEGER);

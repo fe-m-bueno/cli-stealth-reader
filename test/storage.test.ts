@@ -5,13 +5,14 @@ import os from "node:os";
 import path from "node:path";
 import { Storage } from "../src/storage.js";
 
-function makeTempStorage(): { storage: Storage; cleanup: () => void } {
+function makeTempStorage(): { storage: Storage; dir: string; cleanup: () => void } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "stealth-reader-storage-test-"));
   process.env.XDG_DATA_HOME = dir;
   process.env.XDG_CACHE_HOME = dir;
   const storage = new Storage();
   return {
     storage,
+    dir,
     cleanup: () => {
       storage.db.close();
       fs.rmSync(dir, { recursive: true, force: true });
@@ -122,6 +123,37 @@ test("global pace settings round-trip via raw settings", () => {
     assert.equal(storage.getSetting("globalActiveMs"), "120000");
   } finally {
     cleanup();
+  }
+});
+
+test("command history redacts Toggl authentication tokens", () => {
+  const { storage, cleanup } = makeTempStorage();
+  try {
+    storage.saveCommandHistory("/toggl auth super-secret-token", "toggl");
+
+    const row = storage.db.prepare("SELECT raw_command FROM command_history").get() as { raw_command: string };
+    assert.equal(row.raw_command, "/toggl auth <redacted>");
+    assert.equal(row.raw_command.includes("super-secret-token"), false);
+  } finally {
+    cleanup();
+  }
+});
+
+test("opening an existing database redacts legacy Toggl tokens", () => {
+  const { storage, dir } = makeTempStorage();
+  storage.db.prepare(`
+    INSERT INTO command_history (raw_command, normalized_name, created_at)
+    VALUES (?, 'toggl', ?)
+  `).run("/toggl auth legacy-secret-token", Date.now());
+  storage.db.close();
+
+  const reopened = new Storage();
+  try {
+    const row = reopened.db.prepare("SELECT raw_command FROM command_history").get() as { raw_command: string };
+    assert.equal(row.raw_command, "/toggl auth <redacted>");
+  } finally {
+    reopened.db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 

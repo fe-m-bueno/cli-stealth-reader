@@ -756,59 +756,89 @@ function makeTogglSuggestion(usage: string, description: string, completion: str
   };
 }
 
-function listTogglSuggestions(buffer: string, storage?: Storage): CommandSuggestion[] {
-  const tokens = bufferTokens(buffer);
+function listTogglSuggestions(buffer: string, storage?: Storage, cursor = buffer.length): CommandSuggestion[] {
+  const position = Math.max(0, Math.min(cursor, buffer.length));
+  const activeBuffer = buffer.slice(0, position);
+  const tokens = bufferTokens(activeBuffer);
+  const fullTokens = bufferTokens(buffer);
   const command = tokens[0];
   if (command?.text !== "toggl") return [];
   const subcommands = ["auth", "sync", "recent", "start", "stop", "log"];
   const action = tokens[1];
   if (!storage && !action) return [];
-  if (!action || (tokens.length === 2 && !buffer.endsWith(" ") && !subcommands.includes(action.text))) {
+  if (!action || (tokens.length === 2 && !activeBuffer.endsWith(" ") && !subcommands.includes(action.text))) {
     const query = action?.text ?? "";
-    const start = action?.start ?? buffer.length;
-    const end = action?.end ?? buffer.length;
+    const start = action?.start ?? position;
+    const fullAction = action ? fullTokens.find((token) => token.start === action.start) : undefined;
+    const end = fullAction?.end ?? action?.end ?? position;
     return subcommands
       .filter((subcommand) => fuzzyStarts(subcommand, query))
       .map((subcommand) => makeTogglSuggestion(subcommand, `Toggl ${subcommand}`, subcommand, start, end));
   }
   if (!storage || !["start", "log"].includes(action.text)) return [];
 
-  const projectFlagIndex = tokens.findIndex((token) => token.text === "--project");
+  let activeFlagIndex = -1;
+  for (let index = 2; index < tokens.length; index += 1) {
+    if (tokens[index]?.text.startsWith("--")) {
+      activeFlagIndex = index;
+    }
+  }
+  if (activeFlagIndex >= 0 && tokens[activeFlagIndex]?.text !== "--project") {
+    return [];
+  }
+  const projectFlagIndex = activeFlagIndex;
   if (projectFlagIndex >= 0) {
-    const valueToken = tokens[projectFlagIndex + 1];
-    const query = valueToken?.text ?? "";
-    const start = valueToken?.start ?? buffer.length;
-    const end = valueToken?.end ?? buffer.length;
-    const prefix = valueToken ? "" : buffer.endsWith(" ") ? "" : " ";
+    const nextFlagIndex = tokens.findIndex((token, index) => index > projectFlagIndex && token.text.startsWith("--"));
+    const valueTokens = tokens.slice(projectFlagIndex + 1, nextFlagIndex >= 0 ? nextFlagIndex : tokens.length);
+    const firstValueToken = valueTokens[0];
+    const lastValueToken = valueTokens.at(-1);
+    const query = valueTokens.map((token) => token.text).join(" ");
+    const fullProjectFlagIndex = fullTokens.findIndex((token) => token.start === tokens[projectFlagIndex]?.start);
+    const fullNextFlagIndex = fullTokens.findIndex((token, index) => index > fullProjectFlagIndex && token.text.startsWith("--"));
+    const fullValueTokens = fullProjectFlagIndex >= 0
+      ? fullTokens.slice(fullProjectFlagIndex + 1, fullNextFlagIndex >= 0 ? fullNextFlagIndex : fullTokens.length)
+      : [];
+    const start = firstValueToken?.start ?? position;
+    const end = fullValueTokens.at(-1)?.end ?? lastValueToken?.end ?? position;
+    const prefix = firstValueToken ? "" : activeBuffer.endsWith(" ") ? "" : " ";
     return getTogglCache(storage).projects
       .filter((project) => fuzzyStarts(project.name, query) || fuzzyStarts(`${project.clientName ?? ""} ${project.name}`.trim(), query))
       .map((project) => makeTogglSuggestion(quoteCompletion(project.name), project.clientName ? `${project.clientName} / ${project.name}` : project.name, `${prefix}${quoteCompletion(project.name)}`, start, end));
   }
 
-  const descriptionToken = tokens[2];
-  if (!descriptionToken) return [];
-  const query = descriptionToken.text;
-  const start = descriptionToken.start;
-  const end = descriptionToken.end;
+  const descriptionEndIndex = tokens.findIndex((token, index) => index >= 2 && token.text.startsWith("--"));
+  const descriptionTokens = tokens.slice(2, descriptionEndIndex >= 0 ? descriptionEndIndex : tokens.length);
+  const firstDescriptionToken = descriptionTokens[0];
+  const lastDescriptionToken = descriptionTokens.at(-1);
+  if (!firstDescriptionToken || !lastDescriptionToken) return [];
+  const query = descriptionTokens.map((token) => token.text).join(" ");
+  const start = firstDescriptionToken.start;
+  const fullDescriptionEndIndex = fullTokens.findIndex((token, index) => index >= 2 && token.text.startsWith("--"));
+  const fullDescriptionTokens = fullTokens.slice(2, fullDescriptionEndIndex >= 0 ? fullDescriptionEndIndex : fullTokens.length);
+  const end = fullDescriptionTokens.at(-1)?.end ?? lastDescriptionToken.end;
+  const separator = /\s/.test(buffer[end] ?? "") ? "" : " ";
   return getTogglCache(storage).descriptions
     .filter((item) => fuzzyStarts(item.description, query))
-    .map((item) => makeTogglSuggestion(quoteCompletion(item.description), "Recent Toggl description", `${quoteCompletion(item.description)} `, start, end));
+    .map((item) => makeTogglSuggestion(quoteCompletion(item.description), "Recent Toggl description", `${quoteCompletion(item.description)}${separator}`, start, end));
 }
 
-export function listCommandSuggestions(buffer: string, storage?: Storage): CommandSuggestion[] {
-  const togglSuggestions = listTogglSuggestions(buffer, storage);
+export function listCommandSuggestions(buffer: string, storage?: Storage, cursor = buffer.length): CommandSuggestion[] {
+  const position = Math.max(0, Math.min(cursor, buffer.length));
+  const activeBuffer = buffer.slice(0, position);
+  const togglSuggestions = listTogglSuggestions(buffer, storage, position);
   if (togglSuggestions.length > 0) {
     return togglSuggestions;
   }
-  if (storage && /^\s*toggl\s+/.test(buffer)) {
+  if (storage && /^\s*toggl\s+/.test(activeBuffer)) {
     return [];
   }
-  const trimmed = buffer.trimStart();
+  const trimmed = activeBuffer.trimStart();
   const [rawCommand, ...rest] = trimmed.split(/\s+/).filter(Boolean);
   const prefix = rest.length > 0 || trimmed.endsWith(" ")
     ? rawCommand ?? ""
     : rawCommand ?? "";
   const suggestions: CommandSuggestion[] = [];
+  const fullCommandToken = bufferTokens(buffer)[0];
 
   for (const command of COMMANDS) {
     const matchedAlias = matchesPrefix(command, prefix);
@@ -822,7 +852,10 @@ export function listCommandSuggestions(buffer: string, storage?: Storage): Comma
       category: commandCategory(command),
       detail: commandSuggestionDetail(command, matchedAlias),
       aliases: command.aliases ?? [],
-      matchedAlias: matchedAlias === command.name ? undefined : matchedAlias
+      matchedAlias: matchedAlias === command.name ? undefined : matchedAlias,
+      completion: command.name,
+      completionStart: fullCommandToken?.start ?? position,
+      completionEnd: fullCommandToken?.end ?? position
     });
   }
 
