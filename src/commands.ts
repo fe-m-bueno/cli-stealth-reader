@@ -57,7 +57,7 @@ export const COMMANDS: CommandDefinition[] = [
       "Color schemes control the accent hue family and remain separate from light/dark theming.",
       "--preview is accepted for compatibility. --list opens the full colorscheme list."
     ],
-    examples: ["/colorscheme", "/colorscheme amber", "/colorscheme forest --preview", "/colorscheme --list"]
+    examples: ["/colorscheme", "/colorscheme claude", "/colorscheme forest --preview", "/colorscheme --list"]
   },
   {
     name: "theme",

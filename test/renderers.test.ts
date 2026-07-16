@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fg } from "../src/color.js";
+import { bg, fg } from "../src/color.js";
 import { renderBlocks, renderWithDialogueHighlight } from "../src/renderers.js";
 import { stripAnsi } from "../src/screen.js";
 import { DEFAULT_THEME } from "../src/themes.js";
@@ -143,7 +143,8 @@ test("search highlighting still works on dialogue-highlighted plain lines", () =
     "Oi"
   );
   assert.equal(stripAnsi(lines[0] ?? ""), 'Ela disse: "Oi".');
-  assert.ok((lines[0] ?? "").includes("\x1b[48;2;244;184;96m"));
+  const warningBackground = bg(DEFAULT_THEME.warning, "").replace("\x1b[0m", "");
+  assert.ok((lines[0] ?? "").includes(warningBackground));
 });
 
 test("supports disabling dialogue highlight in plain mode", () => {

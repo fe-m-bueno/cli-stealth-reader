@@ -16,7 +16,7 @@ O **cli-stealth-reader** oferece múltiplas experiências de leitura:
 Além disso:
 
 - Interface TUI moderna com status bar integrada
-- 4 colorschemes e 6 temas de aparência (dark, light, colorblind-friendly e ANSI)
+- 5 colorschemes e 6 temas de aparência (dark, light, colorblind-friendly e ANSI)
 - 25+ slash commands com suporte a argumentos, aliases e flags
 - Biblioteca SQLite persistida com XDG directories via `better-sqlite3`
 - Import rigoroso de EPUB com suporte a EPUB3, NCX fallback e fragmentos de âncora
@@ -91,7 +91,8 @@ Ou use `m` para ciclar entre os modos sem abrir o comando.
 ### Exemplo: Mudar Colorscheme e Tema
 
 ```
-/colorscheme codex      # Tema azul frio
+/colorscheme codex      # Monocromático com azul OpenAI
+/colorscheme claude     # Coral e lavanda do Claude Code
 /colorscheme graphite   # Tema neutro
 /colorscheme amber      # Tema quente
 /colorscheme forest     # Tema verde
@@ -344,11 +345,15 @@ Pressione `f` para entrar no modo foco: a tela exibe um único bloco de conteúd
 
 ## Temas de Cores
 
-Quatro temas pensados para leitura prolongada:
+Cinco temas pensados para leitura prolongada:
 
 ### Codex (Padrão)
 
-Azul frio e sofisticado — ideal para ambientes corporativos. Parece código real de um desenvolvedor.
+Preto, branco e cinza com o azul de marca do Codex CLI.
+
+### Claude Code
+
+Coral, lavanda e verde sobre neutros escuros, seguindo a hierarquia visual do Claude Code.
 
 ### Graphite
 

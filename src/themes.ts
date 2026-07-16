@@ -6,16 +6,30 @@ export const THEMES: ThemePreset[] = [
   {
     id: "codex",
     label: "Codex",
-    accent: "#59d0ff",
-    accentMuted: "#1f6f88",
-    foreground: "#dce6ea",
-    dim: "#6d7d84",
-    background: "#0b1012",
-    border: "#1e3a45",
-    warning: "#f4b860",
-    keyword: "#7c9ebf",
-    codeString: "#8fb573",
-    subtle: "#3d5560"
+    accent: "#3b82f6",
+    accentMuted: "#20488d",
+    foreground: "#ffffff",
+    dim: "#aaaaaa",
+    background: "#0d0d0d",
+    border: "#5d5d5d",
+    warning: "#ffcc00",
+    keyword: "#3b82f6",
+    codeString: "#00cc66",
+    subtle: "#616567"
+  },
+  {
+    id: "claude",
+    label: "Claude Code",
+    accent: "#d77757",
+    accentMuted: "#eb9f7f",
+    foreground: "#ffffff",
+    dim: "#999999",
+    background: "#0d0d0d",
+    border: "#888888",
+    warning: "#ffc107",
+    keyword: "#b1b9f9",
+    codeString: "#4eba65",
+    subtle: "#505050"
   },
   {
     id: "graphite",
@@ -151,6 +165,10 @@ function lightTheme(colorScheme: ThemePreset, appearanceTheme: AppearanceThemePr
 
 function colorblindSchemeColors(colorScheme: ThemePreset, light: boolean) {
   switch (colorScheme.id) {
+    case "claude":
+      return light
+        ? { accent: "#b65c00", accentMuted: "#c99b69", warning: "#8a5a00", keyword: "#0072b2", codeString: "#007f5f" }
+        : { accent: "#e69f00", accentMuted: "#7a560f", warning: "#f0e442", keyword: "#56b4e9", codeString: "#009e73" };
     case "graphite":
       return light
         ? { accent: "#4d5358", accentMuted: "#9aa0a5", warning: "#d55e00", keyword: "#0072b2", codeString: "#007f5f" }
@@ -193,6 +211,10 @@ function colorblindTheme(colorScheme: ThemePreset, appearanceTheme: AppearanceTh
 
 function ansiSchemeColors(colorScheme: ThemePreset, light: boolean) {
   switch (colorScheme.id) {
+    case "claude":
+      return light
+        ? { accent: "ansi:brightRed", accentMuted: "ansi:brightYellow", warning: "ansi:yellow", keyword: "ansi:blue", codeString: "ansi:green" }
+        : { accent: "ansi:brightRed", accentMuted: "ansi:brightYellow", warning: "ansi:brightYellow", keyword: "ansi:brightBlue", codeString: "ansi:brightGreen" };
     case "graphite":
       return light
         ? { accent: "ansi:black", accentMuted: "ansi:brightBlack", warning: "ansi:red", keyword: "ansi:blue", codeString: "ansi:green" }
@@ -208,8 +230,8 @@ function ansiSchemeColors(colorScheme: ThemePreset, light: boolean) {
     case "codex":
     default:
       return light
-        ? { accent: "ansi:blue", accentMuted: "ansi:cyan", warning: "ansi:red", keyword: "ansi:magenta", codeString: "ansi:green" }
-        : { accent: "ansi:brightCyan", accentMuted: "ansi:blue", warning: "ansi:yellow", keyword: "ansi:brightBlue", codeString: "ansi:brightGreen" };
+        ? { accent: "ansi:blue", accentMuted: "ansi:brightBlack", warning: "ansi:red", keyword: "ansi:blue", codeString: "ansi:green" }
+        : { accent: "ansi:brightBlue", accentMuted: "ansi:blue", warning: "ansi:yellow", keyword: "ansi:brightBlue", codeString: "ansi:brightGreen" };
   }
 }
 
@@ -225,7 +247,13 @@ function ansiTheme(colorScheme: ThemePreset, appearanceTheme: AppearanceThemePre
     foreground: light ? "ansi:black" : "ansi:brightWhite",
     dim: "ansi:brightBlack",
     background: light ? "ansi:brightWhite" : "ansi:black",
-    border: light ? "ansi:brightBlack" : "ansi:blue",
+    border: light
+      ? "ansi:brightBlack"
+      : colorScheme.id === "claude"
+        ? "ansi:white"
+        : colorScheme.id === "codex"
+          ? "ansi:brightBlack"
+          : "ansi:blue",
     warning: colors.warning,
     keyword: colors.keyword,
     codeString: colors.codeString,

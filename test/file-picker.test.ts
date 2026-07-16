@@ -689,6 +689,21 @@ test("colorschemes overlay arrow keys move selection and enter applies the color
   assert.equal(state.colorScheme.id, THEMES[1].id);
 });
 
+test("/colorscheme claude applies and persists the Claude Code palette", async () => {
+  const saved: Array<[string, unknown]> = [];
+  const storage = makeStorage({
+    setSetting: (key: string, value: unknown) => saved.push([key, value])
+  });
+  const state = makeState({ overlay: "none", storage });
+
+  await executeCommand(state, "/colorscheme claude");
+
+  assert.equal(state.colorScheme.id, "claude");
+  assert.equal(state.theme.accent, "#d77757");
+  assert.equal(state.status, "Colorscheme set to Claude Code");
+  assert.deepEqual(saved, [["themeId", "claude"]]);
+});
+
 test("themes overlay arrow keys move selection and enter applies the appearance theme", async () => {
   const state = makeState({ overlay: "none" });
   await executeCommand(state, "/theme");
