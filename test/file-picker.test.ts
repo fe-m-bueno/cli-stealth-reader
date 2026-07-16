@@ -123,6 +123,7 @@ function makeStorageBase() {
     removeBook: () => {},
     getLatestBookId: () => null,
     setSetting: () => {},
+    saveSettings: () => {},
     saveCommandHistory: () => {},
     savePosition: () => {},
     getSettings: () => ({
@@ -135,7 +136,8 @@ function makeStorageBase() {
       plainHighlight: true,
       fontScale: 1,
       marginSize: 0,
-      lineSpacing: "normal"
+      lineSpacing: "normal",
+      mouseCapture: false
     }),
     listBookmarks: () => [],
     addBookmark: () => ({ id: "", bookId: "", chapterIndex: 0, blockOffset: 0, label: null, createdAt: 0 }),
@@ -434,7 +436,11 @@ test("bundled alternate-scroll arrows scroll the help manual", async () => {
 });
 
 test("/mouse toggles app mouse capture for draggable scrollbar mode", async () => {
-  const state = makeState({ overlay: "none" });
+  const saved: Array<[string, unknown]> = [];
+  const storage = makeStorage({
+    setSetting: (key: string, value: unknown) => saved.push([key, value])
+  });
+  const state = makeState({ overlay: "none", storage });
   assert.equal(state.mouseCapture, false);
 
   await executeCommand(state, "/mouse on");
@@ -442,6 +448,10 @@ test("/mouse toggles app mouse capture for draggable scrollbar mode", async () =
 
   await executeCommand(state, "/mouse off");
   assert.equal(state.mouseCapture, false);
+  assert.deepEqual(saved, [
+    ["mouseCapture", true],
+    ["mouseCapture", false]
+  ]);
 });
 
 test("home and end jump to the chapter boundaries", async () => {
@@ -867,9 +877,9 @@ test("settings search filters controls inside the active tab", async () => {
 });
 
 test("Enter applies and persists the complete Layout draft", async () => {
-  const saved: Array<[string, unknown]> = [];
+  let saved: Parameters<AppState["storage"]["saveSettings"]>[0] | null = null;
   const storage = makeStorage({
-    setSetting: (key: string, value: unknown) => saved.push([key, value])
+    saveSettings: (settings) => { saved = settings; }
   });
   const state = makeState({
     overlay: "none",
@@ -897,9 +907,9 @@ test("Enter applies and persists the complete Layout draft", async () => {
   assert.equal(state.fontScale, 1.15);
   assert.equal(state.marginSize, 4);
   assert.equal(state.lineSpacing, "relaxed");
-  assert.ok(saved.some(([key, value]) => key === "fontScale" && value === 1.15));
-  assert.ok(saved.some(([key, value]) => key === "marginSize" && value === 4));
-  assert.ok(saved.some(([key, value]) => key === "lineSpacing" && value === "relaxed"));
+  assert.equal(saved?.fontScale, 1.15);
+  assert.equal(saved?.marginSize, 4);
+  assert.equal(saved?.lineSpacing, "relaxed");
 });
 
 test("space stages a settings change and escape cancels it", async () => {
@@ -919,11 +929,9 @@ test("space stages a settings change and escape cancels it", async () => {
 });
 
 test("enter saves staged settings and persists app settings", async () => {
-  const saved: Array<[string, unknown]> = [];
+  let saved: Parameters<AppState["storage"]["saveSettings"]>[0] | null = null;
   const storage = makeStorage({
-    setSetting: (key: string, value: unknown) => {
-      saved.push([key, value]);
-    }
+    saveSettings: (settings) => { saved = settings; }
   });
   const state = makeState({ overlay: "none", storage, renderMode: "plain", codeLanguage: "typescript" });
 
@@ -936,8 +944,25 @@ test("enter saves staged settings and persists app settings", async () => {
   assert.equal(state.renderMode, "code");
   assert.equal(state.codeLanguage, "typescript");
   assert.equal(state.status, "Settings saved.");
-  assert.ok(saved.some(([key, value]) => key === "renderMode" && value === "code"));
-  assert.ok(saved.some(([key, value]) => key === "codeLanguage" && value === "typescript"));
+  assert.equal(saved?.renderMode, "code");
+  assert.equal(saved?.codeLanguage, "typescript");
+});
+
+test("settings stay staged when atomic persistence fails", async () => {
+  const storage = makeStorage({
+    saveSettings: () => { throw new Error("disk full"); }
+  });
+  const state = makeState({ overlay: "none", storage, renderMode: "plain" });
+
+  await executeCommand(state, "/settings");
+  await handleInput("\u001b[C", state, redraw, noop, () => {}, noop);
+  await handleInput(" ", state, redraw, noop, () => {}, noop);
+  await handleInput("\r", state, redraw, noop, () => {}, noop);
+
+  assert.equal(state.renderMode, "plain");
+  assert.equal(state.settingsDraft?.renderMode, "code");
+  assert.equal(state.overlay, "settings");
+  assert.equal(state.status, "Settings could not be saved; no changes were applied.");
 });
 
 test("p key cycles progress visibility to the next value", async () => {

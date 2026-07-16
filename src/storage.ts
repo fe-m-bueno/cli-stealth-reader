@@ -23,6 +23,7 @@ import type {
 } from "./types.js";
 import { getAppPaths } from "./paths.js";
 import { EPUB_PARSER_VERSION } from "./parser/epub.js";
+import { isFontScale, isLineSpacing, isMarginSize } from "./settings-values.js";
 
 export type { AppSettings };
 
@@ -36,7 +37,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   plainHighlight: true,
   fontScale: 1,
   marginSize: 0,
-  lineSpacing: "normal"
+  lineSpacing: "normal",
+  mouseCapture: false
 };
 
 export class Storage {
@@ -148,21 +150,21 @@ export class Storage {
         if ([1, 2, 3, 4, 5].includes(parsed)) {
           settings.codeDensity = parsed as CodeDensity;
         }
-      } else if (row.key === "plainHighlight") {
-        settings.plainHighlight = row.value === "true";
+      } else if (row.key === "plainHighlight" || row.key === "mouseCapture") {
+        settings[row.key] = row.value === "true";
       } else if (row.key === "fontScale") {
         const parsed = Number(row.value);
-        if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 2) {
+        if (isFontScale(parsed)) {
           settings.fontScale = parsed;
         }
       } else if (row.key === "marginSize") {
         const parsed = Number(row.value);
-        if (Number.isInteger(parsed) && parsed >= 0 && parsed <= 30) {
+        if (isMarginSize(parsed)) {
           settings.marginSize = parsed;
         }
       } else if (row.key === "lineSpacing") {
-        if (["compact", "normal", "relaxed"].includes(row.value)) {
-          settings.lineSpacing = row.value as AppSettings["lineSpacing"];
+        if (isLineSpacing(row.value)) {
+          settings.lineSpacing = row.value;
         }
       } else if (row.key in settings) {
         (settings as Record<string, unknown>)[row.key] = row.value;
@@ -182,6 +184,18 @@ export class Storage {
 
   setSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): void {
     this.setRawSetting(key, String(value));
+  }
+
+  saveSettings(settings: AppSettings): void {
+    const upsert = this.db.prepare(
+      "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    );
+    const saveAll = this.db.transaction((entries: Array<[string, AppSettings[keyof AppSettings]]>) => {
+      for (const [key, value] of entries) {
+        upsert.run(key, String(value));
+      }
+    });
+    saveAll(Object.entries(settings) as Array<[string, AppSettings[keyof AppSettings]]>);
   }
 
   saveBook(book: CanonicalBook, renderMode: RenderMode): void {

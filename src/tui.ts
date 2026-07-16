@@ -477,7 +477,7 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     booksTagFilter: null,
     booksTagMap: new Map(),
     helpCommand: null,
-    mouseCapture: false,
+    mouseCapture: settings.mouseCapture,
     settingsDraft: null,
     settingsSearchBuffer: "",
     settingsSearchMode: false

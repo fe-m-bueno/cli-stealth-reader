@@ -131,19 +131,71 @@ test("reading layout settings persist with numeric validation", () => {
     storage.setSetting("fontScale", 1.3);
     storage.setSetting("marginSize", 12);
     storage.setSetting("lineSpacing", "relaxed");
+    storage.setSetting("mouseCapture", true);
 
     const settings = storage.getSettings();
     assert.equal(settings.fontScale, 1.3);
     assert.equal(settings.marginSize, 12);
     assert.equal(settings.lineSpacing, "relaxed");
+    assert.equal(settings.mouseCapture, true);
 
-    storage.setRawSetting("fontScale", "not-a-number");
-    storage.setRawSetting("marginSize", "99");
+    storage.setRawSetting("fontScale", "1.7");
+    storage.setRawSetting("marginSize", "30");
     storage.setRawSetting("lineSpacing", "huge");
     const fallback = storage.getSettings();
     assert.equal(fallback.fontScale, 1);
     assert.equal(fallback.marginSize, 0);
     assert.equal(fallback.lineSpacing, "normal");
+  } finally {
+    cleanup();
+  }
+});
+
+test("saveSettings atomically round-trips the complete reader configuration", () => {
+  const { storage, cleanup } = makeTempStorage();
+  try {
+    const settings = storage.getSettings();
+    storage.saveSettings({
+      ...settings,
+      renderMode: "plain",
+      fontScale: 1.5,
+      marginSize: 24,
+      lineSpacing: "compact",
+      mouseCapture: true
+    });
+
+    const saved = storage.getSettings();
+    assert.equal(saved.renderMode, "plain");
+    assert.equal(saved.fontScale, 1.5);
+    assert.equal(saved.marginSize, 24);
+    assert.equal(saved.lineSpacing, "compact");
+    assert.equal(saved.mouseCapture, true);
+  } finally {
+    cleanup();
+  }
+});
+
+test("saveSettings rolls back every preference when one write fails", () => {
+  const { storage, cleanup } = makeTempStorage();
+  try {
+    const before = storage.getSettings();
+    storage.db.exec(`
+      CREATE TRIGGER reject_margin_setting
+      BEFORE UPDATE ON settings
+      WHEN NEW.key = 'marginSize' AND NEW.value = '24'
+      BEGIN
+        SELECT RAISE(ABORT, 'rejected setting');
+      END;
+    `);
+
+    assert.throws(() => storage.saveSettings({
+      ...before,
+      themeId: "solarized",
+      fontScale: 1.5,
+      marginSize: 24
+    }), /rejected setting/);
+
+    assert.deepEqual(storage.getSettings(), before);
   } finally {
     cleanup();
   }

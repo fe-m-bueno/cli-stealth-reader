@@ -4,6 +4,7 @@ export type CodeLanguage = "typescript" | "python" | "rust";
 
 export type CodeDensity = 1 | 2 | 3 | 4 | 5;
 export type LineSpacing = "compact" | "normal" | "relaxed";
+export type SettingsTab = "themes" | "reading" | "layout" | "more";
 
 export type ProgressVisibility =
   | "time-chapter"
@@ -171,6 +172,7 @@ export interface AppSettings {
   fontScale: number;
   marginSize: number;
   lineSpacing: LineSpacing;
+  mouseCapture: boolean;
 }
 
 export interface CommandArgSpec {
@@ -358,8 +360,8 @@ export interface AppState {
   helpCommand: string | null;
   integrationLines?: string[];
   mouseCapture: boolean;
-  settingsDraft?: import("./settings-panel.js").SettingsPanelDraft | null;
-  settingsTab?: import("./settings-panel.js").SettingsTab;
+  settingsDraft?: AppSettings | null;
+  settingsTab?: SettingsTab;
   settingsSearchBuffer?: string;
   settingsSearchMode?: boolean;
 }

@@ -569,6 +569,7 @@ const handlers: Record<string, CommandHandler> = {
     } else {
       throw new Error("Use /mouse [on|off]");
     }
+    state.storage.setSetting("mouseCapture", state.mouseCapture);
     state.mouseDrag = null;
     state.status = state.mouseCapture
       ? "Mouse capture on: scrollbar drag enabled; use Shift-drag for terminal selection."

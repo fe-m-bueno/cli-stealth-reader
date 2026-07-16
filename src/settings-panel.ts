@@ -1,13 +1,8 @@
 import { fg, inverse } from "./color.js";
 import { stripAnsi, truncate } from "./screen.js";
+import { FONT_SCALES, LINE_SPACINGS, MARGIN_SIZES } from "./settings-values.js";
 import { APPEARANCE_THEMES, THEMES, applyAppearanceTheme } from "./themes.js";
-import type { AppSettings, AppState, CodeDensity, LineSpacing, ThemePreset } from "./types.js";
-
-export type SettingsPanelDraft = AppSettings & {
-  mouseCapture: boolean;
-};
-
-export type SettingsTab = "themes" | "reading" | "layout" | "more";
+import type { AppSettings, AppState, CodeDensity, LineSpacing, SettingsTab, ThemePreset } from "./types.js";
 
 export const SETTINGS_TABS: ReadonlyArray<{ id: SettingsTab; label: string }> = [
   { id: "themes", label: "Themes" },
@@ -33,14 +28,11 @@ interface SettingsItem {
   tab: SettingsTab;
   label: string;
   description: string;
-  value: (draft: SettingsPanelDraft) => string;
-  cycle: (draft: SettingsPanelDraft) => SettingsPanelDraft;
+  value: (draft: AppSettings) => string;
+  cycle: (draft: AppSettings) => AppSettings;
 }
 
 const CODE_DENSITIES: CodeDensity[] = [1, 2, 3, 4, 5];
-const FONT_SCALES = [1, 1.15, 1.3, 1.5] as const;
-const MARGIN_SIZES = [0, 4, 8, 12, 16, 24] as const;
-const LINE_SPACINGS: LineSpacing[] = ["compact", "normal", "relaxed"];
 const PROGRESS_VALUES: AppSettings["progressVisibility"][] = [
   "time-chapter",
   "time-book",
@@ -52,7 +44,7 @@ const PROGRESS_VALUES: AppSettings["progressVisibility"][] = [
 
 type ReadingMode = "plain" | "typescript" | "python" | "rust";
 
-function currentReadingMode(draft: SettingsPanelDraft): ReadingMode {
+function currentReadingMode(draft: AppSettings): ReadingMode {
   return draft.renderMode === "plain" ? "plain" : draft.codeLanguage;
 }
 
@@ -201,7 +193,7 @@ export const SETTINGS_ITEMS: SettingsItem[] = [
   }
 ];
 
-export function createSettingsDraft(state: AppState): SettingsPanelDraft {
+export function createSettingsDraft(state: AppState): AppSettings {
   return {
     themeId: state.colorScheme.id,
     appearanceThemeId: state.appearanceTheme.id,
@@ -236,7 +228,7 @@ export function closeSettingsPanel(state: AppState): void {
   state.settingsSearchMode = false;
 }
 
-export function ensureSettingsDraft(state: AppState): SettingsPanelDraft {
+export function ensureSettingsDraft(state: AppState): AppSettings {
   if (!state.settingsDraft) {
     state.settingsDraft = createSettingsDraft(state);
   }
@@ -279,10 +271,17 @@ export function cycleSelectedSetting(state: AppState): void {
   state.status = `${selected.label}: ${selected.value(state.settingsDraft)}`;
 }
 
-export function applySettingsDraft(state: AppState): void {
+export function applySettingsDraft(state: AppState): boolean {
   const draft = ensureSettingsDraft(state);
   const colorScheme = THEMES.find((item) => item.id === draft.themeId) ?? state.colorScheme;
   const appearanceTheme = APPEARANCE_THEMES.find((item) => item.id === draft.appearanceThemeId) ?? state.appearanceTheme;
+
+  try {
+    state.storage.saveSettings(draft);
+  } catch {
+    state.status = "Settings could not be saved; no changes were applied.";
+    return false;
+  }
 
   state.colorScheme = colorScheme;
   state.appearanceTheme = appearanceTheme;
@@ -298,19 +297,9 @@ export function applySettingsDraft(state: AppState): void {
   state.mouseCapture = draft.mouseCapture;
   state.layoutMetrics = null;
 
-  state.storage.setSetting("themeId", draft.themeId);
-  state.storage.setSetting("appearanceThemeId", draft.appearanceThemeId);
-  state.storage.setSetting("progressVisibility", draft.progressVisibility);
-  state.storage.setSetting("renderMode", draft.renderMode);
-  state.storage.setSetting("codeLanguage", draft.codeLanguage);
-  state.storage.setSetting("codeDensity", draft.codeDensity);
-  state.storage.setSetting("plainHighlight", draft.plainHighlight);
-  state.storage.setSetting("fontScale", draft.fontScale);
-  state.storage.setSetting("marginSize", draft.marginSize);
-  state.storage.setSetting("lineSpacing", draft.lineSpacing);
-
   closeSettingsPanel(state);
   state.status = "Settings saved.";
+  return true;
 }
 
 function padAnsi(text: string, width: number): string {
@@ -322,7 +311,7 @@ function boxLine(width: number, left: string, fill: string, right: string, theme
   return border(left + fill.repeat(Math.max(0, width - 2)) + right);
 }
 
-function settingsPreview(draft: SettingsPanelDraft, width: number): string[] {
+function settingsPreview(draft: AppSettings, width: number): string[] {
   const colorScheme = THEMES.find((item) => item.id === draft.themeId) ?? THEMES[0]!;
   const appearance = APPEARANCE_THEMES.find((item) => item.id === draft.appearanceThemeId) ?? APPEARANCE_THEMES[0]!;
   const theme = applyAppearanceTheme(colorScheme, appearance);

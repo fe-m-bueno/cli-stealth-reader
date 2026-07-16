@@ -30,6 +30,7 @@ A full-screen terminal EPUB reader in TypeScript. Two rendering modes: `plain` (
 | `src/types.ts` | All shared types for the app |
 | `src/commands.ts` | Slash-command definitions + tokenizer/parser |
 | `src/storage.ts` | SQLite abstraction (WAL, all queries) |
+| `src/settings-values.ts` | Canonical reader-layout presets and validators |
 | `src/paths.ts` | XDG directory path resolution |
 | `src/discovery.ts` | EPUB file discovery in CWD |
 | `src/renderers.ts` | Block rendering for plain vs code modes |
