@@ -146,7 +146,7 @@ Constants are defined once in `reading-pace.ts` and pinned by unit tests.
 
 For chapters/books with `wordCount === 0` (e.g. CBZ/image-heavy):
 
-- Time estimates unavailable → show `—` in time modes (or fall through to percent if product prefers; **v1: show `—`** when the active mode is a time mode and remaining words cannot be computed).
+- Time estimates unavailable → show `—` in time modes when remaining words cannot be computed.
 
 ## Persistence
 
@@ -259,7 +259,7 @@ Command / settings tests:
 |----------|----------------|
 | `DEFAULT_WPM` | 230 |
 | `IDLE_MS` | 120_000 |
-| `COLD_START_MS` | 180_000–300_000 |
-| `BOOK_BLEND_MS` | ~600_000 (10 min) |
+| `COLD_START_MS` | 240_000 (4 min) |
+| `BOOK_BLEND_MS` | 600_000 (10 min) |
 | Instantaneous WPM filter | 50–800 |
-| EWMA alpha / mass weight | Prefer mass-weighted by `activeMs` |
+| Pace update | Mass-weighted average by `activeMs` (not a free alpha) |
