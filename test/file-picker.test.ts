@@ -418,6 +418,11 @@ test("event-typed Kitty control keys normalize without leaking terminal escapes"
   assert.equal(normalizeTerminalKey("\u001b[46;5:3u"), null);
 });
 
+test("full Kitty key reports normalize alternate keys and associated text", () => {
+  assert.equal(normalizeTerminalKey("\u001b[27;1:1;27u"), "\u001b");
+  assert.equal(normalizeTerminalKey("\u001b[46::46;5:1;46u"), "\u001b[46;5u");
+});
+
 test("command mode autocomplete replaces the token under the cursor and keeps the suffix", async () => {
   const state = makeState({
     overlay: "none",
@@ -629,6 +634,23 @@ test("Kitty-protocol Escape closes shortcut help", async () => {
   const state = makeState({ overlay: "none" });
   await handleInput("\u001b[46;5u", state, redraw, noop, () => {}, noop);
   await handleInput("\u001b[27u", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "none");
+});
+
+test("full Kitty reports open shortcuts and require two Escapes to leave modal search", async () => {
+  const state = makeState({ overlay: "none", currentBook: focusBook });
+
+  await handleInput("\u001b[46::46;5:1;46u", state, redraw, noop, () => {}, noop);
+  assert.equal(state.overlay, "keys");
+
+  await handleInput("/", state, redraw, noop, () => {}, noop);
+  assert.equal(state.shortcutSearchMode, true);
+
+  await handleInput("\u001b[27;1:1;27u", state, redraw, noop, () => {}, noop);
+  assert.equal(state.shortcutSearchMode, false);
+  assert.equal(state.overlay, "keys");
+
+  await handleInput("\u001b[27;1:1;27u", state, redraw, noop, () => {}, noop);
   assert.equal(state.overlay, "none");
 });
 

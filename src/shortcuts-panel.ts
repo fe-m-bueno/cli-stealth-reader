@@ -11,7 +11,7 @@ const CATEGORY_META = [
 ] as const;
 
 const DEFAULT_COLLAPSED_CATEGORIES = ["navigation", "commands", "view"];
-const ESSENTIAL_KEYS = new Set(["/", "Enter", "Esc", "? / Ctrl+. / Ctrl+X", "q"]);
+const ESSENTIAL_KEYS = new Set(["/", "Enter", "Esc", "? / Ctrl+. / Ctrl+X", "Shift+S", "q"]);
 
 export const CTRL_DOT_SEQUENCES = ["\x1b[46;5u", "\x1b[27;5;46~"] as const;
 export const CTRL_X_SEQUENCES = ["\x18", "\x1b[120;5u"] as const;
@@ -200,14 +200,41 @@ export function renderShortcutPanel(state: AppState, width: number, height: numb
 
   const footerDividerY = geometry.y + geometry.height - 3;
   setLine(footerDividerY, border(`├${"─".repeat(Math.max(1, geometry.width - 2))}┤`));
-  const footer = [
-    hint(state.theme, "↑/↓", "nav"),
-    hint(state.theme, "Enter/Space", "expand"),
-    hint(state.theme, "Esc", "close")
-  ].join(fg(state.theme.border, "  │  "));
+  const footer = (state.shortcutSearchMode
+    ? [
+        hint(state.theme, "Esc", "exit search"),
+        hint(state.theme, "Esc again", "close")
+      ]
+    : [
+        hint(state.theme, "↑/↓", "nav"),
+        hint(state.theme, "Enter/Space", "expand"),
+        hint(state.theme, "Esc", "close")
+      ]).join(fg(state.theme.border, "  │  "));
   setLine(footerDividerY + 1, `${border("│")} ${padAnsi(truncate(footer, innerContentWidth), innerContentWidth)} ${border("│")}`);
   setLine(footerDividerY + 2, border(`╰${"─".repeat(Math.max(1, geometry.width - 2))}╯`));
   return output;
+}
+
+export function composeShortcutPanel(
+  state: AppState,
+  backgroundLines: string[],
+  width: number,
+  height: number
+): string[] {
+  const geometry = shortcutModalGeometry(width, height);
+  const modalLines = renderShortcutPanel(state, width, height);
+  return Array.from({ length: height }, (_, row) => {
+    const background = stripAnsi(backgroundLines[row] ?? "").padEnd(width).slice(0, width);
+    const modalLine = modalLines[row] ?? "";
+    if (!modalLine || row < geometry.y || row >= geometry.y + geometry.height) {
+      return fg(state.theme.subtle, background);
+    }
+
+    const modal = modalLine.slice(geometry.x);
+    const before = fg(state.theme.subtle, background.slice(0, geometry.x));
+    const after = fg(state.theme.subtle, background.slice(geometry.x + geometry.width));
+    return `${before}${modal}${after}`;
+  });
 }
 
 export function shortcutModalHitTest(

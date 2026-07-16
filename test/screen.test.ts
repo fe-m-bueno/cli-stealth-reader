@@ -90,6 +90,24 @@ test("shortcut modal ignores reader margins and font scale", () => {
   assert.equal(layout.contentWidth, 118);
 });
 
+test("shortcut modal is composited over a dimmed reading view", () => {
+  const state = readingState({
+    overlay: "keys",
+    shortcutCollapsedCategories: new Set(["navigation", "commands", "view"]),
+    shortcutSearchBuffer: "",
+    shortcutSearchMode: false,
+    overlayCursor: 0
+  });
+
+  const lines = currentLines(state, 100, 30);
+  const backgroundLine = lines.find((line) => stripAnsi(line).includes("first paragraph"));
+
+  assert.ok(backgroundLine, "Expected the reading view to remain visible behind the modal");
+  const subtleOpen = fg(theme.subtle, "").replace("\u001b[0m", "");
+  assert.ok(backgroundLine.startsWith(subtleOpen), "Expected the background text to be dimmed");
+  assert.ok(lines.some((line) => stripAnsi(line).includes("Keyboard Shortcuts")));
+});
+
 test("scrollbar offset mapping follows thumb geometry", () => {
   const metrics = getScrollbarMetrics(100, 10, 45);
   const offset = scrollbarOffsetFromThumb(100, 10, metrics.thumbOffset);
@@ -204,6 +222,27 @@ test("shortcut overlay footer advertises its actual controls", () => {
   assert.match(footer[0], /\/:search/);
   assert.match(footer[0], /Ctrl\+\.\:close/);
   assert.doesNotMatch(footer[0], /q:quit/);
+});
+
+test("shortcut search footer explains the two-step Escape behavior", () => {
+  const state = {
+    theme,
+    commandMode: false,
+    commandBuffer: "",
+    commandCursor: 0,
+    commandSuggestionIndex: 0,
+    currentBook: null,
+    progressVisibility: "hidden",
+    status: "Shortcut search",
+    overlay: "keys",
+    shortcutSearchMode: true,
+    chapterIndex: 0,
+    blockOffset: 0
+  } as AppState;
+
+  const footer = renderFooter(state, 120).map(stripAnsi);
+  assert.match(footer[0], /Esc:exit search/);
+  assert.match(footer[0], /Esc Esc:close/);
 });
 
 test("focus mode footer advertises escape exit hint", () => {

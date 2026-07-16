@@ -1084,35 +1084,40 @@ export async function handleInput(
 }
 
 export function normalizeTerminalKey(chunk: string): string | null {
-  const kittyMatch = chunk.match(/^\x1b\[(\d+)(?:;(\d+)(?::(\d+))?)?u$/)
-    ?? chunk.match(/^\x1b\[(\d+);(\d+);(\d+)u$/);
+  const kittyMatch = chunk.match(/^\x1b\[([\d:]+)(?:;(\d+)(?::(\d+))?)?(?:;[\d:]*)?u$/);
   if (!kittyMatch) {
     return chunk;
   }
 
-  const keyCode = Number(kittyMatch[1]);
+  const keyCodes = kittyMatch[1]!
+    .split(":")
+    .filter(Boolean)
+    .map(Number);
   const modifiers = Number(kittyMatch[2] ?? 1);
   const eventType = Number(kittyMatch[3] ?? 1);
   if (eventType === 3) {
     return null;
   }
-  if (keyCode === 27 && modifiers === 1) {
+  const modifierBits = Math.max(0, modifiers - 1);
+  const nonLockModifierBits = modifierBits & 0b11_1111;
+  if (keyCodes.includes(27) && nonLockModifierBits === 0) {
     return "\u001b";
   }
-  if (modifiers !== 5) {
+  if ((modifierBits & 0b100) === 0) {
     return chunk;
   }
 
-  switch (keyCode) {
-    case 46:
-      return CTRL_DOT_SEQUENCES[0];
-    case 99:
-      return "\u0003";
-    case 100:
-      return "\u0004";
-    case 120:
-      return CTRL_X_SEQUENCES[0];
-    default:
-      return chunk;
+  if (keyCodes.includes(46)) {
+    return CTRL_DOT_SEQUENCES[0];
   }
+  if (keyCodes.includes(99)) {
+    return "\u0003";
+  }
+  if (keyCodes.includes(100)) {
+    return "\u0004";
+  }
+  if (keyCodes.includes(120)) {
+    return CTRL_X_SEQUENCES[0];
+  }
+  return chunk;
 }
