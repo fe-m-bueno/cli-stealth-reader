@@ -6,14 +6,14 @@ export const THEMES: ThemePreset[] = [
   {
     id: "codex",
     label: "Codex",
-    accent: "#3b82f6",
-    accentMuted: "#20488d",
+    accent: "ansi:cyan",
+    accentMuted: "ansi:brightBlack",
     foreground: "#ffffff",
     dim: "#aaaaaa",
     background: "#0d0d0d",
     border: "#5d5d5d",
     warning: "#ffcc00",
-    keyword: "#3b82f6",
+    keyword: "ansi:cyan",
     codeString: "#00cc66",
     subtle: "#616567"
   },
@@ -87,7 +87,27 @@ export const APPEARANCE_THEMES: AppearanceThemePreset[] = [
 export const DEFAULT_COLOR_SCHEME = THEMES[0];
 export const DEFAULT_APPEARANCE_THEME = APPEARANCE_THEMES[0];
 
-function hexToRgb(hex: string): { r: number; g: number; b: number } {
+const ANSI_HEX_FALLBACKS: Record<string, string> = {
+  "ansi:black": "#000000",
+  "ansi:red": "#800000",
+  "ansi:green": "#008000",
+  "ansi:yellow": "#808000",
+  "ansi:blue": "#000080",
+  "ansi:magenta": "#800080",
+  "ansi:cyan": "#008b8b",
+  "ansi:white": "#c0c0c0",
+  "ansi:brightBlack": "#808080",
+  "ansi:brightRed": "#ff0000",
+  "ansi:brightGreen": "#00ff00",
+  "ansi:brightYellow": "#ffff00",
+  "ansi:brightBlue": "#0000ff",
+  "ansi:brightMagenta": "#ff00ff",
+  "ansi:brightCyan": "#00ffff",
+  "ansi:brightWhite": "#ffffff"
+};
+
+function hexToRgb(color: string): { r: number; g: number; b: number } {
+  const hex = ANSI_HEX_FALLBACKS[color] ?? color;
   const value = hex.replace("#", "");
   const numeric = Number.parseInt(value, 16);
   return {
@@ -230,8 +250,8 @@ function ansiSchemeColors(colorScheme: ThemePreset, light: boolean) {
     case "codex":
     default:
       return light
-        ? { accent: "ansi:blue", accentMuted: "ansi:brightBlack", warning: "ansi:red", keyword: "ansi:blue", codeString: "ansi:green" }
-        : { accent: "ansi:brightBlue", accentMuted: "ansi:blue", warning: "ansi:yellow", keyword: "ansi:brightBlue", codeString: "ansi:brightGreen" };
+        ? { accent: "ansi:cyan", accentMuted: "ansi:brightBlack", warning: "ansi:red", keyword: "ansi:cyan", codeString: "ansi:green" }
+        : { accent: "ansi:cyan", accentMuted: "ansi:brightBlack", warning: "ansi:yellow", keyword: "ansi:cyan", codeString: "ansi:brightGreen" };
   }
 }
 
