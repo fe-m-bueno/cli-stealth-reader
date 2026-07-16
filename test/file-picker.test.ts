@@ -233,6 +233,22 @@ test("SS3 arrow down moves cursor", async () => {
   assert.equal(state.filePickerCursor, 1);
 });
 
+test("full Kitty arrow reports navigate every direction in the file picker", async () => {
+  const state = makeState({ filePickerCursor: 1 });
+
+  await handleInput("\u001b[1;1:1B", state, redraw, noop, () => {}, noop);
+  assert.equal(state.filePickerCursor, 2);
+
+  await handleInput("\u001b[1;1:1A", state, redraw, noop, () => {}, noop);
+  assert.equal(state.filePickerCursor, 1);
+
+  await handleInput("\u001b[1;1:1C", state, redraw, noop, () => {}, noop);
+  assert.equal(state.filePickerCursor, 2);
+
+  await handleInput("\u001b[1;1:1D", state, redraw, noop, () => {}, noop);
+  assert.equal(state.filePickerCursor, 1);
+});
+
 test("arrow up does not go below 0", async () => {
   const state = makeState();
   await handleInput("\u001b[A", state, redraw, noop, () => {}, noop);

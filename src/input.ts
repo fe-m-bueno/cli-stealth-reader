@@ -604,9 +604,9 @@ export async function handleInput(
   const pickerItems = state.filePickerItems;
   if (state.overlay === "file-picker") {
     const maxIndex = Math.max(0, pickerItems.length - 1);
-    if (isDownKey(chunk) || chunk === "j") {
+    if (isDownKey(chunk) || isRightKey(chunk) || chunk === "j") {
       state.filePickerCursor = clamp(state.filePickerCursor + 1, 0, maxIndex);
-    } else if (isUpKey(chunk) || chunk === "k") {
+    } else if (isUpKey(chunk) || isLeftKey(chunk) || chunk === "k") {
       state.filePickerCursor = clamp(state.filePickerCursor - 1, 0, maxIndex);
     } else if (chunk === " ") {
       if (pickerItems.length > 0) {
@@ -1084,6 +1084,12 @@ export async function handleInput(
 }
 
 export function normalizeTerminalKey(chunk: string): string | null {
+  const kittyArrowMatch = chunk.match(/^\x1b\[1;\d+(?::(\d+))?([ABCD])$/);
+  if (kittyArrowMatch) {
+    const eventType = Number(kittyArrowMatch[1] ?? 1);
+    return eventType === 3 ? null : `\u001b[${kittyArrowMatch[2]}`;
+  }
+
   const kittyMatch = chunk.match(/^\x1b\[([\d:]+)(?:;(\d+)(?::(\d+))?)?(?:;[\d:]*)?u$/);
   if (!kittyMatch) {
     return chunk;
