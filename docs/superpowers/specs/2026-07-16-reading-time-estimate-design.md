@@ -23,6 +23,7 @@ The reader already shows positional progress (book/chapter %) via view offsets a
 - “Calibrating…” label (cold start uses default WPM silently)
 - Raw sample history table (only aggregated pace state)
 - Syncing pace from Toggl (Toggl remains an external timer only)
+- Full Kindle-like settings chrome (tabbed Themes / Font / Layout / More, font family, margins, spacing, Word Wise, etc.) — **deferred follow-up** after this feature ships; only extend the existing progress cycle / settings item as needed for time modes
 
 ## Product decisions
 
