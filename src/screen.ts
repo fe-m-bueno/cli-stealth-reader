@@ -1,5 +1,5 @@
 import { bold, fg, inverse, paintBackground } from "./color.js";
-import { listCommandSuggestions } from "./commands.js";
+import { commandContextHelp, listCommandSuggestions } from "./commands.js";
 import {
   effectiveWpm,
   formatTimeLeft,
@@ -317,7 +317,7 @@ function renderBottomRight(text: string, width: number, theme: ThemePreset): str
   return `${" ".repeat(padding)}${text}`;
 }
 
-function renderCommandSuggestions(suggestions: CommandSuggestion[], width: number, theme: ThemePreset, selectedIndex: number): string[] {
+function renderCommandSuggestions(suggestions: CommandSuggestion[], help: string[], width: number, theme: ThemePreset, selectedIndex: number): string[] {
   const contentWidth = Math.max(1, width - 2);
   const start = computeWindowStart(suggestions.length, COMMAND_SUGGESTION_ROWS, selectedIndex);
   const visible = suggestions.slice(start, start + COMMAND_SUGGESTION_ROWS);
@@ -338,7 +338,12 @@ function renderCommandSuggestions(suggestions: CommandSuggestion[], width: numbe
       ? visibleIndex >= metrics.thumbOffset && visibleIndex < metrics.thumbOffset + metrics.thumbHeight ? "█" : "│"
       : " ";
     if (!suggestion) {
-      const emptyLabel = visibleIndex === 0 && suggestions.length === 0 ? fg(theme.subtle, "  No matching commands") : "";
+      const helper = suggestions.length === 0 ? help[visibleIndex] : undefined;
+      const emptyLabel = helper
+        ? fg(visibleIndex === 0 ? theme.foreground : theme.subtle, `  ${helper}`)
+        : visibleIndex === 0 && suggestions.length === 0 && help.length === 0
+          ? fg(theme.subtle, "  No matching commands")
+          : "";
       return `${padAnsi(emptyLabel, contentWidth)} ${fg(theme.border, scrollbar)}`;
     }
 
@@ -362,6 +367,7 @@ function renderCommandBox(state: AppState, width: number): string[] {
   const innerWidth = Math.max(1, width - 4);
   const cursor = Math.max(0, Math.min(state.commandCursor ?? state.commandBuffer.length, state.commandBuffer.length));
   const suggestions = listCommandSuggestions(state.commandBuffer, state.storage, cursor);
+  const help = commandContextHelp(state.commandBuffer, state.storage);
   const selectedIndex = suggestions.length === 0 ? 0 : clamp(state.commandSuggestionIndex, 0, suggestions.length - 1);
   const beforeCursor = state.commandBuffer.slice(0, cursor);
   const cursorChar = state.commandBuffer[cursor] ?? " ";
@@ -370,7 +376,7 @@ function renderCommandBox(state: AppState, width: number): string[] {
   const promptLine = padAnsi(truncate(prompt, innerWidth), innerWidth);
   return [
     border(`╭${"─".repeat(innerWidth + 2)}╮`),
-    ...renderCommandSuggestions(suggestions, innerWidth, state.theme, selectedIndex)
+    ...renderCommandSuggestions(suggestions, help, innerWidth, state.theme, selectedIndex)
       .map((line) => `${border("│")} ${line} ${border("│")}`),
     border(`├${"─".repeat(innerWidth + 2)}┤`),
     `${border("│")} ${promptLine} ${border("│")}`,

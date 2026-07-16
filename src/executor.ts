@@ -12,6 +12,7 @@ import { openShortcutHelp } from "./shortcuts-panel.js";
 import {
   connectToggl,
   disconnectToggl,
+  formatTogglQuota,
   formatTogglRecents,
   logTogglEntry,
   openTogglTokenPage,
@@ -596,6 +597,15 @@ const handlers: Record<string, CommandHandler> = {
     const action = parsed.args[0]?.toLowerCase() ?? "recent";
     const rest = parsed.args.slice(1).join(" ").trim();
     const project = typeof parsed.flags.project === "string" ? parsed.flags.project : undefined;
+    const organizationRaw = typeof parsed.flags.organization === "string" ? parsed.flags.organization : undefined;
+    const organizationId = organizationRaw === undefined ? undefined : Number(organizationRaw);
+    if (organizationRaw !== undefined && (!Number.isInteger(organizationId) || Number(organizationId) <= 0)) {
+      throw new Error("Toggl organization must be a positive numeric ID. Use --organization <id>.");
+    }
+    const withQuota = (message: string): string => {
+      const quota = formatTogglQuota(state.storage);
+      return quota ? `${message} · ${quota}` : message;
+    };
 
     if (parsed.flags.disconnect) {
       disconnectToggl(state.storage);
@@ -604,21 +614,26 @@ const handlers: Record<string, CommandHandler> = {
     }
 
     if (action === "auth") {
-      const token = rest;
-      if (!token || parsed.flags.open) {
+      const token = rest || state.storage.getSetting("togglApiToken") || "";
+      if (parsed.flags.open || (!rest && organizationId === undefined)) {
         openTogglTokenPage();
-        state.status = `Opened Toggl token page. Copy the API token, then run /toggl auth <token>. Link: ${togglTokenPage()}`;
+        state.status = `Opened Toggl 2.0 settings. Create an API key, then run /toggl auth <toggl_sk_...> --organization <id>. Link: ${togglTokenPage()}`;
         return;
       }
-      const result = await connectToggl(state.storage, token);
+      if (!token) throw new Error("Paste a Toggl 2.0 key: /toggl auth <toggl_sk_...> --organization <id>");
+      const result = await connectToggl(state.storage, token, organizationId);
+      if (!result.defaultOrganizationId) {
+        state.status = withQuota("Toggl key connected. Finish setup with /toggl auth --organization <id>.");
+        return;
+      }
       const cache = await syncToggl(state.storage);
-      state.status = `Connected Toggl${result.fullName ? ` as ${result.fullName}` : ""}. Cached ${cache.projects.length} projects and ${cache.descriptions.length} recent names.`;
+      state.status = withQuota(`Connected Toggl 2.0. Cached ${cache.projects.length} projects and ${cache.descriptions.length} recent names.`);
       return;
     }
 
     if (action === "sync") {
       const cache = await syncToggl(state.storage);
-      state.status = `Synced Toggl: ${cache.projects.length} projects, ${cache.descriptions.length} recent names.`;
+      state.status = withQuota(`Synced Toggl: ${cache.projects.length} projects, ${cache.descriptions.length} recent names.`);
       return;
     }
 
@@ -634,13 +649,13 @@ const handlers: Record<string, CommandHandler> = {
       const description = rest || state.currentBook?.title;
       if (!description) throw new Error("Use /toggl start <description> [--project name]");
       const entry = await startTogglEntry(state.storage, description, project);
-      state.status = `Started Toggl timer: ${entry.description ?? description}${project ? ` (${project})` : ""}.`;
+      state.status = withQuota(`Started Toggl timer: ${entry.description ?? description}${project ? ` (${project})` : ""}.`);
       return;
     }
 
     if (action === "stop") {
       const entry = await stopTogglEntry(state.storage);
-      state.status = entry ? `Stopped Toggl timer: ${entry.description ?? entry.id}.` : "No running Toggl timer.";
+      state.status = withQuota(entry ? `Stopped Toggl timer: ${entry.description ?? entry.id}.` : "No running Toggl timer.");
       return;
     }
 
@@ -649,7 +664,7 @@ const handlers: Record<string, CommandHandler> = {
       const description = rest || state.currentBook?.title;
       if (!description || !duration) throw new Error("Use /toggl log <description> --duration 25m [--project name]");
       const entry = await logTogglEntry(state.storage, description, duration, project);
-      state.status = `Logged Toggl time: ${entry.description ?? description} (${duration})${project ? ` → ${project}` : ""}.`;
+      state.status = withQuota(`Logged Toggl time: ${entry.description ?? description} (${duration})${project ? ` → ${project}` : ""}.`);
       return;
     }
 
