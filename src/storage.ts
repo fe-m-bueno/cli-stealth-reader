@@ -533,7 +533,7 @@ export class Storage {
         created_at AS createdAt
       FROM notes
       WHERE book_id = ?
-      ORDER BY created_at DESC, id DESC
+      ORDER BY created_at DESC, rowid DESC
     `).all(bookId) as Note[];
   }
 

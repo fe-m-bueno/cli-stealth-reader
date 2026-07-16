@@ -174,6 +174,20 @@ test("listNotes returns most recent first", () => {
   } finally { cleanup(); }
 });
 
+test("listNotes uses insertion order when notes share a timestamp", () => {
+  const { storage, cleanup } = makeTempStorage();
+  try {
+    insertBook(storage, "b1");
+    const insertNote = storage.db.prepare(
+      "INSERT INTO notes (id, book_id, chapter_index, block_offset, content, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+    );
+    insertNote.run("z-older", "b1", 0, 0, "Older note", 1000);
+    insertNote.run("a-newer", "b1", 0, 1, "Newer note", 1000);
+
+    assert.deepEqual(storage.listNotes("b1").map((note) => note.id), ["a-newer", "z-older"]);
+  } finally { cleanup(); }
+});
+
 test("deleteNote removes the note", () => {
   const { storage, cleanup } = makeTempStorage();
   try {
@@ -344,8 +358,8 @@ test("pressing d in notes overlay deletes the selected note", async () => {
   const { storage, cleanup } = makeTempStorage();
   try {
     insertBook(storage, "b1");
-    storage.addNote("b1", "Note to delete", 0, 0);
     storage.addNote("b1", "Note to keep", 1, 5);
+    storage.addNote("b1", "Note to delete", 0, 0);
     const state = makeState(storage, {
       overlay: "notes",
       currentBook: { ...bookWithChapters, id: "b1" },
