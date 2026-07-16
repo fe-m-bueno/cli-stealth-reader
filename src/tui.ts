@@ -21,6 +21,14 @@ import {
   renderStatusBar,
   truncate
 } from "./screen.js";
+import {
+  DEFAULT_WPM,
+  absoluteWordCursor,
+  applySample,
+  createEmptyPaceState,
+  prepareSample,
+  type PaceState
+} from "./reading-pace.js";
 import { Storage } from "./storage.js";
 import {
   APPEARANCE_THEMES,
@@ -31,6 +39,28 @@ import {
 } from "./themes.js";
 import { renderSettingsPanel } from "./settings-panel.js";
 import type { AppState } from "./types.js";
+
+function loadGlobalPace(storage: Storage): Pick<PaceState, "globalWpm" | "globalActiveMs"> {
+  const wpm = Number(storage.getSetting("globalWpm"));
+  const activeMs = Number(storage.getSetting("globalActiveMs"));
+  return {
+    globalWpm: Number.isFinite(wpm) && wpm > 0 ? wpm : DEFAULT_WPM,
+    globalActiveMs: Number.isFinite(activeMs) && activeMs >= 0 ? activeMs : 0
+  };
+}
+
+function persistPace(state: AppState): void {
+  state.storage.setRawSetting("globalWpm", String(state.readingPace.globalWpm));
+  state.storage.setRawSetting("globalActiveMs", String(state.readingPace.globalActiveMs));
+  if (state.readingPace.bookId) {
+    state.storage.saveReadingPace({
+      bookId: state.readingPace.bookId,
+      wpm: state.readingPace.bookWpm,
+      activeMs: state.readingPace.bookActiveMs,
+      updatedAt: Date.now()
+    });
+  }
+}
 
 let mouseCaptureEnabled = false;
 
@@ -373,11 +403,32 @@ function syncPosition(state: AppState): void {
     state.focusBlockIndex = clampFocusBlockIndex(state, state.focusBlockIndex);
     state.blockOffset = mapFocusIndexToBlockOffset(state, layout.contentWidth, state.focusBlockIndex);
   }
+
+  const chapterProgress = computeChapterProgress(state, layout.contentWidth, layout.bodyHeight);
+  const bookProgress = computeBookProgress(state, layout.contentWidth, layout.bodyHeight);
+
+  const chapters = state.currentBook.chapters.map((chapter) => ({ wordCount: chapter.wordCount }));
+  const wordCursor = absoluteWordCursor(chapters, state.chapterIndex, chapterProgress);
+  const readingActive = state.overlay === "none" && !state.commandMode;
+  const now = Date.now();
+  const { sample, nextMeta } = prepareSample({
+    state: state.readingPace,
+    now,
+    wordCursor,
+    readingActive
+  });
+  let pace = { ...state.readingPace, ...nextMeta };
+  if (sample) {
+    pace = { ...applySample(pace, sample), ...nextMeta };
+  }
+  state.readingPace = pace;
+  persistPace(state);
+
   state.storage.savePosition({
     bookId: state.currentBook.id,
     chapterIndex: state.chapterIndex,
-    chapterProgress: computeChapterProgress(state, layout.contentWidth, layout.bodyHeight),
-    bookProgress: computeBookProgress(state, layout.contentWidth, layout.bodyHeight),
+    chapterProgress,
+    bookProgress,
     blockOffset: state.blockOffset
   });
   if (state.focusMode) {
@@ -402,6 +453,7 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     codeDensity: settings.codeDensity,
     plainHighlight: settings.plainHighlight,
     progressVisibility: settings.progressVisibility,
+    readingPace: createEmptyPaceState(loadGlobalPace(storage)),
     currentBook: null,
     chapterIndex: 0,
     blockOffset: 0,

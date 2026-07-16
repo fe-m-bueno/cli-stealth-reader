@@ -800,10 +800,10 @@ test("p key cycles progress visibility to the next value", async () => {
   assert.equal(state.progressVisibility, "both");
 });
 
-test("p key wraps progress visibility back to book after hidden", async () => {
+test("p key wraps progress visibility back to time left in chapter after hidden", async () => {
   const state = makeState({ overlay: "none", progressVisibility: "hidden" });
   await handleInput("p", state, redraw, async (cmd) => { await executeCommand(state, cmd); }, () => {}, noop);
-  assert.equal(state.progressVisibility, "book");
+  assert.equal(state.progressVisibility, "time-chapter");
 });
 
 test("/highlight requires on/off argument", async () => {

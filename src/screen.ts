@@ -1,5 +1,11 @@
 import { fg, inverse, paintBackground } from "./color.js";
 import { listCommandSuggestions } from "./commands.js";
+import {
+  effectiveWpm,
+  formatTimeLeft,
+  remainingWordsInBook,
+  remainingWordsInChapter
+} from "./reading-pace.js";
 import { renderBlocks } from "./renderers.js";
 import { formatRunningTogglTimer } from "./toggl.js";
 import type { AppState, CommandSuggestion, ThemePreset } from "./types.js";
@@ -237,6 +243,21 @@ export function renderStatusBar(state: AppState, width: number): string {
 export function formatProgress(state: AppState, mainWidth: number, bodyHeight: number): string {
   if (!state.currentBook || state.progressVisibility === "hidden") {
     return "";
+  }
+
+  if (state.progressVisibility === "time-chapter" || state.progressVisibility === "time-book") {
+    const chapters = state.currentBook.chapters.map((chapter) => ({ wordCount: chapter.wordCount }));
+    if (chapters.every((chapter) => chapter.wordCount === 0)) {
+      return "—";
+    }
+    const chapterProgress = computeChapterProgress(state, mainWidth, bodyHeight);
+    const remaining =
+      state.progressVisibility === "time-chapter"
+        ? remainingWordsInChapter(chapters, state.chapterIndex, chapterProgress)
+        : remainingWordsInBook(chapters, state.chapterIndex, chapterProgress);
+    const wpm = effectiveWpm(state.readingPace);
+    const scope = state.progressVisibility === "time-chapter" ? "chapter" : "book";
+    return formatTimeLeft(remaining, wpm, scope);
   }
 
   const parts: string[] = [];

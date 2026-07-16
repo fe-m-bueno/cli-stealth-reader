@@ -19,6 +19,7 @@ import {
   syncToggl,
   togglTokenPage
 } from "./toggl.js";
+import { DEFAULT_WPM, createEmptyPaceState } from "./reading-pace.js";
 import { APPEARANCE_THEMES, THEMES, applyAppearanceTheme } from "./themes.js";
 import type {
   AppState,
@@ -34,6 +35,34 @@ import type {
   ProgressVisibility,
   SearchHit
 } from "./types.js";
+
+function persistReadingPace(state: AppState): void {
+  state.storage.setRawSetting("globalWpm", String(state.readingPace.globalWpm));
+  state.storage.setRawSetting("globalActiveMs", String(state.readingPace.globalActiveMs));
+  if (state.readingPace.bookId) {
+    state.storage.saveReadingPace({
+      bookId: state.readingPace.bookId,
+      wpm: state.readingPace.bookWpm,
+      activeMs: state.readingPace.bookActiveMs,
+      updatedAt: Date.now()
+    });
+  }
+}
+
+function loadBookReadingPace(state: AppState, bookId: string): void {
+  const row = state.storage.getReadingPace(bookId);
+  const globalWpm = Number(state.storage.getSetting("globalWpm"));
+  const globalActiveMs = Number(state.storage.getSetting("globalActiveMs"));
+  state.readingPace = createEmptyPaceState({
+    globalWpm: Number.isFinite(globalWpm) && globalWpm > 0 ? globalWpm : DEFAULT_WPM,
+    globalActiveMs: Number.isFinite(globalActiveMs) && globalActiveMs >= 0 ? globalActiveMs : 0,
+    bookId,
+    bookWpm: row?.wpm ?? DEFAULT_WPM,
+    bookActiveMs: row?.activeMs ?? 0,
+    lastWordCursor: null,
+    lastSampleAt: null
+  });
+}
 
 export function pushNavHistory(state: AppState): void {
   if (!state.currentBook) {
@@ -65,6 +94,9 @@ export async function openBook(state: AppState, book: CanonicalBook): Promise<vo
     state.storage.saveBook(refreshed, state.renderMode);
     book = refreshed;
   }
+  if (state.currentBook && state.readingPace.bookId) {
+    persistReadingPace(state);
+  }
   state.currentBook = book;
   const existing = state.storage.getPosition(book.id);
   state.chapterIndex = existing?.chapterIndex ?? 0;
@@ -74,6 +106,7 @@ export async function openBook(state: AppState, book: CanonicalBook): Promise<vo
   state.searchState = null;
   state.navHistory = [];
   state.navHistoryCursor = -1;
+  loadBookReadingPace(state, book.id);
   state.status = `Opened ${book.title}`;
 }
 

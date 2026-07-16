@@ -198,7 +198,7 @@ livro', pensou Alice, 'sem figuras ou conversas?'
 | `c`   | Abrir picker de colorscheme                                      |
 | `C`   | Abrir picker de tema                                             |
 | `S`   | Abrir painel de configurações                                    |
-| `p`   | Avançar visibilidade da barra de progresso                       |
+| `p`   | Ciclar progresso (tempo restante capítulo/livro → % → hidden)    |
 | `?`   | Ver atalhos de teclado                                           |
 | `q`   | Sair do leitor                                                   |
 
@@ -313,8 +313,8 @@ O arquivo exportado é indexado por `importHash` — sem dependência de caminho
   --on                 # Ativar
   --off                # Desativar
 
-/toggleprogress [mode] # Controlar barra de progresso
-  book | both | chapter | hidden
+/toggleprogress [mode] # Progresso: time-chapter|time-book|book|both|chapter|hidden
+  time-chapter | time-book | book | both | chapter | hidden
 
 /settings              # Abrir painel pesquisável de configurações do leitor
                        # Space altera, Enter salva, / pesquisa, Esc cancela
@@ -487,7 +487,7 @@ type CanonicalBlock =
 - Estado de app e todas as strings renderizadas passam por `tui.ts` — a "fonte da verdade"
 - Comandos suportam aliases (ex: `/book` é alias para `/changebook`)
 - Argumentos entre aspas são interpretados literalmente (ex: `/add "Meu Livro.epub"`)
-- A barra de progresso é customizável (`book`, `both`, `chapter`, `hidden`)
+- Progresso customizável: tempo restante (ritmo de leitura aprendido) ou barras `%` (`time-chapter`, `time-book`, `book`, `both`, `chapter`, `hidden`)
 - Remoção de livro apaga apenas a entrada da biblioteca — o arquivo original não é deletado
 - Posição de leitura é persistida por livro automaticamente
 - Modos stealth (TypeScript, Python, Rust) são persistidos via `settings`; a tecla `m` cicla entre eles

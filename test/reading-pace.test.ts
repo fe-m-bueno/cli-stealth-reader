@@ -14,6 +14,7 @@ import {
   formatDuration,
   formatTimeLeft,
   absoluteWordCursor,
+  prepareSample,
   type PaceState,
   type ChapterWordInfo
 } from "../src/reading-pace.js";
@@ -117,4 +118,24 @@ test("formatTimeLeft returns em dash when words unavailable", () => {
   assert.equal(formatTimeLeft(500, 0, "chapter"), "—");
   assert.match(formatTimeLeft(500, 250, "chapter"), /left in chapter/);
   assert.match(formatTimeLeft(500, 250, "book"), /left in book/);
+});
+
+test("prepareSample excludes time spent outside the reading view", () => {
+  const paused = prepareSample({
+    state: createEmptyPaceState({ lastWordCursor: 100, lastSampleAt: 1_000 }),
+    now: 61_000,
+    wordCursor: 100,
+    readingActive: false
+  });
+  assert.equal(paused.sample, null);
+  assert.equal(paused.nextMeta.lastSampleAt, null);
+
+  const resumed = prepareSample({
+    state: createEmptyPaceState({ ...paused.nextMeta }),
+    now: 62_000,
+    wordCursor: 120,
+    readingActive: true
+  });
+  assert.equal(resumed.sample, null);
+  assert.equal(resumed.nextMeta.lastSampleAt, 62_000);
 });

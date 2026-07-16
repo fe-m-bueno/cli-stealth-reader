@@ -5,6 +5,7 @@ import {
   computeBookProgress,
   computeChapterProgress,
   computeWindowStart,
+  formatProgress,
   getScrollbarMetrics,
   renderFooter,
   renderFrame,
@@ -15,6 +16,7 @@ import {
   stripAnsi,
   truncate
 } from "../src/screen.js";
+import { createEmptyPaceState } from "../src/reading-pace.js";
 import { currentLines } from "../src/tui.js";
 import type { AppState, ThemePreset } from "../src/types.js";
 
@@ -276,6 +278,34 @@ test("progress uses rendered viewport lines instead of raw block count", () => {
   assert.ok(bookProgressNextChapterStart >= bookProgressNearChapterEnd);
 });
 
+test("time progress modes render chapter and book estimates", () => {
+  const state = readingState({
+    progressVisibility: "time-chapter",
+    readingPace: createEmptyPaceState({
+      globalWpm: 200,
+      globalActiveMs: 240_000,
+      bookWpm: 200,
+      bookActiveMs: 0
+    })
+  });
+
+  assert.match(formatProgress(state, 80, 10), /left in chapter/);
+  state.progressVisibility = "time-book";
+  assert.match(formatProgress(state, 80, 10), /left in book/);
+});
+
+test("time progress is unavailable for books without word counts", () => {
+  const state = readingState({
+    progressVisibility: "time-book",
+    readingPace: createEmptyPaceState()
+  });
+  for (const chapter of state.currentBook!.chapters) {
+    chapter.wordCount = 0;
+  }
+
+  assert.equal(formatProgress(state, 80, 10), "—");
+});
+
 function readingState(overrides: Partial<AppState> = {}): AppState {
   return {
     theme,
@@ -288,6 +318,7 @@ function readingState(overrides: Partial<AppState> = {}): AppState {
     commandCursor: 0,
     commandSuggestionIndex: 0,
     progressVisibility: "book",
+    readingPace: createEmptyPaceState(),
     status: "Reading",
     overlay: "none",
     focusMode: false,

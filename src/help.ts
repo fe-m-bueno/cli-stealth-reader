@@ -25,7 +25,7 @@ export const KEYBOARD_SHORTCUTS: Array<{ category: string; key: string; descript
   { category: "view", key: "c", description: "Open colorscheme picker" },
   { category: "view", key: "C", description: "Open theme picker" },
   { category: "view", key: "S", description: "Open settings panel" },
-  { category: "view", key: "p", description: "Cycle progress bar visibility" },
+  { category: "view", key: "p", description: "Cycle progress display (time left / % bars / hidden)" },
   { category: "view", key: "Tab", description: "Autocomplete or cycle command suggestions" },
   { category: "view", key: "q", description: "Quit the reader" }
 ];

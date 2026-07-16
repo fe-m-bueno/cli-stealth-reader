@@ -171,7 +171,9 @@ export function prepareSample(args: {
   if (!readingActive) {
     return {
       sample: null,
-      nextMeta: { lastWordCursor: wordCursor, lastSampleAt: state.lastSampleAt }
+      // Break the timing window so time spent in overlays/commands cannot be
+      // charged to the next forward navigation sample.
+      nextMeta: { lastWordCursor: wordCursor, lastSampleAt: null }
     };
   }
   if (state.lastWordCursor === null || state.lastSampleAt === null) {

@@ -275,6 +275,8 @@ export interface AppState {
   codeDensity: CodeDensity;
   plainHighlight: boolean;
   progressVisibility: ProgressVisibility;
+  /** Runtime reading-pace tracker; see reading-pace.ts */
+  readingPace: import("./reading-pace.js").PaceState;
   currentBook: CanonicalBook | null;
   chapterIndex: number;
   blockOffset: number;
