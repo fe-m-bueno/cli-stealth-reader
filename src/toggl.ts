@@ -155,7 +155,7 @@ function errorDetail(raw: string): string {
 function apiError(storage: Storage, status: number, raw: string, statusText: string): TogglApiError {
   const detail = errorDetail(raw);
   if (status === 401) {
-    return new TogglApiError(status, `Toggl authentication failed (401). Create a Toggl 2.0 key at ${TOKEN_PAGE}, then run /toggl auth <toggl_sk_...> --organization <id>.`);
+    return new TogglApiError(status, `Toggl authentication failed (401). Create a Toggl 2.0 key at ${TOKEN_PAGE}, then run /toggl auth <toggl_sk_...>.`);
   }
   if (status === 402) {
     const quota = getTogglQuota(storage);
@@ -163,7 +163,7 @@ function apiError(storage: Storage, status: number, raw: string, statusText: str
     return new TogglApiError(status, `Toggl quota exhausted (402). Try again in ${reset}.`);
   }
   if (status === 403) {
-    return new TogglApiError(status, `Toggl denied this request (403). Check --organization <id> and your workspace permissions${detail ? `: ${detail}` : "."}`);
+    return new TogglApiError(status, `Toggl denied this request (403). Run /toggl auth again and check your workspace permissions${detail ? `: ${detail}` : "."}`);
   }
   return new TogglApiError(status, `Toggl Focus API ${status}: ${detail || statusText}`);
 }
@@ -171,7 +171,7 @@ function apiError(storage: Storage, status: number, raw: string, statusText: str
 async function togglRequest<T>(storage: Storage, path: string, init: RequestInit = {}, tokenOverride?: string): Promise<T> {
   const token = tokenOverride ?? storage.getSetting("togglApiToken");
   if (!token) {
-    throw new Error(`Toggl is not connected. Run /toggl auth <toggl_sk_...> --organization <id>. Key: ${TOKEN_PAGE}`);
+    throw new Error(`Toggl is not connected. Run /toggl auth <toggl_sk_...>. Key: ${TOKEN_PAGE}`);
   }
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -194,16 +194,52 @@ function positiveId(value: number | undefined): number | null {
   return Number.isInteger(value) && Number(value) > 0 ? Number(value) : null;
 }
 
+export function extractTogglOrganizationId(input: string): number {
+  const candidate = input.trim();
+  if (/^\d+$/.test(candidate)) {
+    const id = Number(candidate);
+    if (positiveId(id)) return id;
+  }
+
+  try {
+    const url = new URL(candidate);
+    if (url.hostname !== "focus.toggl.com") throw new Error("not a Focus URL");
+    for (const key of ["organization_id", "organizationId", "organization", "org_id"]) {
+      const id = Number(url.searchParams.get(key));
+      if (positiveId(id)) return id;
+    }
+    const pathMatch = url.pathname.match(/\/(?:organizations?|orgs?)\/(\d+)(?:\/|$)/i);
+    const pathId = pathMatch ? Number(pathMatch[1]) : NaN;
+    if (positiveId(pathId)) return pathId;
+  } catch {
+    // The actionable error below is shared by malformed and incomplete URLs.
+  }
+
+  throw new Error("Could not find an organization ID. Paste the Focus workspace URL or the numeric organization ID.");
+}
+
+type FocusUserSettings = {
+  current_workspace_id?: number;
+  current_organization_id?: number;
+  organization_id?: number;
+};
+
+function inferOrganizationId(settings: FocusUserSettings): number | null {
+  return positiveId(settings.current_organization_id) ?? positiveId(settings.organization_id);
+}
+
 export async function connectToggl(
   storage: Storage,
-  token: string,
-  organizationId?: number
+  token: string
 ): Promise<{ defaultOrganizationId: number | null; defaultWorkspaceId: number | null }> {
   const candidateToken = token.trim();
-  const settings = await togglRequest<{ current_workspace_id?: number }>(storage, "/users/me/settings", {}, candidateToken);
-  const cache = readCache(storage);
-  cache.defaultOrganizationId = positiveId(organizationId) ?? cache.defaultOrganizationId;
+  const settings = await togglRequest<FocusUserSettings>(storage, "/users/me/settings", {}, candidateToken);
+  const previousToken = storage.getSetting("togglApiToken");
+  const sameAccount = previousToken === candidateToken;
+  const cache = sameAccount ? readCache(storage) : emptyCache();
+  cache.defaultOrganizationId = inferOrganizationId(settings) ?? cache.defaultOrganizationId;
   cache.defaultWorkspaceId = positiveId(settings.current_workspace_id) ?? cache.defaultWorkspaceId;
+  if (!sameAccount) saveCurrentEntry(storage, null);
   storage.setRawSetting("togglApiToken", candidateToken);
   writeCache(storage, cache);
   return {
@@ -227,8 +263,8 @@ function scope(storage: Storage, workspaceOverride?: number): { organizationId: 
   const cache = readCache(storage);
   const organizationId = cache.defaultOrganizationId;
   const workspaceId = workspaceOverride ?? cache.defaultWorkspaceId;
-  if (!organizationId) throw new Error("Toggl organization is not configured. Run /toggl auth --organization <id>.");
-  if (!workspaceId) throw new Error("No Toggl workspace found. Reconnect with /toggl auth <toggl_sk_...> --organization <id>.");
+  if (!organizationId) throw new Error("Toggl setup is incomplete. Run /toggl auth again and paste the workspace URL when prompted.");
+  if (!workspaceId) throw new Error("No Toggl workspace found. Reconnect with /toggl auth <toggl_sk_...>.");
   return { organizationId, workspaceId };
 }
 
@@ -325,6 +361,20 @@ export async function syncToggl(storage: Storage): Promise<TogglCache> {
   writeCache(storage, cache);
   await refreshCurrentTogglEntry(storage);
   return cache;
+}
+
+export async function completeTogglSetup(storage: Storage, organizationSource: string): Promise<TogglCache> {
+  const organizationId = extractTogglOrganizationId(organizationSource);
+  const previous = readCache(storage);
+  writeCache(storage, { ...previous, defaultOrganizationId: organizationId });
+  try {
+    return await syncToggl(storage);
+  } catch (error) {
+    if (error instanceof TogglApiError && [400, 403, 404].includes(error.status)) {
+      writeCache(storage, previous);
+    }
+    throw error;
+  }
 }
 
 function normalize(text: string): string {

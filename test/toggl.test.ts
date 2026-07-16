@@ -1,13 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseSlashCommand, listCommandSuggestions, applyCommandAutocomplete, commandContextHelp } from "../src/commands.js";
-import { connectToggl, formatRunningTogglTimer, formatTogglRecents, getTogglQuota, logTogglEntry, refreshCurrentTogglEntry, resolveTogglProject, startTogglEntry, stopTogglEntry, syncToggl } from "../src/toggl.js";
+import { connectToggl, extractTogglOrganizationId, formatRunningTogglTimer, formatTogglRecents, getTogglCache, getTogglQuota, logTogglEntry, refreshCurrentTogglEntry, resolveTogglProject, startTogglEntry, stopTogglEntry, syncToggl } from "../src/toggl.js";
+import { executeCommand } from "../src/executor.js";
 import type { Storage } from "../src/storage.js";
+import type { AppState } from "../src/types.js";
 
 class FakeStorage {
   private settings = new Map<string, string>();
   getSetting(key: string): string | null { return this.settings.get(key) ?? null; }
   setRawSetting(key: string, value: string): void { this.settings.set(key, value); }
+  saveCommandHistory(): void {}
 }
 
 function fakeStorageWithCache(): Storage {
@@ -127,18 +130,171 @@ test("successful Toggl authentication uses a Focus Bearer key before persisting"
   let authorization = "";
   t.mock.method(globalThis, "fetch", async (_input: string | URL | Request, init?: RequestInit) => {
     authorization = String((init?.headers as Record<string, string> | undefined)?.Authorization ?? "");
-    return new Response(JSON.stringify({ current_workspace_id: 1, theme: "dark" }), {
+    return new Response(JSON.stringify({ current_workspace_id: 1, current_organization_id: 7, theme: "dark" }), {
       status: 200,
       headers: { "Content-Type": "application/json" }
     });
   });
 
-  const result = await connectToggl(storage as unknown as Storage, "toggl_sk_valid", 7);
+  const result = await connectToggl(storage as unknown as Storage, "toggl_sk_valid");
 
   assert.equal(authorization, "Bearer toggl_sk_valid");
   assert.equal(storage.getSetting("togglApiToken"), "toggl_sk_valid");
   assert.equal(result.defaultWorkspaceId, 1);
   assert.equal(result.defaultOrganizationId, 7);
+});
+
+test("Toggl authentication automatically uses an explicit organization returned by Focus", async (t) => {
+  const storage = new FakeStorage();
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({
+    current_workspace_id: 1,
+    current_organization_id: 7,
+    theme: "dark"
+  }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+  const result = await connectToggl(storage as unknown as Storage, "toggl_sk_valid");
+
+  assert.equal(result.defaultOrganizationId, 7);
+});
+
+test("authenticating a different Toggl key never inherits the previous account scope", async (t) => {
+  const storage = fakeStorageWithCache() as unknown as FakeStorage;
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({
+    current_workspace_id: 2,
+    theme: "dark"
+  }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+  const result = await connectToggl(storage as unknown as Storage, "toggl_sk_different");
+
+  assert.equal(result.defaultOrganizationId, null);
+  assert.equal(result.defaultWorkspaceId, 2);
+  assert.deepEqual(getTogglCache(storage as unknown as Storage).projects, []);
+});
+
+test("Toggl auth opens a guided organization prompt when Focus cannot return the id", async (t) => {
+  const storage = new FakeStorage();
+  const state = {
+    storage,
+    focusMode: false,
+    currentBook: null,
+    commandMode: false,
+    commandBuffer: "",
+    commandCursor: 0,
+    commandSuggestionIndex: 0,
+    status: "Ready"
+  } as unknown as AppState;
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({
+    current_workspace_id: 1,
+    theme: "dark"
+  }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+  await executeCommand(state, "/toggl auth toggl_sk_valid");
+
+  assert.equal(state.commandMode, true);
+  assert.equal(state.commandBuffer, "toggl setup ");
+  assert.equal(state.commandCursor, state.commandBuffer.length);
+  assert.match(state.status, /paste.*Focus workspace URL/i);
+});
+
+test("Toggl setup saves the organization from the pasted URL and completes sync", async (t) => {
+  const storage = new FakeStorage();
+  storage.setRawSetting("togglApiToken", "toggl_sk_valid");
+  storage.setRawSetting("togglCache", JSON.stringify({
+    defaultOrganizationId: null,
+    defaultWorkspaceId: 1,
+    projects: [],
+    descriptions: [],
+    syncedAt: null
+  }));
+  const state = {
+    storage,
+    focusMode: false,
+    currentBook: null,
+    commandMode: false,
+    commandBuffer: "",
+    commandCursor: 0,
+    commandSuggestionIndex: 0,
+    status: "Ready"
+  } as unknown as AppState;
+  t.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.endsWith("/tracking/current")) return new Response(null, { status: 204 });
+    return new Response(JSON.stringify({ data: [], page: 1, per_page: 25 }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  });
+
+  await executeCommand(state, "/toggl setup https://focus.toggl.com/organizations/7/workspaces/1");
+
+  assert.equal(getTogglCache(storage as unknown as Storage).defaultOrganizationId, 7);
+  assert.match(state.status, /connected Toggl 2\.0/i);
+});
+
+test("Toggl setup keeps the guided prompt open when the URL is missing", async () => {
+  const storage = new FakeStorage();
+  const state = {
+    storage,
+    focusMode: false,
+    currentBook: null,
+    commandMode: false,
+    commandBuffer: "",
+    commandCursor: 0,
+    commandSuggestionIndex: 0,
+    status: "Ready"
+  } as unknown as AppState;
+
+  await executeCommand(state, "/toggl setup");
+
+  assert.equal(state.commandMode, true);
+  assert.equal(state.commandBuffer, "toggl setup ");
+  assert.match(state.status, /paste.*workspace URL/i);
+});
+
+test("Toggl setup stays saved when the first sync is blocked by quota", async (t) => {
+  const storage = new FakeStorage();
+  storage.setRawSetting("togglApiToken", "toggl_sk_valid");
+  storage.setRawSetting("togglCache", JSON.stringify({
+    defaultOrganizationId: null,
+    defaultWorkspaceId: 1,
+    projects: [],
+    descriptions: [],
+    syncedAt: null
+  }));
+  const state = {
+    storage,
+    focusMode: false,
+    currentBook: null,
+    commandMode: false,
+    commandBuffer: "",
+    commandCursor: 0,
+    commandSuggestionIndex: 0,
+    status: "Ready"
+  } as unknown as AppState;
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({ error: "quota_exhausted" }), {
+    status: 402,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Toggl-Quota-Remaining": "0",
+      "X-Toggl-Quota-Resets-In": "60"
+    }
+  }));
+
+  await executeCommand(state, "/toggl setup 7");
+
+  assert.equal(getTogglCache(storage as unknown as Storage).defaultOrganizationId, 7);
+  assert.equal(state.commandMode, false);
+  assert.match(state.status, /organization saved.*quota exhausted/i);
+});
+
+test("Toggl setup accepts an organization id or extracts it from a Focus URL", () => {
+  assert.equal(extractTogglOrganizationId("123456"), 123456);
+  assert.equal(extractTogglOrganizationId("https://focus.toggl.com/organizations/123456/workspaces/42"), 123456);
+  assert.equal(extractTogglOrganizationId("https://focus.toggl.com/timer?organization_id=123456&workspace_id=42"), 123456);
+  assert.throws(
+    () => extractTogglOrganizationId("https://focus.toggl.com/workspaces/42"),
+    /organization/i
+  );
 });
 
 test("Toggl sync reconciles the account's current running timer", async (t) => {
@@ -277,6 +433,21 @@ test("toggl autocomplete completes subcommands", () => {
   const suggestions = listCommandSuggestions("toggl st", fakeStorageWithCache());
   assert.equal(suggestions[0]?.usage, "start");
   assert.equal(applyCommandAutocomplete("toggl st", suggestions[0]), "toggl start");
+
+  const setup = listCommandSuggestions("toggl set", fakeStorageWithCache());
+  assert.equal(setup[0]?.usage, "setup");
+});
+
+test("toggl flag autocomplete only suggests flags valid for the active action", () => {
+  const rootFlags = listCommandSuggestions("toggl --", fakeStorageWithCache());
+  assert.deepEqual(rootFlags.map((item) => item.usage), ["--disconnect"]);
+
+  const startFlags = listCommandSuggestions("toggl start --", fakeStorageWithCache());
+  assert.deepEqual(startFlags.map((item) => item.usage), ["--project"]);
+  assert.equal(applyCommandAutocomplete("toggl start --", startFlags[0]), "toggl start --project ");
+
+  const projectValues = listCommandSuggestions("toggl start --project ", fakeStorageWithCache());
+  assert.ok(projectValues.some((item) => item.usage === '"Reading books"'));
 });
 
 test("toggl autocomplete replaces the full token under a mid-command cursor", () => {
@@ -390,8 +561,11 @@ test("Toggl quota headers are persisted and explain a 402 reset", async (t) => {
 test("recognized Toggl commands show contextual next-step help", () => {
   const authHelp = commandContextHelp("toggl auth", fakeStorageWithCache());
   assert.ok(authHelp.some((line) => line.includes("toggl_sk_")));
-  assert.ok(authHelp.some((line) => line.includes("--organization")));
+  assert.ok(authHelp.every((line) => !line.includes("--organization")));
   assert.ok(authHelp.some((line) => line.includes("focus.toggl.com/settings")));
+
+  const setupHelp = commandContextHelp("toggl setup", fakeStorageWithCache());
+  assert.ok(setupHelp.some((line) => line.includes("workspace URL")));
 
   const startHelp = commandContextHelp("toggl start ", fakeStorageWithCache());
   assert.ok(startHelp.some((line) => line.includes("<description>")));
