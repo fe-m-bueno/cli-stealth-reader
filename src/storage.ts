@@ -13,6 +13,7 @@ import type {
   ImportResult,
   LibraryEntry,
   LibraryEntryWithProgress,
+  BookReadingPace,
   LibrarySortKey,
   Note,
   ProgressVisibility,
@@ -28,7 +29,7 @@ export type { AppSettings };
 const DEFAULT_SETTINGS: AppSettings = {
   themeId: "codex",
   appearanceThemeId: "dark",
-  progressVisibility: "both",
+  progressVisibility: "time-chapter",
   renderMode: "code",
   codeLanguage: "typescript",
   codeDensity: 3,
@@ -109,6 +110,12 @@ export class Storage {
         block_offset INTEGER,
         content TEXT NOT NULL,
         created_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS reading_pace (
+        book_id TEXT PRIMARY KEY,
+        wpm REAL NOT NULL,
+        active_ms INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_book_tags_tag ON book_tags(tag);
       CREATE INDEX IF NOT EXISTS idx_notes_book_id ON notes(book_id);
@@ -334,6 +341,7 @@ export class Storage {
       this.db.prepare("DELETE FROM bookmarks WHERE book_id = ?").run(bookId);
       this.db.prepare("DELETE FROM book_tags WHERE book_id = ?").run(bookId);
       this.db.prepare("DELETE FROM notes WHERE book_id = ?").run(bookId);
+      this.db.prepare("DELETE FROM reading_pace WHERE book_id = ?").run(bookId);
       fs.rmSync(path.join(this.chapterCacheDir, bookId), { recursive: true, force: true });
       this.db.exec("COMMIT");
     } catch (error) {
@@ -365,6 +373,25 @@ export class Storage {
         block_offset AS blockOffset
       FROM positions WHERE book_id = ?
     `).get(bookId) as ReadingPosition | undefined) ?? null;
+  }
+
+  getReadingPace(bookId: string): BookReadingPace | null {
+    const row = this.db.prepare(`
+      SELECT book_id AS bookId, wpm, active_ms AS activeMs, updated_at AS updatedAt
+      FROM reading_pace WHERE book_id = ?
+    `).get(bookId) as BookReadingPace | undefined;
+    return row ?? null;
+  }
+
+  saveReadingPace(pace: BookReadingPace): void {
+    this.db.prepare(`
+      INSERT INTO reading_pace (book_id, wpm, active_ms, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(book_id) DO UPDATE SET
+        wpm = excluded.wpm,
+        active_ms = excluded.active_ms,
+        updated_at = excluded.updated_at
+    `).run(pace.bookId, pace.wpm, pace.activeMs, pace.updatedAt);
   }
 
   getLatestBookId(): string | null {

@@ -86,3 +86,35 @@ test("adds, lists and deletes bookmarks", () => {
     cleanup();
   }
 });
+
+test("getReadingPace returns null when missing and upserts book pace", () => {
+  const { storage, cleanup } = makeTempStorage();
+  try {
+    assert.equal(storage.getReadingPace("book-1"), null);
+    storage.saveReadingPace({
+      bookId: "book-1",
+      wpm: 210.5,
+      activeMs: 90_000,
+      updatedAt: 1_700_000_000_000
+    });
+    const row = storage.getReadingPace("book-1");
+    assert.ok(row);
+    assert.equal(row.bookId, "book-1");
+    assert.ok(Math.abs(row.wpm - 210.5) < 0.001);
+    assert.equal(row.activeMs, 90_000);
+  } finally {
+    cleanup();
+  }
+});
+
+test("global pace settings round-trip via raw settings", () => {
+  const { storage, cleanup } = makeTempStorage();
+  try {
+    storage.setRawSetting("globalWpm", "215.25");
+    storage.setRawSetting("globalActiveMs", "120000");
+    assert.equal(storage.getSetting("globalWpm"), "215.25");
+    assert.equal(storage.getSetting("globalActiveMs"), "120000");
+  } finally {
+    cleanup();
+  }
+});
