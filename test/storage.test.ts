@@ -232,3 +232,12 @@ test("saveSettings rolls back every preference when one write fails", () => {
     cleanup();
   }
 });
+
+test("fresh installs default to mouseCapture off so native terminal text selection works", () => {
+  const { storage, cleanup } = makeTempStorage();
+  try {
+    assert.equal(storage.getSettings().mouseCapture, false);
+  } finally {
+    cleanup();
+  }
+});

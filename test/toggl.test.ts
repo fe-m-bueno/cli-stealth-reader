@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseSlashCommand, listCommandSuggestions, applyCommandAutocomplete, commandContextHelp } from "../src/commands.js";
-import { connectToggl, extractTogglOrganizationId, formatRunningTogglTimer, formatTogglRecents, getTogglCache, getTogglQuota, logTogglEntry, refreshCurrentTogglEntry, resolveTogglProject, startTogglEntry, stopTogglEntry, syncToggl } from "../src/toggl.js";
+import { TOGGL_REFRESH_INTERVAL_MS, connectToggl, extractTogglOrganizationId, formatRunningTogglTimer, formatTogglRecents, getTogglCache, getTogglQuota, logTogglEntry, refreshCurrentTogglEntry, resolveTogglProject, startTogglEntry, stopTogglEntry, syncToggl } from "../src/toggl.js";
 import { executeCommand } from "../src/executor.js";
 import type { Storage } from "../src/storage.js";
 import type { AppState } from "../src/types.js";
@@ -570,4 +570,10 @@ test("recognized Toggl commands show contextual next-step help", () => {
   const startHelp = commandContextHelp("toggl start ", fakeStorageWithCache());
   assert.ok(startHelp.some((line) => line.includes("<description>")));
   assert.ok(startHelp.some((line) => line.includes("Tab")));
+});
+
+test("background Toggl polling interval stays well under the Free-plan quota (30 req/h)", () => {
+  // 30 req/h quota → background polling must use at most half of it,
+  // leaving headroom for user-initiated commands.
+  assert.ok(TOGGL_REFRESH_INTERVAL_MS >= 240_000, `interval ${TOGGL_REFRESH_INTERVAL_MS}ms allows more than 15 req/h`);
 });

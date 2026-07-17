@@ -6,7 +6,7 @@ import { discoveredBookLabel, libraryPickerItems } from "./library-picker.js";
 import { bg, bold, fg } from "./color.js";
 import { discoverBooks } from "./discovery.js";
 import { renderBlocks } from "./renderers.js";
-import { refreshCurrentTogglEntry } from "./toggl.js";
+import { TOGGL_REFRESH_INTERVAL_MS, refreshCurrentTogglEntry } from "./toggl.js";
 import {
   clamp,
   computeWindowStart,
@@ -536,7 +536,7 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     }
   };
   void refreshTogglTimer();
-  setInterval(() => void refreshTogglTimer(), 60_000).unref();
+  setInterval(() => void refreshTogglTimer(), TOGGL_REFRESH_INTERVAL_MS).unref();
 
   process.stdin.on("data", async (chunk: string) => {
     await handleInput(chunk, state, redraw, async (cmd) => {

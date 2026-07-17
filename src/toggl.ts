@@ -273,6 +273,11 @@ function scopedPath(storage: Storage, suffix: string, workspaceOverride?: number
   return `/organizations/${organizationId}/workspaces/${workspaceId}${suffix}`;
 }
 
+// Focus Free plan allows 30 requests/hour; background polling stays at 12/h
+// so user-initiated commands keep quota headroom. Footer elapsed time is
+// computed locally from the entry start, so display accuracy is unaffected.
+export const TOGGL_REFRESH_INTERVAL_MS = 300_000;
+
 export async function refreshCurrentTogglEntry(storage: Storage): Promise<TogglTimeEntry | null> {
   const previousEntry = storage.getSetting("togglCurrentEntry") ?? "";
   const current = await togglRequest<TogglTimeEntry | undefined>(storage, scopedPath(storage, "/tracking/current"));

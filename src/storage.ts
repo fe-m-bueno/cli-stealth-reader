@@ -38,7 +38,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   fontScale: 1,
   marginSize: 0,
   lineSpacing: "normal",
-  mouseCapture: true
+  mouseCapture: false
 };
 
 function redactSensitiveCommand(rawCommand: string, normalizedName: string): string {
