@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { renderOverlay } from "../src/tui.js";
+import { renderLibraryModal } from "../src/library-modal.js";
 import { stripAnsi } from "../src/screen.js";
 import type { AppState, LibraryEntryWithProgress, ThemePreset } from "../src/types.js";
 
@@ -63,12 +64,15 @@ test("library startup overlay makes continue-reading action explicit", () => {
     }
   ];
 
-  const lines = renderOverlay(booksState(books, "latest"), 100, 20).map(stripAnsi);
+  const lines = renderLibraryModal(booksState(books, "latest"), 100, 30).map(stripAnsi);
 
-  assert.match(lines[1], /Enter continues selected book/);
-  assert.match(lines[1], /\/resume opens latest/);
-  assert.match(lines[2], /Latest Book/);
-  assert.match(lines[2], /\[continue\]/);
-  assert.match(lines[2], /\[Ch\.4 · 42%\]/);
-  assert.doesNotMatch(lines[3], /\[continue\]/);
+  const footer = lines.find((line) => line.includes("Enter:open"));
+  assert.ok(footer, `Expected Enter:open footer hint, got: ${lines.join(" | ")}`);
+  const latestLine = lines.find((line) => line.includes("Latest Book"));
+  assert.ok(latestLine, "Expected Latest Book row");
+  assert.match(latestLine!, /\[continue\]/);
+  assert.match(latestLine!, /\[Ch\.4 · 42%\]/);
+  const otherLine = lines.find((line) => line.includes("Other Book"));
+  assert.ok(otherLine, "Expected Other Book row");
+  assert.doesNotMatch(otherLine!, /\[continue\]/);
 });

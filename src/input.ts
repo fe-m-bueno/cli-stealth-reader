@@ -1,7 +1,14 @@
 import { applyCommandAutocomplete, commandAutocompleteIndex, commandHelp, listCommandSuggestions } from "./commands.js";
 import { applySearchHit, pushNavHistory } from "./executor.js";
 import { clampFocusBlockIndex, getChapterBlockCount, mapBlockOffsetToFocusIndex, mapFocusIndexToBlockOffset } from "./focus.js";
-import { libraryPickerItems } from "./library-picker.js";
+import {
+  filePickerModalHitTest,
+  filteredLibraryItems,
+  filteredPickerItems,
+  libraryModalHitTest,
+  resetOverlaySearch
+} from "./library-modal.js";
+import { modalGeometry } from "./modal.js";
 import {
   clamp,
   computeChapterMaxOffset,
@@ -243,6 +250,29 @@ function applyUiPointer(state: AppState, mouse: ParsedMouseEvent): boolean {
     return true;
   }
 
+  if (state.overlay === "books" || state.overlay === "file-picker") {
+    const isPicker = state.overlay === "file-picker";
+    const hit = isPicker
+      ? filePickerModalHitTest(state, layout.contentWidth, layout.bodyHeight, mouse.x - 1, mouse.y - 2)
+      : libraryModalHitTest(state, layout.contentWidth, layout.bodyHeight, mouse.x - 1, mouse.y - 2);
+    if (!hit) {
+      return false;
+    }
+    if (hit.kind === "close") {
+      state.overlay = "none";
+      state.overlayCursor = 0;
+      state.booksTagFilter = null;
+      resetOverlaySearch(state);
+    } else if (hit.kind === "search") {
+      state.overlaySearchMode = true;
+    } else if (isPicker) {
+      state.filePickerCursor = hit.index;
+    } else {
+      state.overlayCursor = hit.index;
+    }
+    return true;
+  }
+
   if (state.commandMode) {
     return false;
   }
@@ -273,8 +303,6 @@ function interactiveOverlayLength(state: AppState): number {
   switch (state.overlay) {
     case "chapters":
       return state.currentBook?.chapters.length ?? 0;
-    case "books":
-      return libraryPickerItems(state).length;
     case "bookmarks":
       return state.currentBook ? state.storage.listBookmarks(state.currentBook.id).length : 0;
     case "notes":
@@ -589,6 +617,170 @@ export async function handleInput(
     return;
   }
 
+  if (state.overlay === "books") {
+    const items = filteredLibraryItems(state);
+    const maxIndex = Math.max(0, items.length - 1);
+    state.overlayCursor = clamp(state.overlayCursor, 0, maxIndex);
+    const layout = getViewportLayout(state, process.stdout.columns || 120, process.stdout.rows || 40);
+    const pageSize = modalGeometry(layout.contentWidth, layout.bodyHeight).visibleRows;
+
+    if (state.overlaySearchMode) {
+      if (chunk === "\u001b") {
+        state.overlaySearchMode = false;
+        state.overlaySearchBuffer = "";
+        state.overlayCursor = 0;
+      } else if (chunk === "\r") {
+        state.overlaySearchMode = false;
+      } else if (chunk === "\u007f") {
+        state.overlaySearchBuffer = (state.overlaySearchBuffer ?? "").slice(0, -1);
+        state.overlayCursor = 0;
+      } else if (chunk.length === 1 && chunk >= " ") {
+        state.overlaySearchBuffer = `${state.overlaySearchBuffer ?? ""}${chunk}`;
+        state.overlayCursor = 0;
+      }
+    } else if (chunk === "\u001b") {
+      state.overlay = "none";
+      state.overlayCursor = 0;
+      state.booksTagFilter = null;
+      resetOverlaySearch(state);
+    } else if (chunk === "/") {
+      state.overlaySearchMode = true;
+    } else if (isDownKey(chunk) || chunk === "j" || isMouseWheelDown(chunk)) {
+      state.overlayCursor = clamp(state.overlayCursor + 1, 0, maxIndex);
+    } else if (isUpKey(chunk) || chunk === "k" || isMouseWheelUp(chunk)) {
+      state.overlayCursor = clamp(state.overlayCursor - 1, 0, maxIndex);
+    } else if (isPageDownKey(chunk)) {
+      state.overlayCursor = clamp(state.overlayCursor + pageSize, 0, maxIndex);
+    } else if (isPageUpKey(chunk)) {
+      state.overlayCursor = clamp(state.overlayCursor - pageSize, 0, maxIndex);
+    } else if (isHomeKey(chunk)) {
+      state.overlayCursor = 0;
+    } else if (isEndKey(chunk)) {
+      state.overlayCursor = maxIndex;
+    } else if (chunk === "\r") {
+      const selected = items[state.overlayCursor];
+      if (selected?.kind === "discovered") {
+        state.overlay = "none";
+        state.booksTagFilter = null;
+        resetOverlaySearch(state);
+        await confirmPicker([selected.discovery.path], false);
+      } else if (selected) {
+        const book = state.storage.getBook(selected.book.id);
+        if (book) {
+          state.currentBook = book;
+          state.searchState = null;
+          const existing = state.storage.getPosition(book.id);
+          state.chapterIndex = existing?.chapterIndex ?? 0;
+          state.blockOffset = existing?.blockOffset ?? 0;
+          state.status = `Opened ${book.title}`;
+        }
+        state.overlay = "none";
+        state.booksTagFilter = null;
+        resetOverlaySearch(state);
+      } else {
+        state.overlay = "none";
+        state.booksTagFilter = null;
+        resetOverlaySearch(state);
+      }
+    } else if (chunk === "b" || chunk === "n") {
+      const selected = items[state.overlayCursor];
+      const book = selected?.kind === "stored" ? state.storage.getBook(selected.book.id) : null;
+      if (book) {
+        state.currentBook = book;
+        state.searchState = null;
+        const existing = state.storage.getPosition(book.id);
+        state.chapterIndex = existing?.chapterIndex ?? 0;
+        state.blockOffset = existing?.blockOffset ?? 0;
+        state.overlay = chunk === "b" ? "bookmarks" : "notes";
+        state.overlayCursor = 0;
+        state.booksTagFilter = null;
+        resetOverlaySearch(state);
+        state.status = chunk === "b"
+          ? `Opened bookmarks for ${book.title}.`
+          : `Opened notes for ${book.title}.`;
+      }
+    } else if (chunk === "s") {
+      const cycle: LibrarySortKey[] = ["lastOpened", "title", "author", "progress"];
+      const current = cycle.indexOf(state.librarySortKey);
+      state.librarySortKey = cycle[(current + 1) % cycle.length]!;
+      state.overlayCursor = 0;
+      state.status = `Library sort: ${state.librarySortKey}.`;
+    } else if (chunk === "r") {
+      state.librarySortDir = state.librarySortDir === "asc" ? "desc" : "asc";
+      state.overlayCursor = 0;
+      state.status = `Library sort direction: ${state.librarySortDir}.`;
+    }
+    redraw();
+    return;
+  }
+
+  if (state.overlay === "file-picker") {
+    const items = filteredPickerItems(state);
+    const maxIndex = Math.max(0, items.length - 1);
+    state.filePickerCursor = clamp(state.filePickerCursor, 0, maxIndex);
+    const layout = getViewportLayout(state, process.stdout.columns || 120, process.stdout.rows || 40);
+    const pageSize = modalGeometry(layout.contentWidth, layout.bodyHeight).visibleRows;
+
+    if (state.overlaySearchMode) {
+      if (chunk === "\u001b") {
+        state.overlaySearchMode = false;
+        state.overlaySearchBuffer = "";
+        state.filePickerCursor = 0;
+      } else if (chunk === "\r") {
+        state.overlaySearchMode = false;
+      } else if (chunk === "\u007f") {
+        state.overlaySearchBuffer = (state.overlaySearchBuffer ?? "").slice(0, -1);
+        state.filePickerCursor = 0;
+      } else if (chunk.length === 1 && chunk >= " ") {
+        state.overlaySearchBuffer = `${state.overlaySearchBuffer ?? ""}${chunk}`;
+        state.filePickerCursor = 0;
+      }
+    } else if (chunk === "\u001b") {
+      state.overlay = "none";
+      resetOverlaySearch(state);
+    } else if (chunk === "/") {
+      state.overlaySearchMode = true;
+    } else if (isDownKey(chunk) || isRightKey(chunk) || chunk === "j" || isMouseWheelDown(chunk)) {
+      state.filePickerCursor = clamp(state.filePickerCursor + 1, 0, maxIndex);
+    } else if (isUpKey(chunk) || isLeftKey(chunk) || chunk === "k" || isMouseWheelUp(chunk)) {
+      state.filePickerCursor = clamp(state.filePickerCursor - 1, 0, maxIndex);
+    } else if (isPageDownKey(chunk)) {
+      state.filePickerCursor = clamp(state.filePickerCursor + pageSize, 0, maxIndex);
+    } else if (isPageUpKey(chunk)) {
+      state.filePickerCursor = clamp(state.filePickerCursor - pageSize, 0, maxIndex);
+    } else if (isHomeKey(chunk)) {
+      state.filePickerCursor = 0;
+    } else if (isEndKey(chunk)) {
+      state.filePickerCursor = maxIndex;
+    } else if (chunk === " ") {
+      const entry = items[state.filePickerCursor];
+      if (entry) {
+        if (state.filePickerSelected.has(entry.index)) {
+          state.filePickerSelected.delete(entry.index);
+        } else {
+          state.filePickerSelected.add(entry.index);
+        }
+      }
+    } else if (chunk === "\r") {
+      if (items.length > 0) {
+        const selectedIndexes = state.filePickerSelected.size > 0
+          ? Array.from(state.filePickerSelected).sort((a, b) => a - b)
+          : [items[state.filePickerCursor]!.index];
+        const paths = selectedIndexes
+          .map((index) => state.filePickerItems[index]?.path)
+          .filter((value): value is string => Boolean(value));
+        state.overlay = "none";
+        resetOverlaySearch(state);
+        await confirmPicker(paths, state.filePickerForce);
+      } else {
+        state.overlay = "none";
+        resetOverlaySearch(state);
+      }
+    }
+    redraw();
+    return;
+  }
+
   if (chunk === "/") {
     // Command entry is not active reading. Break the current timing window so
     // time spent typing (including navigation commands) cannot enter a sample.
@@ -597,41 +789,6 @@ export async function handleInput(
     state.commandBuffer = "";
     state.commandCursor = 0;
     state.commandSuggestionIndex = 0;
-    redraw();
-    return;
-  }
-
-  const pickerItems = state.filePickerItems;
-  if (state.overlay === "file-picker") {
-    const maxIndex = Math.max(0, pickerItems.length - 1);
-    if (isDownKey(chunk) || isRightKey(chunk) || chunk === "j") {
-      state.filePickerCursor = clamp(state.filePickerCursor + 1, 0, maxIndex);
-    } else if (isUpKey(chunk) || isLeftKey(chunk) || chunk === "k") {
-      state.filePickerCursor = clamp(state.filePickerCursor - 1, 0, maxIndex);
-    } else if (chunk === " ") {
-      if (pickerItems.length > 0) {
-        if (state.filePickerSelected.has(state.filePickerCursor)) {
-          state.filePickerSelected.delete(state.filePickerCursor);
-        } else {
-          state.filePickerSelected.add(state.filePickerCursor);
-        }
-      }
-    } else if (chunk === "\r") {
-      if (pickerItems.length > 0) {
-        const selectedIndexes = state.filePickerSelected.size > 0
-          ? Array.from(state.filePickerSelected).sort((a, b) => a - b)
-          : [state.filePickerCursor];
-        const paths = selectedIndexes
-          .map((index) => pickerItems[index]?.path)
-          .filter((value): value is string => Boolean(value));
-        state.overlay = "none";
-        await confirmPicker(paths, state.filePickerForce);
-      } else {
-        state.overlay = "none";
-      }
-    } else if (chunk === "\u001b") {
-      state.overlay = "none";
-    }
     redraw();
     return;
   }
@@ -651,21 +808,6 @@ export async function handleInput(
         state.blockOffset = 0;
         pushNavHistory(state);
         state.status = `Moved to chapter ${state.chapterIndex + 1}`;
-      } else if (state.overlay === "books") {
-        const selected = libraryPickerItems(state)[state.overlayCursor];
-        if (selected?.kind === "discovered") {
-          await confirmPicker([selected.discovery.path], false);
-        } else if (selected) {
-          const book = state.storage.getBook(selected.book.id);
-          if (book) {
-            state.currentBook = book;
-            state.searchState = null;
-            const existing = state.storage.getPosition(book.id);
-            state.chapterIndex = existing?.chapterIndex ?? 0;
-            state.blockOffset = existing?.blockOffset ?? 0;
-            state.status = `Opened ${book.title}`;
-          }
-        }
       } else if (state.overlay === "colorschemes") {
         const colorScheme = THEMES[state.overlayCursor];
         if (colorScheme) {
@@ -710,32 +852,6 @@ export async function handleInput(
     } else if (chunk === "\u001b") {
       state.overlay = "none";
       state.booksTagFilter = null;
-    } else if ((chunk === "b" || chunk === "n") && state.overlay === "books") {
-      const selected = libraryPickerItems(state)[state.overlayCursor];
-      const book = selected?.kind === "stored" ? state.storage.getBook(selected.book.id) : null;
-      if (book) {
-        state.currentBook = book;
-        state.searchState = null;
-        const existing = state.storage.getPosition(book.id);
-        state.chapterIndex = existing?.chapterIndex ?? 0;
-        state.blockOffset = existing?.blockOffset ?? 0;
-        state.overlay = chunk === "b" ? "bookmarks" : "notes";
-        state.overlayCursor = 0;
-        state.booksTagFilter = null;
-        state.status = chunk === "b"
-          ? `Opened bookmarks for ${book.title}.`
-          : `Opened notes for ${book.title}.`;
-      }
-    } else if (chunk === "s" && state.overlay === "books") {
-      const cycle: LibrarySortKey[] = ["lastOpened", "title", "author", "progress"];
-      const current = cycle.indexOf(state.librarySortKey);
-      state.librarySortKey = cycle[(current + 1) % cycle.length]!;
-      state.overlayCursor = 0;
-      state.status = `Library sort: ${state.librarySortKey}.`;
-    } else if (chunk === "r" && state.overlay === "books") {
-      state.librarySortDir = state.librarySortDir === "asc" ? "desc" : "asc";
-      state.overlayCursor = 0;
-      state.status = `Library sort direction: ${state.librarySortDir}.`;
     } else if (chunk === "d" && state.overlay === "bookmarks" && state.currentBook) {
       const bookmarks = state.storage.listBookmarks(state.currentBook.id);
       const selected = bookmarks[state.overlayCursor];

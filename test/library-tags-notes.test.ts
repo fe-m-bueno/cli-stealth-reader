@@ -7,6 +7,7 @@ import { Storage } from "../src/storage.js";
 import { executeCommand } from "../src/executor.js";
 import { handleInput } from "../src/input.js";
 import { renderOverlay } from "../src/tui.js";
+import { renderLibraryModal } from "../src/library-modal.js";
 import { stripAnsi } from "../src/screen.js";
 import type { AppState, CanonicalBook, ThemePreset } from "../src/types.js";
 
@@ -382,7 +383,7 @@ test("books overlay shows tags next to book title", () => {
       overlay: "books",
       booksTagMap: storage.listTagsByBookId()
     });
-    const lines = renderOverlay(state, 80, 20).map(stripAnsi);
+    const lines = renderLibraryModal(state, 100, 30).map(stripAnsi);
     const bookLine = lines.find((l) => l.includes("Dom Casmurro"));
     assert.ok(bookLine?.includes("#clássico"), `Expected tag in line, got: ${bookLine}`);
   } finally { cleanup(); }

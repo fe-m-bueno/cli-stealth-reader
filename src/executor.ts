@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseSlashCommand } from "./commands.js";
 import { discoverBooks } from "./discovery.js";
+import { resetOverlaySearch } from "./library-modal.js";
 import { mapBlockOffsetToFocusIndex, mapFocusIndexToBlockOffset } from "./focus.js";
 import { EPUB_PARSER_VERSION, importEpub } from "./parser/epub.js";
 import { importFile } from "./parser/index.js";
@@ -152,6 +153,7 @@ export function openFilePicker(
 ): void {
   state.overlay = "file-picker";
   state.overlayCursor = 0;
+  resetOverlaySearch(state);
   state.filePickerItems = items;
   state.filePickerCursor = 0;
   state.filePickerSelected = new Set();
@@ -347,6 +349,7 @@ const handlers: Record<string, CommandHandler> = {
       state.booksTagMap = state.storage.listTagsByBookId();
       state.overlay = "books";
       state.overlayCursor = 0;
+      resetOverlaySearch(state);
       state.status = books.length > 0 ? "Opened library picker." : "No books in the library yet.";
       return;
     }
@@ -372,6 +375,7 @@ const handlers: Record<string, CommandHandler> = {
       }
       state.overlay = "books";
       state.overlayCursor = 0;
+      resetOverlaySearch(state);
       if (tagMatches.length > 0) {
         state.booksTagFilter = query.trim();
         state.booksTagMap = state.storage.listTagsByBookId();

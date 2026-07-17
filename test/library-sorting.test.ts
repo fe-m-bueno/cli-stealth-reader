@@ -7,6 +7,7 @@ import { Storage } from "../src/storage.js";
 import { executeCommand } from "../src/executor.js";
 import { handleInput } from "../src/input.js";
 import { renderOverlay } from "../src/tui.js";
+import { renderLibraryModal } from "../src/library-modal.js";
 import { stripAnsi } from "../src/screen.js";
 import type { AppState, CanonicalBook, ThemePreset } from "../src/types.js";
 
@@ -169,9 +170,10 @@ test("books overlay shows sort header", () => {
   try {
     insertBook(storage, "b1", "Test", "A", 1000);
     const state = makeState(storage, { overlay: "books", librarySortKey: "title", librarySortDir: "asc" });
-    const lines = renderOverlay(state, 80, 20).map(stripAnsi);
-    assert.ok(lines[0]?.includes("Sort: Title"), `Expected sort header, got: ${lines[0]}`);
-    assert.ok(lines[0]?.includes("↑"), `Expected asc arrow, got: ${lines[0]}`);
+    const lines = renderLibraryModal(state, 100, 30).map(stripAnsi);
+    const title = lines.find((line) => line.includes("Library"));
+    assert.ok(title?.includes("Sort: Title"), `Expected sort in title, got: ${title}`);
+    assert.ok(title?.includes("↑"), `Expected asc arrow, got: ${title}`);
   } finally { cleanup(); }
 });
 
@@ -180,8 +182,9 @@ test("books overlay shows descending arrow by default", () => {
   try {
     insertBook(storage, "b1", "Test", "A", 1000);
     const state = makeState(storage, { overlay: "books" });
-    const lines = renderOverlay(state, 80, 20).map(stripAnsi);
-    assert.ok(lines[0]?.includes("↓"), `Expected desc arrow, got: ${lines[0]}`);
+    const lines = renderLibraryModal(state, 100, 30).map(stripAnsi);
+    const title = lines.find((line) => line.includes("Library"));
+    assert.ok(title?.includes("↓"), `Expected desc arrow, got: ${title}`);
   } finally { cleanup(); }
 });
 
@@ -195,13 +198,14 @@ test("books overlay documents management actions and richer row metadata", () =>
       booksTagMap: storage.listTagsByBookId(),
       booksTagFilter: "work"
     });
-    const lines = renderOverlay(state, 100, 20).map(stripAnsi);
-    assert.ok(lines[0]?.includes("Filter: #work"), `Expected tag filter affordance, got: ${lines[0]}`);
-    assert.ok(lines[1]?.includes("Enter continue/open"), `Expected continue action hint, got: ${lines[1]}`);
-    assert.ok(lines[1]?.includes("/resume latest"), `Expected resume action hint, got: ${lines[1]}`);
-    assert.ok(lines[1]?.includes("b bookmarks"), `Expected bookmark action hint, got: ${lines[1]}`);
-    assert.ok(lines[1]?.includes("n notes"), `Expected notes action hint, got: ${lines[1]}`);
-    assert.ok(lines[1]?.includes("/book"), `Expected search affordance, got: ${lines[1]}`);
+    const lines = renderLibraryModal(state, 100, 30).map(stripAnsi);
+    const title = lines.find((line) => line.includes("Library"));
+    assert.ok(title?.includes("#work"), `Expected tag filter in title, got: ${title}`);
+    const footer = lines.find((line) => line.includes("Enter:open"));
+    assert.ok(footer, `Expected Enter:open footer hint, got: ${lines.join(" | ")}`);
+    assert.ok(footer?.includes("b/n:marks/notes"), `Expected marks/notes hint, got: ${footer}`);
+    assert.ok(footer?.includes("s/r:sort"), `Expected sort hint, got: ${footer}`);
+    assert.ok(lines.some((line) => line.includes("/ to search")), `Expected search affordance, got: ${lines.join(" | ")}`);
     assert.ok(lines.some((line) => line.includes("[continue]")), `Expected continue marker, got: ${lines.join(" | ")}`);
     assert.ok(lines.some((line) => line.includes("42%")), `Expected progress metadata, got: ${lines.join(" | ")}`);
     assert.ok(lines.some((line) => line.includes("#work")), `Expected tag metadata, got: ${lines.join(" | ")}`);

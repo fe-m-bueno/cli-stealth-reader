@@ -2,7 +2,7 @@ import { commandHelp } from "./commands.js";
 import { executeCommand, importAndOpen, openBook, persistReadingPace } from "./executor.js";
 import { clampFocusBlockIndex, mapFocusIndexToBlockOffset, renderFocusBlock } from "./focus.js";
 import { handleInput } from "./input.js";
-import { discoveredBookLabel, libraryPickerItems } from "./library-picker.js";
+import { composeFilePickerModal, composeLibraryModal } from "./library-modal.js";
 import { bg, bold, fg } from "./color.js";
 import { discoverBooks } from "./discovery.js";
 import { renderBlocks } from "./renderers.js";
@@ -15,6 +15,7 @@ import {
   computeChapterProgress,
   formatProgress,
   getViewportLayout,
+  isModalOverlay,
   renderFrame,
   renderBody,
   renderFooter,
@@ -74,6 +75,18 @@ export function currentLines(state: AppState, width: number, height: number): st
     const backgroundState = { ...state, overlay: "none" } as AppState;
     const backgroundLines = currentLines(backgroundState, width, height);
     return composeShortcutPanel(state, backgroundLines, width, height);
+  }
+
+  if (state.overlay === "books") {
+    const backgroundState = { ...state, overlay: "none" } as AppState;
+    const backgroundLines = currentLines(backgroundState, width, height);
+    return composeLibraryModal(state, backgroundLines, width, height);
+  }
+
+  if (state.overlay === "file-picker") {
+    const backgroundState = { ...state, overlay: "none" } as AppState;
+    const backgroundLines = currentLines(backgroundState, width, height);
+    return composeFilePickerModal(state, backgroundLines, width, height);
   }
 
   if (!state.currentBook) {
@@ -179,56 +192,6 @@ export function renderOverlay(state: AppState, width: number, height: number): s
           const marker = chapter.index === state.overlayCursor ? ">" : " ";
           return `${marker} ${String(chapter.index + 1).padStart(2, "0")} ${truncate(chapter.title, width - 6)}`;
         });
-    case "books": {
-      const items = libraryPickerItems(state);
-      const latestBookId = state.storage.getLatestBookId();
-      const tagsByBookId = state.booksTagMap;
-      const sortKeyLabels: Record<string, string> = {
-        lastOpened: "Last Opened",
-        title: "Title",
-        author: "Author",
-        progress: "Progress"
-      };
-      const dirArrow = state.librarySortDir === "asc" ? "↑" : "↓";
-      const filterNote = state.booksTagFilter ? `  Filter: #${state.booksTagFilter} (Esc clears)` : "";
-      const header = truncate(
-        `  Library · Sort: ${sortKeyLabels[state.librarySortKey]} ${dirArrow}${filterNote}`,
-        width
-      );
-      const continueAction = latestBookId
-        ? state.booksTagFilter
-          ? "Enter continue/open"
-          : "Enter continues selected book"
-        : "Enter open";
-      const resumeHint = state.booksTagFilter ? "/resume latest" : "/resume opens latest";
-      const actionHint = truncate(
-        `  ${continueAction} · ${resumeHint} · b bookmarks · n notes · /book search`,
-        width
-      );
-      return [
-        header,
-        actionHint,
-        ...items.map((item, index) => {
-          const marker = index === state.overlayCursor ? ">" : " ";
-          if (item.kind === "discovered") {
-            const right = "  [local · Enter to import]";
-            const title = truncate(discoveredBookLabel(item.discovery), Math.max(1, width - 2 - right.length));
-            return `${marker} ${title}${right}`;
-          }
-          const book = item.book;
-          const isLatest = book.id === latestBookId;
-          const progressTag = book.bookProgress !== null
-            ? `[Ch.${(book.chapterIndex ?? 0) + 1} · ${Math.round(book.bookProgress * 100)}%]`
-            : "[not started]";
-          const latestTag = isLatest ? "[continue] " : "";
-          const tags = tagsByBookId.get(book.id) ?? [];
-          const tagsStr = tags.length > 0 ? `  ${tags.map((t) => `#${t}`).join(" ")}` : "";
-          const right = `  ${latestTag}${progressTag}${tagsStr}`;
-          const titleAuthor = truncate(`${book.title}  —  ${book.author}`, Math.max(1, width - 2 - right.length));
-          return `${marker} ${titleAuthor}${right}`;
-        })
-      ];
-    }
     case "bookmarks": {
       if (!state.currentBook) {
         return ["No book open."];
@@ -280,21 +243,6 @@ export function renderOverlay(state: AppState, width: number, height: number): s
       return state.currentBook?.diagnostics.length
         ? state.currentBook.diagnostics.map((item) => `${item.severity.toUpperCase()} ${item.message}${item.context ? ` (${item.context})` : ""}`)
         : ["No diagnostics for the current book."];
-    case "file-picker": {
-      if (state.filePickerItems.length === 0) {
-        return ["No books found in this folder."];
-      }
-      const lines: string[] = [];
-      for (let index = 0; index < state.filePickerItems.length; index += 1) {
-        const item = state.filePickerItems[index];
-        const cursor = index === state.filePickerCursor ? ">" : " ";
-        const check = state.filePickerSelected.has(index) ? "[x]" : "[ ]";
-        const label = truncate(item.fileName, Math.max(1, width - 6));
-        const row = `${cursor} ${check} ${label}`;
-        lines.push(index === state.filePickerCursor ? fg(state.theme.accent, row) : fg(state.theme.dim, row));
-      }
-      return lines;
-    }
     default:
       return [];
   }
@@ -314,7 +262,7 @@ function draw(state: AppState): void {
   if (state.overlay === "help") {
     state.overlayCursor = clamp(state.overlayCursor, 0, helpMaxOffset);
   }
-  const fixedOverlay = state.overlay === "settings" || state.overlay === "keys";
+  const fixedOverlay = isModalOverlay(state.overlay);
   const maxOffset = state.overlay === "help"
     ? helpMaxOffset
     : fixedOverlay
@@ -342,13 +290,13 @@ function draw(state: AppState): void {
     : state.focusMode
     ? mapFocusIndexToBlockOffset(state, layout.contentWidth, state.focusBlockIndex)
     : state.blockOffset;
-  const scrollbar = state.currentBook && state.overlay !== "settings" && state.overlay !== "keys"
+  const scrollbar = state.currentBook && !isModalOverlay(state.overlay)
     ? renderScrollbar(allMainLines.length, layout.bodyHeight, effectiveOffset, state.theme, state.overlay === "help" ? false : state.focusMode)
     : state.overlay === "help"
       ? renderScrollbar(allMainLines.length, layout.bodyHeight, effectiveOffset, state.theme, false)
     : [];
   const originalOffset = state.blockOffset;
-  const progress = state.overlay === "help" || state.overlay === "settings" || state.overlay === "keys"
+  const progress = state.overlay === "help" || isModalOverlay(state.overlay)
     ? ""
     : (() => {
         state.blockOffset = effectiveOffset;

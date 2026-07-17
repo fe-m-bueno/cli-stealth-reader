@@ -363,6 +363,8 @@ export interface AppState {
   shortcutCollapsedCategories?: Set<string>;
   shortcutSearchBuffer?: string;
   shortcutSearchMode?: boolean;
+  overlaySearchBuffer?: string;
+  overlaySearchMode?: boolean;
   settingsDraft?: AppSettings | null;
   settingsTab?: SettingsTab;
   settingsSearchBuffer?: string;

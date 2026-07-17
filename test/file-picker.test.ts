@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { renderLibraryModal } from "../src/library-modal.js";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -872,7 +873,7 @@ test("themes overlay arrow keys move selection and enter applies the appearance 
 
 test("books overlay shows [not started] for a book with no saved position", () => {
   const state = makeState({ overlay: "books", overlayCursor: 0 });
-  const lines = renderOverlay(state, 60, 10).map(stripAnsi);
+  const lines = renderLibraryModal(state, 100, 30).map(stripAnsi);
   assert.ok(lines.some((line) => line.includes("[not started]")));
 });
 
@@ -880,7 +881,7 @@ test("books overlay includes discovered EPUBs that have not been imported yet", 
   const jane = { path: "/tmp/Jane Eyre (Brontë Charlotte) (Z-Library).epub", fileName: "Jane Eyre (Brontë Charlotte) (Z-Library).epub" };
   const state = makeState({ overlay: "books", overlayCursor: 0, discoveries: [jane] });
 
-  const lines = renderOverlay(state, 100, 12).map(stripAnsi);
+  const lines = renderLibraryModal(state, 100, 30).map(stripAnsi);
 
   assert.ok(lines.some((line) => line.includes("Jane Eyre")), `Expected discovered Jane Eyre in: ${lines.join(" | ")}`);
 });
@@ -903,7 +904,7 @@ test("books overlay shows chapter and progress for a book with a saved position"
     listBooksWithProgress: () => [{ ...baseBook, chapterIndex: 4, chapterTitle: "Act Two", bookProgress: 0.42 }]
   });
   const state = makeState({ overlay: "books", overlayCursor: 0, storage });
-  const lines = renderOverlay(state, 60, 10).map(stripAnsi);
+  const lines = renderLibraryModal(state, 100, 30).map(stripAnsi);
   assert.ok(lines.some((line) => line.includes("[Ch.5 · 42%]")));
 });
 
