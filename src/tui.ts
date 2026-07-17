@@ -17,6 +17,7 @@ import {
   getViewportLayout,
   isModalOverlay,
   renderFrame,
+  resetRenderCache,
   renderBody,
   renderFooter,
   renderScrollbar,
@@ -134,20 +135,57 @@ export function currentLines(state: AppState, width: number, height: number): st
     return [...Array.from({ length: topPadding }, () => ""), ...focusLines];
   }
 
-  const chapter = state.currentBook.chapters[state.chapterIndex];
-  return renderBlocks(
+  return renderChapterLines(state, width);
+}
+
+function renderChapterLines(state: AppState, width: number): string[] {
+  const book = state.currentBook!;
+  const searchQuery = state.searchState?.query;
+  const cached = state.chapterRenderCache;
+  if (
+    cached
+    && cached.bookId === book.id
+    && cached.chapterIndex === state.chapterIndex
+    && cached.renderMode === state.renderMode
+    && cached.width === width
+    && cached.theme === state.theme
+    && cached.codeLanguage === state.codeLanguage
+    && cached.codeDensity === state.codeDensity
+    && cached.searchQuery === searchQuery
+    && cached.plainHighlight === state.plainHighlight
+    && cached.lineSpacing === state.lineSpacing
+  ) {
+    return cached.lines;
+  }
+
+  const chapter = book.chapters[state.chapterIndex];
+  const lines = renderBlocks(
     chapter.blocks,
     state.renderMode,
     width,
     state.theme,
     state.codeLanguage,
     state.codeDensity,
-    state.searchState?.query,
+    searchQuery,
     state.plainHighlight,
     0,
     true,
     state.lineSpacing
   );
+  state.chapterRenderCache = {
+    bookId: book.id,
+    chapterIndex: state.chapterIndex,
+    renderMode: state.renderMode,
+    width,
+    theme: state.theme,
+    codeLanguage: state.codeLanguage,
+    codeDensity: state.codeDensity,
+    searchQuery,
+    plainHighlight: state.plainHighlight,
+    lineSpacing: state.lineSpacing,
+    lines
+  };
+  return lines;
 }
 
 function chapterTransitionLine(state: AppState, width: number): string | null {
@@ -357,6 +395,8 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     chapterTransition: null,
     mouseDrag: null,
     layoutMetrics: null,
+    chapterRenderCache: null,
+    focusLineMetrics: null,
     searchState: null,
     navHistory: [],
     navHistoryCursor: -1,
@@ -396,9 +436,20 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
   process.stdin.resume();
   process.stdin.setEncoding("utf8");
   process.stdout.write("\x1b[?1007h\x1b[?1049h\x1b[>1u\x1b[?25l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
+  resetRenderCache();
 
   const redraw = () => draw(state);
   redraw();
+
+  if (process.stdout.isTTY) {
+    process.stdout.on("resize", () => {
+      state.layoutMetrics = null;
+      state.chapterRenderCache = null;
+      state.focusLineMetrics = null;
+      resetRenderCache();
+      redraw();
+    });
+  }
 
   let togglRefreshInFlight = false;
   const refreshTogglTimer = async () => {

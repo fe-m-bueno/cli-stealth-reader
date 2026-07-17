@@ -564,6 +564,12 @@ export function renderBody(
   return output;
 }
 
+let previousFrame: { width: number; height: number; lines: string[] } | null = null;
+
+export function resetRenderCache(): void {
+  previousFrame = null;
+}
+
 export function renderFrame(
   lines: string[],
   width: number,
@@ -575,5 +581,18 @@ export function renderFrame(
   const paintedLines = background
     ? frameLines.map((line) => paintBackground(background, line, foreground))
     : frameLines;
-  return `${screenResetSequence(false)}${paintedLines.join("\n")}`;
+  const previous = previousFrame;
+  previousFrame = { width, height, lines: paintedLines };
+  if (!previous || previous.width !== width || previous.height !== height) {
+    return `${screenResetSequence(false)}${paintedLines.join("\n")}`;
+  }
+
+  let output = "";
+  for (let row = 0; row < height; row += 1) {
+    if (paintedLines[row] !== previous.lines[row]) {
+      output += `\x1b[${row + 1};1H${paintedLines[row]}`;
+    }
+  }
+  // Land the cursor at the bottom-right corner, matching where a full repaint leaves it.
+  return output ? `${output}\x1b[${height};${width}H` : "";
 }
