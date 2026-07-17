@@ -327,7 +327,18 @@ function isEndKey(chunk: string): boolean {
   return chunk === "\u001b[F" || chunk === "\u001b[4~" || chunk === "\u001bOF";
 }
 
+let exitFlushHook: (() => void) | null = null;
+
+export function registerExitFlush(hook: () => void): void {
+  exitFlushHook = hook;
+}
+
 function exitTui(): never {
+  try {
+    exitFlushHook?.();
+  } catch {
+    // Never let a persistence failure block terminal restoration on quit.
+  }
   process.stdin.setRawMode?.(false);
   process.stdout.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1007l\x1b[<u\x1b[?25h\x1b[?1049l");
   process.exit(0);

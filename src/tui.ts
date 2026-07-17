@@ -1,7 +1,8 @@
 import { commandHelp } from "./commands.js";
 import { executeCommand, importAndOpen, openBook, persistReadingPace } from "./executor.js";
 import { clampFocusBlockIndex, mapFocusIndexToBlockOffset, renderFocusBlock } from "./focus.js";
-import { handleInput } from "./input.js";
+import { handleInput, registerExitFlush } from "./input.js";
+import { createWriteThrottle } from "./write-throttle.js";
 import { composeFilePickerModal, composeLibraryModal } from "./library-modal.js";
 import { composeListOverlayModal, isListModalOverlay } from "./overlay-modals.js";
 import { bg, bold, fg } from "./color.js";
@@ -308,6 +309,12 @@ function draw(state: AppState): void {
   );
 }
 
+const positionWriteThrottle = createWriteThrottle();
+
+export function flushPendingPosition(): void {
+  positionWriteThrottle.flush();
+}
+
 function syncPosition(state: AppState): void {
   if (!state.currentBook) {
     return;
@@ -339,15 +346,21 @@ function syncPosition(state: AppState): void {
     pace = { ...applySample(pace, sample), ...nextMeta };
   }
   state.readingPace = pace;
-  persistReadingPace(state);
 
-  state.storage.savePosition({
+  const position = {
     bookId: state.currentBook.id,
     chapterIndex: state.chapterIndex,
     chapterProgress,
     bookProgress,
     blockOffset: state.blockOffset
-  });
+  };
+  // In-memory state stays exact; SQLite writes are throttled to once per
+  // window (leading-edge write, trailing-edge coalesce). Overlay opens and
+  // exit paths flush immediately.
+  positionWriteThrottle.schedule(() => {
+    persistReadingPace(state);
+    state.storage.savePosition(position);
+  }, { immediate: state.overlay !== "none" });
   if (state.focusMode) {
     state.blockOffset = originalOffset;
   }
@@ -438,6 +451,15 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
   process.stdout.write("\x1b[?1007h\x1b[?1049h\x1b[>1u\x1b[?25l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
   resetRenderCache();
 
+  registerExitFlush(flushPendingPosition);
+  process.on("exit", flushPendingPosition);
+  for (const signal of ["SIGTERM", "SIGHUP"] as const) {
+    process.once(signal, () => {
+      flushPendingPosition();
+      process.exit(0);
+    });
+  }
+
   const redraw = () => draw(state);
   redraw();
 
@@ -471,11 +493,13 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
 
   process.stdin.on("data", async (chunk: string) => {
     await handleInput(chunk, state, redraw, async (cmd) => {
+      flushPendingPosition();
       await executeCommand(state, cmd);
       syncPosition(state);
     }, syncPosition, async (paths, force) => {
+      flushPendingPosition();
       for (const epubPath of paths) {
-        await importAndOpen(state, epubPath, force);
+        await importAndOpen(state, epubPath, force, redraw);
       }
       syncPosition(state);
     });

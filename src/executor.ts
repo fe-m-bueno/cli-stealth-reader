@@ -120,14 +120,17 @@ export async function openBook(state: AppState, book: CanonicalBook): Promise<vo
   state.status = `Opened ${book.title}`;
 }
 
-export async function importAndOpen(state: AppState, filePath: string, force = false): Promise<void> {
+export async function importAndOpen(state: AppState, filePath: string, force = false, redraw?: () => void): Promise<void> {
   if (!force && !fs.existsSync(filePath)) {
     state.status = `File not found: ${filePath}`;
     return;
   }
+  state.status = `Importing ${path.basename(filePath)}…`;
+  redraw?.();
   const book = await importFile(filePath);
   state.storage.saveBook(book, state.renderMode);
   await openBook(state, book);
+  state.status = `Imported ${book.title}`;
 }
 
 async function refreshDiscoveries(state: AppState): Promise<void> {
