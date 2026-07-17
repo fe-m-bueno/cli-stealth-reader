@@ -49,6 +49,11 @@ test("parses /settings and /config alias", () => {
   assert.equal(parseSlashCommand("/config").name, "settings");
 });
 
+test("parses a persistent library directory or cwd reset", () => {
+  assert.deepEqual(parseSlashCommand('/librarydir "~/My Books"').args, ["~/My Books"]);
+  assert.equal(parseSlashCommand("/librarydir --cwd").flags.cwd, true);
+});
+
 test("parses bookmark commands", () => {
   const mark = parseSlashCommand('/mark "Ponto importante"');
   assert.equal(mark.name, "mark");

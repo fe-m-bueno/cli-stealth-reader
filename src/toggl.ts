@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { compareText } from "./locale.js";
 import type { Storage } from "./storage.js";
 
 const API_BASE = "https://focus.toggl.com/api";
@@ -48,6 +49,35 @@ interface FocusPage<T> {
   page?: number;
   per_page?: number;
   total?: number;
+}
+
+async function fetchFocusPages<T>(
+  storage: Storage,
+  requestPath: string,
+  perPage: number
+): Promise<T[]> {
+  const items: T[] = [];
+  for (let page = 1; ; page += 1) {
+    const separator = requestPath.includes("?") ? "&" : "?";
+    const response = await togglRequest<FocusPage<T>>(
+      storage,
+      `${requestPath}${separator}page=${page}&per_page=${perPage}`
+    );
+    const data = response.data ?? [];
+    items.push(...data);
+
+    const total = Number(response.total);
+    const effectivePerPage = Number.isInteger(response.per_page) && Number(response.per_page) > 0
+      ? Number(response.per_page)
+      : perPage;
+    if (
+      (Number.isFinite(total) && items.length >= total)
+      || data.length === 0
+      || data.length < effectivePerPage
+    ) {
+      return items;
+    }
+  }
 }
 
 class TogglApiError extends Error {
@@ -325,15 +355,15 @@ function uniqueDescriptions(entries: TogglTimeEntry[]): TogglRecentDescription[]
 
 export async function syncToggl(storage: Storage): Promise<TogglCache> {
   const { workspaceId } = scope(storage);
-  const projectPage = await togglRequest<FocusPage<{
+  const projectRows = await fetchFocusPages<{
     id: number;
     workspace_id: number;
     name: string;
     client?: { name?: string };
     color?: string;
     active?: boolean;
-  }>>(storage, `${scopedPath(storage, "/projects")}?page=1&per_page=200`);
-  const projects = (projectPage.data ?? [])
+  }>(storage, scopedPath(storage, "/projects"), 200);
+  const projects = projectRows
     .filter((project) => project.active !== false)
     .map((project) => ({
       id: project.id,
@@ -342,7 +372,7 @@ export async function syncToggl(storage: Storage): Promise<TogglCache> {
       clientName: project.client?.name,
       color: project.color
     }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => compareText(a.name, b.name));
 
   const now = new Date();
   const from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);

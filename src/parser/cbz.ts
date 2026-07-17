@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import JSZip from "jszip";
+import { compareText } from "../locale.js";
 import type { CanonicalBlock, CanonicalBook, CanonicalChapter, ImportDiagnostic } from "../types.js";
 
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"]);
@@ -26,7 +27,7 @@ export async function importCbz(filePath: string): Promise<CanonicalBook> {
       const ext = path.extname(name).toLowerCase();
       return IMAGE_EXTENSIONS.has(ext) && !zip.files[name]!.dir;
     })
-    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    .sort(compareText);
 
   if (imageFiles.length === 0) {
     diagnostics.push({ severity: "warning", message: "No images found in CBZ archive." });

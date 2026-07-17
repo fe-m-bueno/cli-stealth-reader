@@ -320,6 +320,41 @@ test("Toggl sync reconciles the account's current running timer", async (t) => {
   );
 });
 
+test("Toggl sync fetches every project page beyond the first 200", async (t) => {
+  const storage = fakeStorageWithCache();
+  const projectPages: number[] = [];
+  t.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith("/projects")) {
+      const page = Number(url.searchParams.get("page"));
+      projectPages.push(page);
+      const start = page === 1 ? 1 : 201;
+      const count = page === 1 ? 200 : 1;
+      return Response.json({
+        data: Array.from({ length: count }, (_, index) => ({
+          id: start + index,
+          workspace_id: 1,
+          name: `Project ${start + index}`,
+          active: true
+        })),
+        page,
+        per_page: 200,
+        total: 201
+      });
+    }
+    if (url.pathname.endsWith("/time-entries")) {
+      return Response.json({ data: [], page: 1, per_page: 25, total: 0 });
+    }
+    return Response.json(null);
+  });
+
+  const cache = await syncToggl(storage);
+
+  assert.deepEqual(projectPages, [1, 2]);
+  assert.equal(cache.projects.length, 201);
+  assert.equal(cache.projects.some((project) => project.id === 201), true);
+});
+
 test("stopping with no remote timer clears a stale local footer timer", async (t) => {
   const storage = fakeStorageWithCache();
   storage.setRawSetting("togglCurrentEntry", JSON.stringify({

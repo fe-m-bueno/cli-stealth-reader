@@ -1,4 +1,5 @@
 import path from "node:path";
+import { compareText } from "./locale.js";
 import type { AppState, FolderDiscovery, LibraryEntryWithProgress } from "./types.js";
 
 export type LibraryPickerItem =
@@ -23,7 +24,7 @@ export function libraryPickerItems(state: AppState): LibraryPickerItem[] {
   const importedPaths = new Set(books.map((book) => normalizedPath(book.sourcePath)));
   const discoveries = (state.discoveries ?? [])
     .filter((discovery) => !importedPaths.has(normalizedPath(discovery.path)))
-    .sort((a, b) => a.fileName.localeCompare(b.fileName));
+    .sort((a, b) => compareText(a.fileName, b.fileName));
   if (state.librarySortKey === "title" && state.librarySortDir === "desc") {
     discoveries.reverse();
   }

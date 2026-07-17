@@ -71,7 +71,7 @@ Depois disso, você pode executar `stealth-reader` em qualquer diretório.
 ## Uso Rápido
 
 1. Inicie o leitor: `npm run dev`
-2. Importe um livro com `/add` ou pressione `Enter` para abrir o picker de EPUBs/CBZ/PDF da pasta atual
+2. Importe um livro com `/add` ou pressione `Enter` para abrir o picker recursivo de EPUBs/CBZ/PDF da biblioteca configurada
 3. Use `j`/`k`, setas, `Space`/`b` ou a roda do mouse para navegar
 4. Pressione `m` para ciclar entre os modos de renderização (plain, typescript, python, rust)
 5. Pressione `f` para ativar o modo foco (leitura de bloco único centralizado)
@@ -264,6 +264,8 @@ A tecla `B` abre o overlay de bookmarks. Dentro dele, `Enter` navega para o book
   --cwd                # Procurar arquivos na pasta atual
   --force              # Reimportar mesmo que já exista
 
+/librarydir [path]     # Exibir/configurar a raiz da biblioteca (`--cwd` restaura o CWD)
+
 /remove [book-query]   # Remover livro da biblioteca
   --current            # Remover o livro atual
 
@@ -399,7 +401,7 @@ src/
   color.ts           # Utilitários de formatação ANSI
   storage.ts         # Abstração SQLite com WAL (XDG dirs)
   paths.ts           # Resolução de caminhos XDG
-  discovery.ts       # Auto-detecção de EPUBs/CBZ/PDF no CWD
+  discovery.ts       # Descoberta recursiva de EPUBs/CBZ/PDF na biblioteca configurada
   screen.ts          # Gerenciamento da tela do terminal
   input.ts           # Gerenciamento de input do teclado
   
@@ -438,7 +440,7 @@ O estado é persistido em diretórios XDG-padrão:
   - Tabelas: `books`, `chapters`, `positions`, `diagnostics`, `settings`, `command_history`, `bookmarks`, `book_tags`, `notes`
 - `**$XDG_CACHE_HOME/cli-stealth-reader/**`: Cache de JSON de livros
 
-EPUBs, CBZs e PDFs encontrados no diretório atual são automaticamente oferecidos na tela inicial e em `/add --cwd`.
+EPUBs, CBZs e PDFs encontrados recursivamente na biblioteca configurada são oferecidos na tela inicial e em `/add`. Use `/librarydir ~/Books` para persistir outra raiz ou `/add --cwd` para procurar temporariamente no diretório atual.
 
 ## Desenvolvimento
 

@@ -6,7 +6,7 @@ import { createWriteThrottle } from "./write-throttle.js";
 import { composeFilePickerModal, composeLibraryModal } from "./library-modal.js";
 import { composeListOverlayModal, isListModalOverlay } from "./overlay-modals.js";
 import { bg, bold, fg } from "./color.js";
-import { discoverBooks } from "./discovery.js";
+import { discoverBooks, resolveLibraryDirectory } from "./discovery.js";
 import { renderBlocks } from "./renderers.js";
 import { TOGGL_REFRESH_INTERVAL_MS, refreshCurrentTogglEntry } from "./toggl.js";
 import {
@@ -370,11 +370,12 @@ function syncPosition(state: AppState): void {
 export async function runTui(options?: { resume?: boolean }): Promise<void> {
   const storage = new Storage();
   const settings = storage.getSettings();
+  const libraryDirectory = resolveLibraryDirectory(storage.getSetting("libraryDirectory"), process.cwd());
   const colorScheme = THEMES.find((item) => item.id === settings.themeId) ?? DEFAULT_COLOR_SCHEME;
   const appearanceTheme = APPEARANCE_THEMES.find((item) => item.id === settings.appearanceThemeId) ?? DEFAULT_APPEARANCE_THEME;
   const state: AppState = {
     storage,
-    cwd: process.cwd(),
+    cwd: libraryDirectory,
     colorScheme,
     appearanceTheme,
     theme: applyAppearanceTheme(colorScheme, appearanceTheme),
@@ -399,7 +400,7 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     status: "Ready",
     overlay: "none",
     overlayCursor: 0,
-    discoveries: await discoverBooks(process.cwd()),
+    discoveries: await discoverBooks(libraryDirectory),
     shouldQuit: false,
     filePickerCursor: 0,
     filePickerItems: [],

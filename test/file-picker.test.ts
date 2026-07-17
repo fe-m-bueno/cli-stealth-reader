@@ -351,6 +351,40 @@ test("add query with no matches opens an empty picker state", async () => {
   });
 });
 
+test("librarydir persists a recursive discovery root and cwd resets it", async () => {
+  await withTempEpubDir([], async (dir) => {
+    const library = path.join(dir, "My Books");
+    const nested = path.join(library, "fiction");
+    await fs.mkdir(nested, { recursive: true });
+    await fs.writeFile(path.join(nested, "dune.epub"), "");
+    let configured: string | null = null;
+    const state = makeState({
+      storage: makeStorage({
+        getSetting: (key: string) => key === "libraryDirectory" ? configured : null,
+        setRawSetting: (key: string, value: string) => {
+          if (key === "libraryDirectory") configured = value;
+        }
+      })
+    });
+
+    await executeCommand(state, '/librarydir "My Books"');
+
+    assert.equal(configured, library);
+    assert.equal(state.cwd, library);
+    assert.deepEqual(state.discoveries.map((item) => item.fileName), [path.join("fiction", "dune.epub")]);
+
+    await executeCommand(state, "/changebook --cwd");
+    assert.equal(state.cwd, dir);
+    await executeCommand(state, "/changebook");
+    assert.equal(state.cwd, library);
+    assert.deepEqual(state.discoveries.map((item) => item.fileName), [path.join("fiction", "dune.epub")]);
+
+    await executeCommand(state, "/librarydir --cwd");
+    assert.equal(configured, "");
+    assert.equal(state.cwd, dir);
+  });
+});
+
 test("changebook with no query opens the library picker instead of auto-opening the first book", async () => {
   const state = makeState({ overlay: "none", currentBook: null, status: "Ready" });
   await executeCommand(state, "/changebook");
