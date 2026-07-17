@@ -341,3 +341,24 @@ test("themes modal renders appearance labels and Enter applies the filtered them
     assert.equal(storage.getSetting("appearanceThemeId"), "light");
   } finally { cleanup(); }
 });
+
+test("chapters modal prefers the number embedded in the chapter title over the spine index", () => {
+  const { storage, cleanup } = makeTempStorage();
+  try {
+    const book = makeBook();
+    book.chapters = ["Capa", "CAPÍTULO 72", "Chapter 73", "Epílogo"].map((title, index) => ({
+      id: `c${index}`, index, title, href: `c${index}.xhtml`, depth: 0,
+      blocks: [{ kind: "paragraph", text: "x" }], wordCount: 1
+    })) as typeof book.chapters;
+    const state = makeState(storage, { overlay: "chapters", currentBook: book });
+    const lines = renderChaptersModal(state, 100, 30).map(stripAnsi);
+    const body = lines.join(" | ");
+    // Titles with their own number keep it as the row number (not index+1).
+    assert.match(body, /72 CAPÍTULO 72/);
+    assert.doesNotMatch(body, /02 CAPÍTULO 72/);
+    assert.match(body, /73 Chapter 73/);
+    // Titles without a number keep the spine position.
+    assert.match(body, /01 Capa/);
+    assert.match(body, /04 Epílogo/);
+  } finally { cleanup(); }
+});

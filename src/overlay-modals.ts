@@ -128,6 +128,14 @@ function renderListModal<T>(state: AppState, options: ListModalOptions<T>, width
   }, width, height);
 }
 
+// Front matter (cover, preface) shifts the spine index off the book's own
+// chapter numbering, so a number already present in the title wins over index+1.
+export function chapterRowNumber(title: string, index: number): string {
+  const match = /\d+/.exec(title);
+  const value = match ? Number(match[0]) : index + 1;
+  return String(value).padStart(2, "0");
+}
+
 export function renderChaptersModal(state: AppState, width: number, height: number): string[] {
   const items = filteredChapterItems(state);
   state.overlayCursor = clamp(state.overlayCursor, 0, Math.max(0, items.length - 1));
@@ -137,7 +145,7 @@ export function renderChaptersModal(state: AppState, width: number, height: numb
     cursor: state.overlayCursor,
     emptyMessage: state.currentBook ? "No chapters match." : "No book open.",
     row: (entry, contentWidth, selected) =>
-      paintRow(state, `${String(entry.index + 1).padStart(2, "0")} ${entry.item.title}`, contentWidth, selected),
+      paintRow(state, `${chapterRowNumber(entry.item.title, entry.index)} ${entry.item.title}`, contentWidth, selected),
     footerHints: [
       { key: "Enter", label: "go" },
       { key: "Esc", label: "close" }
