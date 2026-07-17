@@ -1,6 +1,15 @@
 import { bold, fg, paintBackground } from "./color.js";
 import { KEYBOARD_SHORTCUTS } from "./help.js";
-import { clamp, computeWindowStart, getScrollbarMetrics, stripAnsi, truncate } from "./screen.js";
+import { clamp, stripAnsi, truncate } from "./screen.js";
+import {
+  composeModal,
+  modalGeometry,
+  modalHitTest,
+  padAnsi,
+  renderModalFrame,
+  type ModalGeometry,
+  type ModalHit
+} from "./modal.js";
 import type { AppState } from "./types.js";
 
 const CATEGORY_META = [
@@ -25,20 +34,8 @@ export interface ShortcutPanelRow {
   collapsed?: boolean;
 }
 
-export interface ShortcutModalGeometry {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  visibleRows: number;
-  entriesY: number;
-}
-
-export type ShortcutModalHit =
-  | { kind: "close" }
-  | { kind: "search" }
-  | { kind: "row"; index: number }
-  | null;
+export type ShortcutModalGeometry = ModalGeometry;
+export type ShortcutModalHit = ModalHit;
 
 export function isShortcutHelpKey(chunk: string): boolean {
   return chunk === "?"
@@ -108,37 +105,10 @@ export function toggleShortcutCategory(state: AppState, category: string): void 
 }
 
 export function shortcutModalGeometry(width: number, height: number): ShortcutModalGeometry {
-  const maxWidth = Math.max(20, width - 2);
-  const maxHeight = Math.max(8, height - 2);
-  const modalWidth = clamp(Math.floor(width * 0.7), Math.min(44, maxWidth), Math.min(80, maxWidth));
-  const modalHeight = clamp(Math.floor(height * 0.76), Math.min(16, maxHeight), maxHeight);
-  return {
-    x: Math.max(0, Math.floor((width - modalWidth) / 2)),
-    y: Math.max(0, Math.floor((height - modalHeight) / 2)),
-    width: modalWidth,
-    height: modalHeight,
-    visibleRows: Math.max(1, modalHeight - 6),
-    entriesY: Math.max(0, Math.floor((height - modalHeight) / 2)) + 3
-  };
+  return modalGeometry(width, height);
 }
 
-function padAnsi(text: string, width: number): string {
-  return `${text}${" ".repeat(Math.max(0, width - stripAnsi(text).length))}`;
-}
-
-function modalTop(width: number): string {
-  const innerWidth = Math.max(1, width - 2);
-  const left = "─ Keyboard Shortcuts ";
-  const right = " [×]─";
-  return `╭${left}${"─".repeat(Math.max(0, innerWidth - left.length - right.length))}${right}╮`;
-}
-
-function hint(theme: AppState["theme"], key: string, label: string): string {
-  return `${bold(fg(theme.foreground, key))}${fg(theme.dim, `:${label}`)}`;
-}
-
-function renderRow(state: AppState, row: ShortcutPanelRow, width: number, selected: boolean, scrollbar = ""): string {
-  const contentWidth = Math.max(1, width - 2);
+function renderRow(state: AppState, row: ShortcutPanelRow, contentWidth: number, selected: boolean): string {
   let content: string;
   if (row.kind === "header") {
     const disclosure = row.collapsed ? "›" : "◆";
@@ -154,65 +124,38 @@ function renderRow(state: AppState, row: ShortcutPanelRow, width: number, select
   }
 
   const plain = padAnsi(truncate(content, contentWidth), contentWidth);
-  const styled = selected
+  return selected
     ? paintBackground(state.theme.border, fg(state.theme.foreground, plain))
     : row.kind === "header"
       ? fg(state.theme.foreground, plain)
       : fg(state.theme.dim, plain);
-  return `${styled} ${fg(scrollbar === "█" ? state.theme.foreground : state.theme.border, scrollbar || " ")}`;
 }
 
 export function renderShortcutPanel(state: AppState, width: number, height: number): string[] {
-  const geometry = shortcutModalGeometry(width, height);
   const rows = shortcutPanelRows(state);
   state.overlayCursor = clamp(state.overlayCursor, 0, Math.max(0, rows.length - 1));
-  const start = computeWindowStart(rows.length, geometry.visibleRows, state.overlayCursor);
-  const metrics = getScrollbarMetrics(rows.length, geometry.visibleRows, start);
-  const innerContentWidth = Math.max(1, geometry.width - 4);
-  const border = (value: string) => fg(state.theme.border, value);
-  const output = Array.from({ length: height }, () => "");
-  const prefix = " ".repeat(geometry.x);
-
-  const setLine = (row: number, value: string) => {
-    if (row >= 0 && row < output.length) {
-      output[row] = `${prefix}${value}`;
-    }
-  };
-
-  setLine(geometry.y, border(modalTop(geometry.width)));
-  const search = state.shortcutSearchMode || state.shortcutSearchBuffer
-    ? `${fg(state.theme.accent, "/")} ${state.shortcutSearchBuffer ?? ""}${state.shortcutSearchMode ? "▏" : ""}`
-    : fg(state.theme.subtle, "/ to search");
-  setLine(geometry.y + 1, `${border("│")} ${padAnsi(search, innerContentWidth)} ${border("│")}`);
-  setLine(geometry.y + 2, border(`├${"─".repeat(Math.max(1, geometry.width - 2))}┤`));
-
-  for (let visibleIndex = 0; visibleIndex < geometry.visibleRows; visibleIndex += 1) {
-    const rowIndex = start + visibleIndex;
-    const row = rows[rowIndex];
-    const scrollbar = rows.length > geometry.visibleRows
-      ? visibleIndex >= metrics.thumbOffset && visibleIndex < metrics.thumbOffset + metrics.thumbHeight ? "█" : "│"
-      : " ";
-    const content = row
-      ? renderRow(state, row, innerContentWidth, rowIndex === state.overlayCursor, scrollbar)
-      : " ".repeat(innerContentWidth);
-    setLine(geometry.entriesY + visibleIndex, `${border("│")} ${content} ${border("│")}`);
-  }
-
-  const footerDividerY = geometry.y + geometry.height - 3;
-  setLine(footerDividerY, border(`├${"─".repeat(Math.max(1, geometry.width - 2))}┤`));
-  const footer = (state.shortcutSearchMode
-    ? [
-        hint(state.theme, "Esc", "exit search"),
-        hint(state.theme, "Esc again", "close")
-      ]
-    : [
-        hint(state.theme, "↑/↓", "nav"),
-        hint(state.theme, "Enter/Space", "expand"),
-        hint(state.theme, "Esc", "close")
-      ]).join(fg(state.theme.border, "  │  "));
-  setLine(footerDividerY + 1, `${border("│")} ${padAnsi(truncate(footer, innerContentWidth), innerContentWidth)} ${border("│")}`);
-  setLine(footerDividerY + 2, border(`╰${"─".repeat(Math.max(1, geometry.width - 2))}╯`));
-  return output;
+  return renderModalFrame({
+    theme: state.theme,
+    title: "Keyboard Shortcuts",
+    search: {
+      buffer: state.shortcutSearchBuffer ?? "",
+      active: Boolean(state.shortcutSearchMode),
+      placeholder: "/ to search"
+    },
+    rowCount: rows.length,
+    cursor: state.overlayCursor,
+    renderRow: (index, contentWidth, selected) => renderRow(state, rows[index]!, contentWidth, selected),
+    footerHints: state.shortcutSearchMode
+      ? [
+          { key: "Esc", label: "exit search" },
+          { key: "Esc again", label: "close" }
+        ]
+      : [
+          { key: "↑/↓", label: "nav" },
+          { key: "Enter/Space", label: "expand" },
+          { key: "Esc", label: "close" }
+        ]
+  }, width, height);
 }
 
 export function composeShortcutPanel(
@@ -221,20 +164,7 @@ export function composeShortcutPanel(
   width: number,
   height: number
 ): string[] {
-  const geometry = shortcutModalGeometry(width, height);
-  const modalLines = renderShortcutPanel(state, width, height);
-  return Array.from({ length: height }, (_, row) => {
-    const background = stripAnsi(backgroundLines[row] ?? "").padEnd(width).slice(0, width);
-    const modalLine = modalLines[row] ?? "";
-    if (!modalLine || row < geometry.y || row >= geometry.y + geometry.height) {
-      return fg(state.theme.subtle, background);
-    }
-
-    const modal = modalLine.slice(geometry.x);
-    const before = fg(state.theme.subtle, background.slice(0, geometry.x));
-    const after = fg(state.theme.subtle, background.slice(geometry.x + geometry.width));
-    return `${before}${modal}${after}`;
-  });
+  return composeModal(state.theme, renderShortcutPanel(state, width, height), backgroundLines, width, height);
 }
 
 export function shortcutModalHitTest(
@@ -244,21 +174,5 @@ export function shortcutModalHitTest(
   x: number,
   y: number
 ): ShortcutModalHit {
-  const geometry = shortcutModalGeometry(width, height);
-  if (y === geometry.y && x >= geometry.x + geometry.width - 6 && x <= geometry.x + geometry.width) {
-    return { kind: "close" };
-  }
-  if (y === geometry.y + 1 && x > geometry.x && x < geometry.x + geometry.width) {
-    return { kind: "search" };
-  }
-  if (y < geometry.entriesY || y >= geometry.entriesY + geometry.visibleRows) {
-    return null;
-  }
-  if (x <= geometry.x || x >= geometry.x + geometry.width - 1) {
-    return null;
-  }
-  const rows = shortcutPanelRows(state);
-  const start = computeWindowStart(rows.length, geometry.visibleRows, state.overlayCursor);
-  const index = start + (y - geometry.entriesY);
-  return index < rows.length ? { kind: "row", index } : null;
+  return modalHitTest(width, height, shortcutPanelRows(state).length, state.overlayCursor, x, y);
 }
