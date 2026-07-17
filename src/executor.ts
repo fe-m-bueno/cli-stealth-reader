@@ -285,6 +285,7 @@ const handlers: Record<string, CommandHandler> = {
   chapters: async (state) => {
     state.overlay = "chapters";
     state.overlayCursor = state.chapterIndex;
+    resetOverlaySearch(state);
     state.status = "Opened table of contents";
   },
 
@@ -311,6 +312,7 @@ const handlers: Record<string, CommandHandler> = {
     const bookmarks = state.storage.listBookmarks(state.currentBook.id);
     state.overlay = "bookmarks";
     state.overlayCursor = 0;
+    resetOverlaySearch(state);
     state.status = bookmarks.length > 0 ? "Opened bookmarks." : "No bookmarks in this book yet.";
   },
 
@@ -392,6 +394,7 @@ const handlers: Record<string, CommandHandler> = {
     if (parsed.flags.list || parsed.args.length === 0) {
       state.overlay = "colorschemes";
       state.overlayCursor = Math.max(0, THEMES.findIndex((item) => item.id === state.colorScheme.id));
+      resetOverlaySearch(state);
       state.status = "Opened colorscheme picker";
       return;
     }
@@ -409,6 +412,7 @@ const handlers: Record<string, CommandHandler> = {
     if (parsed.flags.list || parsed.args.length === 0) {
       state.overlay = "themes";
       state.overlayCursor = Math.max(0, APPEARANCE_THEMES.findIndex((item) => item.id === state.appearanceTheme.id));
+      resetOverlaySearch(state);
       state.status = "Opened theme picker";
       return;
     }
@@ -888,6 +892,7 @@ const handlers: Record<string, CommandHandler> = {
       const notes = state.storage.listNotes(state.currentBook.id);
       state.overlay = "notes";
       state.overlayCursor = 0;
+      resetOverlaySearch(state);
       state.status = notes.length > 0 ? "Opened notes." : "No notes for this book yet.";
     } else if (isDelete) {
       const id = parsed.args[0];

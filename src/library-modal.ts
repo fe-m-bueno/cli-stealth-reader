@@ -6,6 +6,7 @@ import {
   modalHitTest,
   padAnsi,
   renderModalFrame,
+  resetOverlaySearch,
   type ModalHit
 } from "./modal.js";
 import { clamp, stripAnsi, truncate } from "./screen.js";
@@ -30,10 +31,7 @@ function searchState(state: AppState) {
   };
 }
 
-export function resetOverlaySearch(state: AppState): void {
-  state.overlaySearchBuffer = "";
-  state.overlaySearchMode = false;
-}
+export { resetOverlaySearch };
 
 export function filteredLibraryItems(state: AppState): LibraryPickerItem[] {
   return fuzzyFilter(overlayQuery(state), libraryPickerItems(state), (item) => item.kind === "stored"

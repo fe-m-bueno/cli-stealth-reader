@@ -3,13 +3,13 @@ import { executeCommand, importAndOpen, openBook, persistReadingPace } from "./e
 import { clampFocusBlockIndex, mapFocusIndexToBlockOffset, renderFocusBlock } from "./focus.js";
 import { handleInput } from "./input.js";
 import { composeFilePickerModal, composeLibraryModal } from "./library-modal.js";
+import { composeListOverlayModal, isListModalOverlay } from "./overlay-modals.js";
 import { bg, bold, fg } from "./color.js";
 import { discoverBooks } from "./discovery.js";
 import { renderBlocks } from "./renderers.js";
 import { TOGGL_REFRESH_INTERVAL_MS, refreshCurrentTogglEntry } from "./toggl.js";
 import {
   clamp,
-  computeWindowStart,
   computeChapterMaxOffset,
   computeBookProgress,
   computeChapterProgress,
@@ -89,6 +89,12 @@ export function currentLines(state: AppState, width: number, height: number): st
     return composeFilePickerModal(state, backgroundLines, width, height);
   }
 
+  if (isListModalOverlay(state.overlay)) {
+    const backgroundState = { ...state, overlay: "none" } as AppState;
+    const backgroundLines = currentLines(backgroundState, width, height);
+    return composeListOverlayModal(state, backgroundLines, width, height);
+  }
+
   if (!state.currentBook) {
     const lines = [
       bold(fg(state.theme.accent, "cli-stealth-reader")),
@@ -158,82 +164,8 @@ function chapterTransitionLine(state: AppState, width: number): string | null {
   return bg(state.theme.accent, fg(state.theme.background, padded.padEnd(width, " ")));
 }
 
-function formatRelativeTime(timestamp: number): string {
-  const elapsedMs = Math.max(0, Date.now() - timestamp);
-  const minute = 60_000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-  if (elapsedMs < minute) {
-    return "agora";
-  }
-  if (elapsedMs < hour) {
-    const minutes = Math.floor(elapsedMs / minute);
-    return `há ${minutes} min`;
-  }
-  if (elapsedMs < day) {
-    const hours = Math.floor(elapsedMs / hour);
-    return `há ${hours} h`;
-  }
-  const days = Math.floor(elapsedMs / day);
-  return `há ${days} dia${days > 1 ? "s" : ""}`;
-}
-
 export function renderOverlay(state: AppState, width: number, height: number): string[] {
   switch (state.overlay) {
-    case "chapters":
-      if (!state.currentBook) {
-        return ["No book open."];
-      }
-      const visibleRows = Math.max(1, height - 2);
-      const start = computeWindowStart(state.currentBook.chapters.length, visibleRows, state.overlayCursor);
-      return state.currentBook.chapters
-        .slice(start, start + visibleRows)
-        .map((chapter) => {
-          const marker = chapter.index === state.overlayCursor ? ">" : " ";
-          return `${marker} ${String(chapter.index + 1).padStart(2, "0")} ${truncate(chapter.title, width - 6)}`;
-        });
-    case "bookmarks": {
-      if (!state.currentBook) {
-        return ["No book open."];
-      }
-      const bookmarks = state.storage.listBookmarks(state.currentBook.id);
-      return bookmarks.map((bookmark, index) => {
-        const marker = index === state.overlayCursor ? ">" : " ";
-        const location = `Ch.${bookmark.chapterIndex + 1} §${bookmark.blockOffset}`;
-        const label = bookmark.label ? ` — "${bookmark.label}"` : "";
-        const age = `[${formatRelativeTime(bookmark.createdAt)}]`;
-        const left = truncate(`${location}${label}`, Math.max(1, width - age.length - 1));
-        return `${marker} ${left} ${age}`;
-      });
-    }
-    case "notes": {
-      if (!state.currentBook) {
-        return ["No book open."];
-      }
-      const notes = state.storage.listNotes(state.currentBook.id);
-      if (notes.length === 0) {
-        return ["No notes for this book yet."];
-      }
-      return notes.map((note, index) => {
-        const marker = index === state.overlayCursor ? ">" : " ";
-        const location = note.chapterIndex !== null
-          ? `Ch.${note.chapterIndex + 1} §${note.blockOffset ?? 0}`
-          : "Book";
-        const age = `[${formatRelativeTime(note.createdAt)}]`;
-        const left = truncate(`${location}  "${note.content}"`, Math.max(1, width - age.length - 1));
-        return `${marker} ${left} ${age}`;
-      });
-    }
-    case "colorschemes":
-      return THEMES.map((theme, index) => {
-        const marker = index === state.overlayCursor ? ">" : " ";
-        return `${marker} ${theme.label} (${theme.id})`;
-      });
-    case "themes":
-      return APPEARANCE_THEMES.map((theme, index) => {
-        const marker = index === state.overlayCursor ? ">" : " ";
-        return `${marker} ${theme.label} (${theme.id})`;
-      });
     case "help":
       return commandHelp().slice(0, Math.max(1, height));
     case "diagnostics":

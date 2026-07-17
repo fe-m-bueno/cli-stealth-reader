@@ -78,7 +78,9 @@ export function resetViewport(): void {
 }
 
 export function isModalOverlay(overlay: AppState["overlay"]): boolean {
-  return overlay === "settings" || overlay === "keys" || overlay === "books" || overlay === "file-picker";
+  return overlay === "settings" || overlay === "keys" || overlay === "books" || overlay === "file-picker"
+    || overlay === "chapters" || overlay === "bookmarks" || overlay === "notes"
+    || overlay === "colorschemes" || overlay === "themes";
 }
 
 export function getViewportLayout(state: AppState, width: number, height: number) {

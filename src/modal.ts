@@ -1,6 +1,6 @@
 import { bold, fg } from "./color.js";
 import { clamp, computeWindowStart, getScrollbarMetrics, stripAnsi, truncate } from "./screen.js";
-import type { ThemePreset } from "./types.js";
+import type { AppState, ThemePreset } from "./types.js";
 
 export interface ModalGeometry {
   x: number;
@@ -31,6 +31,11 @@ export interface ModalFrameOptions {
   cursor: number;
   renderRow: (index: number, contentWidth: number, selected: boolean) => string;
   footerHints: Array<{ key: string; label: string }>;
+}
+
+export function resetOverlaySearch(state: AppState): void {
+  state.overlaySearchBuffer = "";
+  state.overlaySearchMode = false;
 }
 
 export function modalGeometry(width: number, height: number): ModalGeometry {
