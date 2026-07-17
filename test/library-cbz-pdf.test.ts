@@ -7,7 +7,7 @@ import JSZip from "jszip";
 import { importCbz } from "../src/parser/cbz.js";
 import { importPdf } from "../src/parser/pdf.js";
 import { importFile } from "../src/parser/index.js";
-import { discoverBooks } from "../src/discovery.js";
+import { discoverBooks, resolveLibraryDirectory } from "../src/discovery.js";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -101,6 +101,30 @@ test("discoverBooks returns empty array when no supported files exist", async ()
     const found = await discoverBooks(dir);
     assert.equal(found.length, 0);
   });
+});
+
+test("discoverBooks recursively finds books and keeps relative paths distinguishable", async () => {
+  await withTempDir(async (dir) => {
+    fs.mkdirSync(path.join(dir, "fiction", "classics"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "comics"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "fiction", "classics", "dune.epub"), "");
+    fs.writeFileSync(path.join(dir, "comics", "dune.cbz"), "");
+    fs.writeFileSync(path.join(dir, "fiction", "notes.txt"), "");
+
+    const found = await discoverBooks(dir);
+
+    assert.deepEqual(found.map((item) => item.fileName), [
+      path.join("comics", "dune.cbz"),
+      path.join("fiction", "classics", "dune.epub")
+    ]);
+  });
+});
+
+test("resolveLibraryDirectory supports defaults, relative paths, and home paths", () => {
+  assert.equal(resolveLibraryDirectory(null, "/work/app", "/home/reader"), path.resolve("/work/app"));
+  assert.equal(resolveLibraryDirectory("books", "/work/app", "/home/reader"), path.resolve("/work/app/books"));
+  assert.equal(resolveLibraryDirectory("~/Books", "/work/app", "/home/reader"), path.resolve("/home/reader/Books"));
+  assert.equal(resolveLibraryDirectory("~\\Books", "/work/app", "/home/reader"), path.resolve("/home/reader/Books"));
 });
 
 // ── importFile dispatcher ─────────────────────────────────────────────────────

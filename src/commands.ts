@@ -1,4 +1,5 @@
 import { bold, fg } from "./color.js";
+import { compareText } from "./locale.js";
 import { formatTogglQuota, getTogglCache } from "./toggl.js";
 import type { Storage } from "./storage.js";
 import type { CommandDefinition, CommandSuggestion, ParsedCommandResult, ThemePreset } from "./types.js";
@@ -82,16 +83,30 @@ export const COMMANDS: CommandDefinition[] = [
   },
   {
     name: "add",
-    description: "Import an EPUB, CBZ, or PDF from cwd or an explicit path.",
+    description: "Import an EPUB, CBZ, or PDF from the library directory or an explicit path.",
     args: [{ name: "path" }],
     flags: [{ name: "cwd" }, { name: "force" }],
     usage: "/add [path] [--cwd] [--force]",
     details: [
       "Imports a supported book file into the local library and opens it.",
-      "Without a path, opens a file picker for supported files in the current folder.",
+      "Without a path, opens a recursive file picker rooted at the configured library directory.",
+      "--cwd temporarily uses the current working directory instead.",
       "--force reimports even when the file hash already exists in the library."
     ],
     examples: ["/add", "/add ./books/example.epub", "/add --cwd", "/add ./comic.cbz --force"]
+  },
+  {
+    name: "librarydir",
+    aliases: ["bookdir"],
+    description: "Show or configure the directory scanned for books.",
+    args: [{ name: "path" }],
+    flags: [{ name: "cwd" }],
+    usage: "/librarydir [path] [--cwd]",
+    details: [
+      "Stores an absolute library directory and scans it recursively for EPUB, CBZ, and PDF files.",
+      "With no path, shows the active directory. --cwd resets discovery to the process working directory."
+    ],
+    examples: ["/librarydir", "/librarydir ~/Books", "/librarydir --cwd"]
   },
   {
     name: "remove",
@@ -219,7 +234,7 @@ export const COMMANDS: CommandDefinition[] = [
   },
   {
     name: "density",
-    description: "Set code density (1=max comments, 5=max code). Tecla d cicla entre 1→3→5.",
+    description: "Set code density (1=max comments, 5=max code). The d key cycles through 1→3→5.",
     args: [{ name: "level" }],
     usage: "/density [1-5]",
     details: [
@@ -348,6 +363,7 @@ const COMMAND_CATEGORIES: Record<string, string> = {
   changebook: "Library",
   resume: "Library",
   add: "Library",
+  librarydir: "Library",
   remove: "Library",
   removecurrent: "Library",
   mark: "Annotations",
@@ -978,7 +994,7 @@ export function listCommandSuggestions(buffer: string, storage?: Storage, cursor
     });
   }
 
-  return suggestions.sort((left, right) => left.name.localeCompare(right.name));
+  return suggestions.sort((left, right) => compareText(left.name, right.name));
 }
 
 export function applyCommandAutocomplete(buffer: string, suggestion: CommandSuggestion): string {

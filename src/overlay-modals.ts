@@ -1,5 +1,6 @@
 import { fg, paintBackground } from "./color.js";
 import { fuzzyFilter } from "./fuzzy.js";
+import { formatRelativeTime } from "./locale.js";
 import {
   composeModal,
   modalHitTest,
@@ -23,25 +24,7 @@ function searchState(state: AppState) {
   };
 }
 
-export function formatRelativeTime(timestamp: number): string {
-  const elapsedMs = Math.max(0, Date.now() - timestamp);
-  const minute = 60_000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-  if (elapsedMs < minute) {
-    return "agora";
-  }
-  if (elapsedMs < hour) {
-    const minutes = Math.floor(elapsedMs / minute);
-    return `há ${minutes} min`;
-  }
-  if (elapsedMs < day) {
-    const hours = Math.floor(elapsedMs / hour);
-    return `há ${hours} h`;
-  }
-  const days = Math.floor(elapsedMs / day);
-  return `há ${days} dia${days > 1 ? "s" : ""}`;
-}
+export { formatRelativeTime } from "./locale.js";
 
 export interface FilteredChapterItem {
   item: CanonicalChapter;

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parseSlashCommand } from "./commands.js";
-import { discoverBooks } from "./discovery.js";
+import { discoverBooks, resolveLibraryDirectory } from "./discovery.js";
 import { resetOverlaySearch } from "./library-modal.js";
 import { mapBlockOffsetToFocusIndex, mapFocusIndexToBlockOffset } from "./focus.js";
 import { EPUB_PARSER_VERSION, importEpub } from "./parser/epub.js";
@@ -133,8 +133,11 @@ export async function importAndOpen(state: AppState, filePath: string, force = f
   state.status = `Imported ${book.title}`;
 }
 
-async function refreshDiscoveries(state: AppState): Promise<void> {
-  state.cwd = process.cwd();
+async function refreshDiscoveries(state: AppState, useProcessCwd = false): Promise<void> {
+  state.cwd = resolveLibraryDirectory(
+    useProcessCwd ? null : state.storage.getSetting("libraryDirectory"),
+    process.cwd()
+  );
   state.discoveries = await discoverBooks(state.cwd);
 }
 
@@ -338,6 +341,17 @@ const handlers: Record<string, CommandHandler> = {
   },
 
   changebook: async (state, parsed) => {
+    if (parsed.flags.cwd) {
+      await refreshDiscoveries(state, true);
+    } else {
+      const configuredDirectory = resolveLibraryDirectory(
+        state.storage.getSetting("libraryDirectory"),
+        process.cwd()
+      );
+      if (path.resolve(state.cwd) !== configuredDirectory) {
+        await refreshDiscoveries(state);
+      }
+    }
     const validSortKeys: LibrarySortKey[] = ["lastOpened", "title", "author", "progress"];
     const sortFlag = parsed.flags.sort as string | undefined;
     if (sortFlag) {
@@ -454,7 +468,7 @@ const handlers: Record<string, CommandHandler> = {
   },
 
   add: async (state, parsed) => {
-    await refreshDiscoveries(state);
+    await refreshDiscoveries(state, Boolean(parsed.flags.cwd));
     const force = Boolean(parsed.flags.force);
     if (parsed.flags.cwd || parsed.args.length === 0) {
       openFilePicker(state, state.discoveries, {
@@ -485,6 +499,33 @@ const handlers: Record<string, CommandHandler> = {
         ? `Opened file picker for "${target}".`
         : `No books matched "${target}".`
     });
+  },
+
+  librarydir: async (state, parsed) => {
+    const resetToCwd = Boolean(parsed.flags.cwd);
+    const requested = parsed.args.join(" ").trim();
+    if (!resetToCwd && !requested) {
+      const active = resolveLibraryDirectory(state.storage.getSetting("libraryDirectory"), process.cwd());
+      state.status = `Library directory: ${active}`;
+      return;
+    }
+
+    const directory = resolveLibraryDirectory(resetToCwd ? null : requested, process.cwd());
+    let info: fs.Stats;
+    try {
+      info = fs.statSync(directory);
+    } catch {
+      throw new Error(`Library directory not found: ${directory}`);
+    }
+    if (!info.isDirectory()) {
+      throw new Error(`Library path is not a directory: ${directory}`);
+    }
+
+    const discoveries = await discoverBooks(directory);
+    state.storage.setRawSetting("libraryDirectory", resetToCwd ? "" : directory);
+    state.cwd = directory;
+    state.discoveries = discoveries;
+    state.status = `Library directory set to ${directory} · ${state.discoveries.length} book(s) found.`;
   },
 
   remove: async (state, parsed) => {
