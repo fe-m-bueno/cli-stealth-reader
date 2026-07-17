@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseSlashCommand } from "./commands.js";
 import { discoverBooks } from "./discovery.js";
+import { resetOverlaySearch } from "./library-modal.js";
 import { mapBlockOffsetToFocusIndex, mapFocusIndexToBlockOffset } from "./focus.js";
 import { EPUB_PARSER_VERSION, importEpub } from "./parser/epub.js";
 import { importFile } from "./parser/index.js";
@@ -119,14 +120,17 @@ export async function openBook(state: AppState, book: CanonicalBook): Promise<vo
   state.status = `Opened ${book.title}`;
 }
 
-export async function importAndOpen(state: AppState, filePath: string, force = false): Promise<void> {
+export async function importAndOpen(state: AppState, filePath: string, force = false, redraw?: () => void): Promise<void> {
   if (!force && !fs.existsSync(filePath)) {
     state.status = `File not found: ${filePath}`;
     return;
   }
+  state.status = `Importing ${path.basename(filePath)}…`;
+  redraw?.();
   const book = await importFile(filePath);
   state.storage.saveBook(book, state.renderMode);
   await openBook(state, book);
+  state.status = `Imported ${book.title}`;
 }
 
 async function refreshDiscoveries(state: AppState): Promise<void> {
@@ -152,6 +156,7 @@ export function openFilePicker(
 ): void {
   state.overlay = "file-picker";
   state.overlayCursor = 0;
+  resetOverlaySearch(state);
   state.filePickerItems = items;
   state.filePickerCursor = 0;
   state.filePickerSelected = new Set();
@@ -283,6 +288,7 @@ const handlers: Record<string, CommandHandler> = {
   chapters: async (state) => {
     state.overlay = "chapters";
     state.overlayCursor = state.chapterIndex;
+    resetOverlaySearch(state);
     state.status = "Opened table of contents";
   },
 
@@ -309,6 +315,7 @@ const handlers: Record<string, CommandHandler> = {
     const bookmarks = state.storage.listBookmarks(state.currentBook.id);
     state.overlay = "bookmarks";
     state.overlayCursor = 0;
+    resetOverlaySearch(state);
     state.status = bookmarks.length > 0 ? "Opened bookmarks." : "No bookmarks in this book yet.";
   },
 
@@ -347,6 +354,7 @@ const handlers: Record<string, CommandHandler> = {
       state.booksTagMap = state.storage.listTagsByBookId();
       state.overlay = "books";
       state.overlayCursor = 0;
+      resetOverlaySearch(state);
       state.status = books.length > 0 ? "Opened library picker." : "No books in the library yet.";
       return;
     }
@@ -372,6 +380,7 @@ const handlers: Record<string, CommandHandler> = {
       }
       state.overlay = "books";
       state.overlayCursor = 0;
+      resetOverlaySearch(state);
       if (tagMatches.length > 0) {
         state.booksTagFilter = query.trim();
         state.booksTagMap = state.storage.listTagsByBookId();
@@ -388,6 +397,7 @@ const handlers: Record<string, CommandHandler> = {
     if (parsed.flags.list || parsed.args.length === 0) {
       state.overlay = "colorschemes";
       state.overlayCursor = Math.max(0, THEMES.findIndex((item) => item.id === state.colorScheme.id));
+      resetOverlaySearch(state);
       state.status = "Opened colorscheme picker";
       return;
     }
@@ -405,6 +415,7 @@ const handlers: Record<string, CommandHandler> = {
     if (parsed.flags.list || parsed.args.length === 0) {
       state.overlay = "themes";
       state.overlayCursor = Math.max(0, APPEARANCE_THEMES.findIndex((item) => item.id === state.appearanceTheme.id));
+      resetOverlaySearch(state);
       state.status = "Opened theme picker";
       return;
     }
@@ -884,6 +895,7 @@ const handlers: Record<string, CommandHandler> = {
       const notes = state.storage.listNotes(state.currentBook.id);
       state.overlay = "notes";
       state.overlayCursor = 0;
+      resetOverlaySearch(state);
       state.status = notes.length > 0 ? "Opened notes." : "No notes for this book yet.";
     } else if (isDelete) {
       const id = parsed.args[0];

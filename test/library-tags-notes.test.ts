@@ -6,7 +6,8 @@ import path from "node:path";
 import { Storage } from "../src/storage.js";
 import { executeCommand } from "../src/executor.js";
 import { handleInput } from "../src/input.js";
-import { renderOverlay } from "../src/tui.js";
+import { renderLibraryModal } from "../src/library-modal.js";
+import { renderNotesModal } from "../src/overlay-modals.js";
 import { stripAnsi } from "../src/screen.js";
 import type { AppState, CanonicalBook, ThemePreset } from "../src/types.js";
 
@@ -327,7 +328,7 @@ test("notes overlay renders notes with position and age", () => {
     insertBook(storage, "b1");
     storage.addNote("b1", "Great insight here", 3, 42);
     const state = makeState(storage, { overlay: "notes", currentBook: { ...bookWithChapters, id: "b1" } });
-    const lines = renderOverlay(state, 80, 20).map(stripAnsi);
+    const lines = renderNotesModal(state, 100, 30).map(stripAnsi);
     const noteLine = lines.find((l) => l.includes("Great insight here"));
     assert.ok(noteLine, "Note content should appear in overlay");
     assert.ok(noteLine?.includes("Ch.4"), "Chapter number should be displayed");
@@ -382,7 +383,7 @@ test("books overlay shows tags next to book title", () => {
       overlay: "books",
       booksTagMap: storage.listTagsByBookId()
     });
-    const lines = renderOverlay(state, 80, 20).map(stripAnsi);
+    const lines = renderLibraryModal(state, 100, 30).map(stripAnsi);
     const bookLine = lines.find((l) => l.includes("Dom Casmurro"));
     assert.ok(bookLine?.includes("#clássico"), `Expected tag in line, got: ${bookLine}`);
   } finally { cleanup(); }

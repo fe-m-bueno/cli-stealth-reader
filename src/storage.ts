@@ -38,7 +38,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   fontScale: 1,
   marginSize: 0,
   lineSpacing: "normal",
-  mouseCapture: true
+  mouseCapture: false
 };
 
 function redactSensitiveCommand(rawCommand: string, normalizedName: string): string {
@@ -55,6 +55,7 @@ function redactSensitiveCommand(rawCommand: string, normalizedName: string): str
 export class Storage {
   readonly db: Database.Database;
   readonly chapterCacheDir: string;
+  private readonly statementCache = new Map<string, Database.Statement>();
 
   constructor() {
     const paths = getAppPaths();
@@ -138,7 +139,7 @@ export class Storage {
       CREATE INDEX IF NOT EXISTS idx_book_tags_tag ON book_tags(tag);
       CREATE INDEX IF NOT EXISTS idx_notes_book_id ON notes(book_id);
     `);
-    const columns = this.db.prepare("PRAGMA table_info(books)").all() as Array<{ name: string }>;
+    const columns = this.prep("PRAGMA table_info(books)").all() as Array<{ name: string }>;
     if (!columns.some((column) => column.name === "parser_version")) {
       this.db.exec("ALTER TABLE books ADD COLUMN parser_version INTEGER NOT NULL DEFAULT 1");
     }
@@ -146,13 +147,22 @@ export class Storage {
     this.seedSettings();
   }
 
+  private prep(sql: string): Database.Statement {
+    let statement = this.statementCache.get(sql);
+    if (!statement) {
+      statement = this.db.prepare(sql);
+      this.statementCache.set(sql, statement);
+    }
+    return statement;
+  }
+
   private redactSensitiveCommandHistory(): void {
-    const rows = this.db.prepare("SELECT id, raw_command, normalized_name FROM command_history WHERE lower(normalized_name) = 'toggl'").all() as Array<{
+    const rows = this.prep("SELECT id, raw_command, normalized_name FROM command_history WHERE lower(normalized_name) = 'toggl'").all() as Array<{
       id: number;
       raw_command: string;
       normalized_name: string;
     }>;
-    const update = this.db.prepare("UPDATE command_history SET raw_command = ? WHERE id = ?");
+    const update = this.prep("UPDATE command_history SET raw_command = ? WHERE id = ?");
     const migrate = this.db.transaction(() => {
       for (const row of rows) {
         const redacted = redactSensitiveCommand(row.raw_command, row.normalized_name);
@@ -165,14 +175,14 @@ export class Storage {
   }
 
   private seedSettings(): void {
-    const insert = this.db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)");
+    const insert = this.prep("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)");
     for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
       insert.run(key, String(value));
     }
   }
 
   getSettings(): AppSettings {
-    const rows = this.db.prepare("SELECT key, value FROM settings").all() as Array<{ key: string; value: string }>;
+    const rows = this.prep("SELECT key, value FROM settings").all() as Array<{ key: string; value: string }>;
     const settings = { ...DEFAULT_SETTINGS };
     for (const row of rows) {
       if (row.key === "codeDensity") {
@@ -204,12 +214,12 @@ export class Storage {
   }
 
   getSetting(key: string): string | null {
-    const row = this.db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
+    const row = this.prep("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
     return row?.value ?? null;
   }
 
   setRawSetting(key: string, value: string): void {
-    this.db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, value);
+    this.prep("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, value);
   }
 
   setSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): void {
@@ -217,7 +227,7 @@ export class Storage {
   }
 
   saveSettings(settings: AppSettings): void {
-    const upsert = this.db.prepare(
+    const upsert = this.prep(
       "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
     );
     const saveAll = this.db.transaction((entries: Array<[string, AppSettings[keyof AppSettings]]>) => {
@@ -232,7 +242,7 @@ export class Storage {
     const now = Date.now();
     this.db.exec("BEGIN");
     try {
-      this.db.prepare(`
+      this.prep(`
         INSERT INTO books (id, title, author, source_path, import_hash, parser_version, last_opened_at, render_mode)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
@@ -245,10 +255,10 @@ export class Storage {
           render_mode = excluded.render_mode
       `).run(book.id, book.title, book.author, book.sourcePath, book.importHash, book.parserVersion ?? EPUB_PARSER_VERSION, now, renderMode);
 
-      this.db.prepare("DELETE FROM chapters WHERE book_id = ?").run(book.id);
-      this.db.prepare("DELETE FROM diagnostics WHERE book_id = ?").run(book.id);
+      this.prep("DELETE FROM chapters WHERE book_id = ?").run(book.id);
+      this.prep("DELETE FROM diagnostics WHERE book_id = ?").run(book.id);
 
-      const chapterStmt = this.db.prepare(`
+      const chapterStmt = this.prep(`
         INSERT INTO chapters (id, book_id, chapter_index, title, href, depth, word_count, blocks_json)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
@@ -265,7 +275,7 @@ export class Storage {
         );
       }
 
-      const diagnosticsStmt = this.db.prepare(`
+      const diagnosticsStmt = this.prep(`
         INSERT INTO diagnostics (book_id, severity, message, context)
         VALUES (?, ?, ?, ?)
       `);
@@ -273,9 +283,6 @@ export class Storage {
         diagnosticsStmt.run(book.id, diagnostic.severity, diagnostic.message, diagnostic.context ?? null);
       }
 
-      const bookDir = path.join(this.chapterCacheDir, book.id);
-      fs.mkdirSync(bookDir, { recursive: true });
-      fs.writeFileSync(path.join(bookDir, "book.json"), JSON.stringify(book, null, 2), "utf8");
       this.db.exec("COMMIT");
     } catch (error) {
       this.db.exec("ROLLBACK");
@@ -284,7 +291,7 @@ export class Storage {
   }
 
   getBook(bookId: string): CanonicalBook | null {
-    const bookRow = this.db.prepare("SELECT * FROM books WHERE id = ?").get(bookId) as
+    const bookRow = this.prep("SELECT * FROM books WHERE id = ?").get(bookId) as
       | {
           id: string;
           title: string;
@@ -297,7 +304,7 @@ export class Storage {
     if (!bookRow) {
       return null;
     }
-    const chapterRows = this.db.prepare(
+    const chapterRows = this.prep(
       "SELECT * FROM chapters WHERE book_id = ? ORDER BY chapter_index ASC"
     ).all(bookId) as Array<{
       id: string;
@@ -308,7 +315,7 @@ export class Storage {
       word_count: number;
       blocks_json: string;
     }>;
-    const diagnostics = this.db.prepare("SELECT severity, message, context FROM diagnostics WHERE book_id = ?").all(bookId) as unknown as ImportDiagnostic[];
+    const diagnostics = this.prep("SELECT severity, message, context FROM diagnostics WHERE book_id = ?").all(bookId) as unknown as ImportDiagnostic[];
     const chapters: CanonicalChapter[] = chapterRows.map((row) => ({
       id: row.id,
       index: row.chapter_index,
@@ -331,7 +338,7 @@ export class Storage {
   }
 
   listBooks(): LibraryEntry[] {
-    return this.db.prepare(`
+    return this.prep(`
       SELECT
         id,
         title,
@@ -355,7 +362,7 @@ export class Storage {
     } else {
       orderClause = `b.last_opened_at ${dir === "asc" ? "ASC" : "DESC"}`;
     }
-    const rows = this.db.prepare(`
+    const rows = this.prep(`
       SELECT
         b.id,
         b.title,
@@ -376,7 +383,7 @@ export class Storage {
     let filtered = rows;
     if (tagFilter) {
       const taggedIds = new Set(
-        (this.db.prepare("SELECT book_id FROM book_tags WHERE LOWER(tag) = LOWER(?)").all(tagFilter) as Array<{ book_id: string }>).map((r) => r.book_id)
+        (this.prep("SELECT book_id FROM book_tags WHERE LOWER(tag) = LOWER(?)").all(tagFilter) as Array<{ book_id: string }>).map((r) => r.book_id)
       );
       filtered = rows.filter((r) => taggedIds.has(r.id));
     }
@@ -397,14 +404,14 @@ export class Storage {
   removeBook(bookId: string): void {
     this.db.exec("BEGIN");
     try {
-      this.db.prepare("DELETE FROM reading_pace WHERE book_id = ?").run(bookId);
-      this.db.prepare("DELETE FROM books WHERE id = ?").run(bookId);
-      this.db.prepare("DELETE FROM chapters WHERE book_id = ?").run(bookId);
-      this.db.prepare("DELETE FROM diagnostics WHERE book_id = ?").run(bookId);
-      this.db.prepare("DELETE FROM positions WHERE book_id = ?").run(bookId);
-      this.db.prepare("DELETE FROM bookmarks WHERE book_id = ?").run(bookId);
-      this.db.prepare("DELETE FROM book_tags WHERE book_id = ?").run(bookId);
-      this.db.prepare("DELETE FROM notes WHERE book_id = ?").run(bookId);
+      this.prep("DELETE FROM reading_pace WHERE book_id = ?").run(bookId);
+      this.prep("DELETE FROM books WHERE id = ?").run(bookId);
+      this.prep("DELETE FROM chapters WHERE book_id = ?").run(bookId);
+      this.prep("DELETE FROM diagnostics WHERE book_id = ?").run(bookId);
+      this.prep("DELETE FROM positions WHERE book_id = ?").run(bookId);
+      this.prep("DELETE FROM bookmarks WHERE book_id = ?").run(bookId);
+      this.prep("DELETE FROM book_tags WHERE book_id = ?").run(bookId);
+      this.prep("DELETE FROM notes WHERE book_id = ?").run(bookId);
       fs.rmSync(path.join(this.chapterCacheDir, bookId), { recursive: true, force: true });
       this.db.exec("COMMIT");
     } catch (error) {
@@ -414,7 +421,7 @@ export class Storage {
   }
 
   savePosition(position: ReadingPosition): void {
-    this.db.prepare(`
+    this.prep(`
       INSERT INTO positions (book_id, chapter_index, chapter_progress, book_progress, block_offset)
       VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(book_id) DO UPDATE SET
@@ -423,11 +430,11 @@ export class Storage {
         book_progress = excluded.book_progress,
         block_offset = excluded.block_offset
     `).run(position.bookId, position.chapterIndex, position.chapterProgress, position.bookProgress, position.blockOffset);
-    this.db.prepare("UPDATE books SET last_opened_at = ? WHERE id = ?").run(Date.now(), position.bookId);
+    this.prep("UPDATE books SET last_opened_at = ? WHERE id = ?").run(Date.now(), position.bookId);
   }
 
   getPosition(bookId: string): ReadingPosition | null {
-    return (this.db.prepare(`
+    return (this.prep(`
       SELECT
         book_id AS bookId,
         chapter_index AS chapterIndex,
@@ -439,7 +446,7 @@ export class Storage {
   }
 
   getReadingPace(bookId: string): BookReadingPace | null {
-    const row = this.db.prepare(`
+    const row = this.prep(`
       SELECT book_id AS bookId, wpm, active_ms AS activeMs, updated_at AS updatedAt
       FROM reading_pace WHERE book_id = ?
     `).get(bookId) as BookReadingPace | undefined;
@@ -447,7 +454,7 @@ export class Storage {
   }
 
   saveReadingPace(pace: BookReadingPace): void {
-    this.db.prepare(`
+    this.prep(`
       INSERT INTO reading_pace (book_id, wpm, active_ms, updated_at)
       VALUES (?, ?, ?, ?)
       ON CONFLICT(book_id) DO UPDATE SET
@@ -458,18 +465,18 @@ export class Storage {
   }
 
   getLatestBookId(): string | null {
-    const row = this.db.prepare("SELECT id FROM books ORDER BY last_opened_at DESC LIMIT 1").get() as { id: string } | undefined;
+    const row = this.prep("SELECT id FROM books ORDER BY last_opened_at DESC LIMIT 1").get() as { id: string } | undefined;
     return row?.id ?? null;
   }
 
   needsEpubReimport(bookId: string): boolean {
-    const row = this.db.prepare("SELECT parser_version, source_path FROM books WHERE id = ?").get(bookId) as { parser_version?: number; source_path: string } | undefined;
+    const row = this.prep("SELECT parser_version, source_path FROM books WHERE id = ?").get(bookId) as { parser_version?: number; source_path: string } | undefined;
     if (!row?.source_path.toLowerCase().endsWith(".epub")) return false;
     return (row?.parser_version ?? 1) < EPUB_PARSER_VERSION;
   }
 
   saveCommandHistory(rawCommand: string, normalizedName: string): void {
-    this.db.prepare("INSERT INTO command_history (raw_command, normalized_name, created_at) VALUES (?, ?, ?)").run(
+    this.prep("INSERT INTO command_history (raw_command, normalized_name, created_at) VALUES (?, ?, ?)").run(
       redactSensitiveCommand(rawCommand, normalizedName),
       normalizedName,
       Date.now()
@@ -485,7 +492,7 @@ export class Storage {
       label: label?.trim() || null,
       createdAt: Date.now()
     };
-    this.db.prepare(`
+    this.prep(`
       INSERT INTO bookmarks (id, book_id, chapter_index, block_offset, label, created_at)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(bookmark.id, bookmark.bookId, bookmark.chapterIndex, bookmark.blockOffset, bookmark.label, bookmark.createdAt);
@@ -493,7 +500,7 @@ export class Storage {
   }
 
   listBookmarks(bookId: string): Bookmark[] {
-    return this.db.prepare(`
+    return this.prep(`
       SELECT
         id,
         book_id AS bookId,
@@ -508,25 +515,25 @@ export class Storage {
   }
 
   deleteBookmark(id: string): void {
-    this.db.prepare("DELETE FROM bookmarks WHERE id = ?").run(id);
+    this.prep("DELETE FROM bookmarks WHERE id = ?").run(id);
   }
 
   addTag(bookId: string, tag: string): void {
-    this.db.prepare("INSERT OR IGNORE INTO book_tags (book_id, tag) VALUES (?, ?)").run(bookId, tag.trim());
+    this.prep("INSERT OR IGNORE INTO book_tags (book_id, tag) VALUES (?, ?)").run(bookId, tag.trim());
   }
 
   removeTag(bookId: string, tag: string): void {
-    this.db.prepare("DELETE FROM book_tags WHERE book_id = ? AND tag = ?").run(bookId, tag.trim());
+    this.prep("DELETE FROM book_tags WHERE book_id = ? AND tag = ?").run(bookId, tag.trim());
   }
 
   listTags(bookId: string): string[] {
     return (
-      this.db.prepare("SELECT tag FROM book_tags WHERE book_id = ? ORDER BY tag").all(bookId) as Array<{ tag: string }>
+      this.prep("SELECT tag FROM book_tags WHERE book_id = ? ORDER BY tag").all(bookId) as Array<{ tag: string }>
     ).map((r) => r.tag);
   }
 
   listTagsByBookId(): Map<string, string[]> {
-    const rows = this.db.prepare("SELECT book_id, tag FROM book_tags ORDER BY book_id, tag").all() as Array<{
+    const rows = this.prep("SELECT book_id, tag FROM book_tags ORDER BY book_id, tag").all() as Array<{
       book_id: string;
       tag: string;
     }>;
@@ -549,7 +556,7 @@ export class Storage {
       content: content.trim(),
       createdAt: Date.now()
     };
-    this.db.prepare(`
+    this.prep(`
       INSERT INTO notes (id, book_id, chapter_index, block_offset, content, created_at)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(note.id, note.bookId, note.chapterIndex, note.blockOffset, note.content, note.createdAt);
@@ -557,7 +564,7 @@ export class Storage {
   }
 
   listNotes(bookId: string): Note[] {
-    return this.db.prepare(`
+    return this.prep(`
       SELECT
         id,
         book_id AS bookId,
@@ -572,20 +579,20 @@ export class Storage {
   }
 
   deleteNote(id: string): void {
-    this.db.prepare("DELETE FROM notes WHERE id = ?").run(id);
+    this.prep("DELETE FROM notes WHERE id = ?").run(id);
   }
 
   exportAll(): ExportData {
     const exportedAt = new Date().toISOString();
 
-    const posRows = this.db.prepare(`
+    const posRows = this.prep(`
       SELECT b.import_hash AS importHash, b.title, p.chapter_index AS chapterIndex,
              p.block_offset AS blockOffset, p.book_progress AS bookProgress
       FROM positions p
       JOIN books b ON b.id = p.book_id
     `).all() as Array<{ importHash: string; title: string; chapterIndex: number; blockOffset: number; bookProgress: number }>;
 
-    const bmRows = this.db.prepare(`
+    const bmRows = this.prep(`
       SELECT b.import_hash AS importHash, b.title,
              bm.chapter_index AS chapterIndex, bm.block_offset AS blockOffset,
              bm.label, bm.created_at AS createdAt
@@ -593,7 +600,7 @@ export class Storage {
       JOIN books b ON b.id = bm.book_id
     `).all() as Array<{ importHash: string; title: string; chapterIndex: number; blockOffset: number; label: string | null; createdAt: number }>;
 
-    const noteRows = this.db.prepare(`
+    const noteRows = this.prep(`
       SELECT b.import_hash AS importHash, b.title,
              n.chapter_index AS chapterIndex, n.block_offset AS blockOffset,
              n.content, n.created_at AS createdAt
@@ -601,7 +608,7 @@ export class Storage {
       JOIN books b ON b.id = n.book_id
     `).all() as Array<{ importHash: string; title: string; chapterIndex: number | null; blockOffset: number | null; content: string; createdAt: number }>;
 
-    const tagRows = this.db.prepare(`
+    const tagRows = this.prep(`
       SELECT b.import_hash AS importHash, b.title, bt.tag
       FROM book_tags bt
       JOIN books b ON b.id = bt.book_id
@@ -623,9 +630,9 @@ export class Storage {
       throw new Error("Export file has an invalid exportedAt date.");
     }
 
-    const findBook = this.db.prepare("SELECT id, last_opened_at FROM books WHERE import_hash = ?");
-    const findBookById = this.db.prepare("SELECT id FROM books WHERE import_hash = ?");
-    const updatePos = this.db.prepare(`
+    const findBook = this.prep("SELECT id, last_opened_at FROM books WHERE import_hash = ?");
+    const findBookById = this.prep("SELECT id FROM books WHERE import_hash = ?");
+    const updatePos = this.prep(`
       INSERT INTO positions (book_id, chapter_index, chapter_progress, book_progress, block_offset)
       VALUES (?, ?, 0, ?, ?)
       ON CONFLICT(book_id) DO UPDATE SET
@@ -634,11 +641,11 @@ export class Storage {
         book_progress = excluded.book_progress,
         block_offset = excluded.block_offset
     `);
-    const findBm = this.db.prepare("SELECT id FROM bookmarks WHERE book_id = ? AND chapter_index = ? AND block_offset = ?");
-    const insertBm = this.db.prepare("INSERT INTO bookmarks (id, book_id, chapter_index, block_offset, label, created_at) VALUES (?, ?, ?, ?, ?, ?)");
-    const findNote = this.db.prepare("SELECT id FROM notes WHERE book_id = ? AND content = ? AND created_at = ?");
-    const insertNote = this.db.prepare("INSERT INTO notes (id, book_id, chapter_index, block_offset, content, created_at) VALUES (?, ?, ?, ?, ?, ?)");
-    const insertTag = this.db.prepare("INSERT OR IGNORE INTO book_tags (book_id, tag) VALUES (?, ?)");
+    const findBm = this.prep("SELECT id FROM bookmarks WHERE book_id = ? AND chapter_index = ? AND block_offset = ?");
+    const insertBm = this.prep("INSERT INTO bookmarks (id, book_id, chapter_index, block_offset, label, created_at) VALUES (?, ?, ?, ?, ?, ?)");
+    const findNote = this.prep("SELECT id FROM notes WHERE book_id = ? AND content = ? AND created_at = ?");
+    const insertNote = this.prep("INSERT INTO notes (id, book_id, chapter_index, block_offset, content, created_at) VALUES (?, ?, ?, ?, ?, ?)");
+    const insertTag = this.prep("INSERT OR IGNORE INTO book_tags (book_id, tag) VALUES (?, ?)");
 
     let positionsUpdated = 0;
     let bookmarksAdded = 0;

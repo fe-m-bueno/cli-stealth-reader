@@ -17,7 +17,22 @@ export function getFocusBlockLineCounts(state: AppState, contentWidth: number): 
   if (!chapter) {
     return [];
   }
-  return chapter.blocks.map((block, blockIndex) => (
+  const cached = state.focusLineMetrics;
+  if (
+    cached
+    && cached.bookId === state.currentBook!.id
+    && cached.chapterIndex === state.chapterIndex
+    && cached.renderMode === state.renderMode
+    && cached.width === contentWidth
+    && cached.theme === state.theme
+    && cached.codeLanguage === state.codeLanguage
+    && cached.codeDensity === state.codeDensity
+    && cached.plainHighlight === state.plainHighlight
+    && cached.lineSpacing === state.lineSpacing
+  ) {
+    return cached.counts;
+  }
+  const counts = chapter.blocks.map((block, blockIndex) => (
     renderBlocks(
       [block],
       state.renderMode,
@@ -32,6 +47,19 @@ export function getFocusBlockLineCounts(state: AppState, contentWidth: number): 
       state.lineSpacing
     ).length
   ));
+  state.focusLineMetrics = {
+    bookId: state.currentBook!.id,
+    chapterIndex: state.chapterIndex,
+    renderMode: state.renderMode,
+    width: contentWidth,
+    theme: state.theme,
+    codeLanguage: state.codeLanguage,
+    codeDensity: state.codeDensity,
+    plainHighlight: state.plainHighlight,
+    lineSpacing: state.lineSpacing,
+    counts
+  };
+  return counts;
 }
 
 export function clampFocusBlockIndex(state: AppState, index: number): number {

@@ -77,19 +77,24 @@ export function resetViewport(): void {
   process.stdout.write(screenResetSequence(false));
 }
 
+export function isModalOverlay(overlay: AppState["overlay"]): boolean {
+  return overlay === "settings" || overlay === "keys" || overlay === "books" || overlay === "file-picker"
+    || overlay === "chapters" || overlay === "bookmarks" || overlay === "notes"
+    || overlay === "colorschemes" || overlay === "themes";
+}
+
 export function getViewportLayout(state: AppState, width: number, height: number) {
   const reservedFooterHeight = footerHeight(state, width);
   const bodyHeight = Math.max(1, height - reservedFooterHeight - 2);
-  const overlayWidth = state.overlay === "none" || state.overlay === "help" || state.overlay === "settings" || state.overlay === "keys"
+  const overlayWidth = state.overlay === "none" || state.overlay === "help" || isModalOverlay(state.overlay)
     ? 0
     : Math.min(OVERLAY_MAX_WIDTH, Math.floor(width * 0.32));
   const mainWidth = Math.max(MIN_MAIN_WIDTH, width - overlayWidth - (overlayWidth ? 3 : 0));
-  const scrollbarWidth = state.currentBook && state.overlay !== "settings" && state.overlay !== "keys" ? 1 : 0;
+  const scrollbarWidth = state.currentBook && !isModalOverlay(state.overlay) ? 1 : 0;
   const baseContentWidth = Math.max(1, mainWidth - 2 - scrollbarWidth);
   const readingLayoutActive = Boolean(state.currentBook)
-    && state.overlay !== "settings"
     && state.overlay !== "help"
-    && state.overlay !== "keys";
+    && !isModalOverlay(state.overlay);
   const requestedMargin = readingLayoutActive ? clamp(state.marginSize ?? 0, 0, 30) : 0;
   const maxMargin = Math.max(0, Math.floor((baseContentWidth - Math.min(20, baseContentWidth)) / 2));
   const appliedMargin = Math.min(requestedMargin, maxMargin);
@@ -124,7 +129,7 @@ export function selectMainViewportLines(state: AppState, lines: string[], bodyHe
   if (state.overlay === "help") {
     return lines.slice(state.overlayCursor, state.overlayCursor + bodyHeight);
   }
-  if (state.overlay === "settings" || state.overlay === "keys" || state.focusMode) {
+  if (isModalOverlay(state.overlay) || state.focusMode) {
     return lines.slice(0, bodyHeight);
   }
   return lines.slice(state.blockOffset, state.blockOffset + bodyHeight);
@@ -559,6 +564,12 @@ export function renderBody(
   return output;
 }
 
+let previousFrame: { width: number; height: number; lines: string[] } | null = null;
+
+export function resetRenderCache(): void {
+  previousFrame = null;
+}
+
 export function renderFrame(
   lines: string[],
   width: number,
@@ -570,5 +581,18 @@ export function renderFrame(
   const paintedLines = background
     ? frameLines.map((line) => paintBackground(background, line, foreground))
     : frameLines;
-  return `${screenResetSequence(false)}${paintedLines.join("\n")}`;
+  const previous = previousFrame;
+  previousFrame = { width, height, lines: paintedLines };
+  if (!previous || previous.width !== width || previous.height !== height) {
+    return `${screenResetSequence(false)}${paintedLines.join("\n")}`;
+  }
+
+  let output = "";
+  for (let row = 0; row < height; row += 1) {
+    if (paintedLines[row] !== previous.lines[row]) {
+      output += `\x1b[${row + 1};1H${paintedLines[row]}`;
+    }
+  }
+  // Land the cursor at the bottom-right corner, matching where a full repaint leaves it.
+  return output ? `${output}\x1b[${height};${width}H` : "";
 }

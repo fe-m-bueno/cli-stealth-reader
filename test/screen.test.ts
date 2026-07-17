@@ -10,6 +10,7 @@ import {
   getScrollbarMetrics,
   renderFooter,
   renderFrame,
+  resetRenderCache,
   renderStatusBar,
   renderScrollbar,
   selectMainViewportLines,
@@ -34,11 +35,13 @@ test("incremental redraws avoid full screen clears", () => {
 });
 
 test("full frame rendering pads lines without erase sequences", () => {
+  resetRenderCache();
   const frame = renderFrame(["abc", "x"], 4, 3);
   assert.equal(frame, "\x1b[Habc \nx   \n    ");
 });
 
 test("frame rendering can paint a stable background across colored segments", () => {
+  resetRenderCache();
   const frame = renderFrame([`${fg("#ffffff", "x")}y`], 3, 1, "#000000", "#111111");
   assert.match(frame, /\x1b\[48;2;0;0;0m/);
   assert.match(frame, /\x1b\[38;2;17;17;17m/);

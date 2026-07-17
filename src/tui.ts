@@ -1,21 +1,24 @@
 import { commandHelp } from "./commands.js";
 import { executeCommand, importAndOpen, openBook, persistReadingPace } from "./executor.js";
 import { clampFocusBlockIndex, mapFocusIndexToBlockOffset, renderFocusBlock } from "./focus.js";
-import { handleInput } from "./input.js";
-import { discoveredBookLabel, libraryPickerItems } from "./library-picker.js";
+import { handleInput, registerExitFlush } from "./input.js";
+import { createWriteThrottle } from "./write-throttle.js";
+import { composeFilePickerModal, composeLibraryModal } from "./library-modal.js";
+import { composeListOverlayModal, isListModalOverlay } from "./overlay-modals.js";
 import { bg, bold, fg } from "./color.js";
 import { discoverBooks } from "./discovery.js";
 import { renderBlocks } from "./renderers.js";
-import { refreshCurrentTogglEntry } from "./toggl.js";
+import { TOGGL_REFRESH_INTERVAL_MS, refreshCurrentTogglEntry } from "./toggl.js";
 import {
   clamp,
-  computeWindowStart,
   computeChapterMaxOffset,
   computeBookProgress,
   computeChapterProgress,
   formatProgress,
   getViewportLayout,
+  isModalOverlay,
   renderFrame,
+  resetRenderCache,
   renderBody,
   renderFooter,
   renderScrollbar,
@@ -76,6 +79,24 @@ export function currentLines(state: AppState, width: number, height: number): st
     return composeShortcutPanel(state, backgroundLines, width, height);
   }
 
+  if (state.overlay === "books") {
+    const backgroundState = { ...state, overlay: "none" } as AppState;
+    const backgroundLines = currentLines(backgroundState, width, height);
+    return composeLibraryModal(state, backgroundLines, width, height);
+  }
+
+  if (state.overlay === "file-picker") {
+    const backgroundState = { ...state, overlay: "none" } as AppState;
+    const backgroundLines = currentLines(backgroundState, width, height);
+    return composeFilePickerModal(state, backgroundLines, width, height);
+  }
+
+  if (isListModalOverlay(state.overlay)) {
+    const backgroundState = { ...state, overlay: "none" } as AppState;
+    const backgroundLines = currentLines(backgroundState, width, height);
+    return composeListOverlayModal(state, backgroundLines, width, height);
+  }
+
   if (!state.currentBook) {
     const lines = [
       bold(fg(state.theme.accent, "cli-stealth-reader")),
@@ -115,20 +136,57 @@ export function currentLines(state: AppState, width: number, height: number): st
     return [...Array.from({ length: topPadding }, () => ""), ...focusLines];
   }
 
-  const chapter = state.currentBook.chapters[state.chapterIndex];
-  return renderBlocks(
+  return renderChapterLines(state, width);
+}
+
+function renderChapterLines(state: AppState, width: number): string[] {
+  const book = state.currentBook!;
+  const searchQuery = state.searchState?.query;
+  const cached = state.chapterRenderCache;
+  if (
+    cached
+    && cached.bookId === book.id
+    && cached.chapterIndex === state.chapterIndex
+    && cached.renderMode === state.renderMode
+    && cached.width === width
+    && cached.theme === state.theme
+    && cached.codeLanguage === state.codeLanguage
+    && cached.codeDensity === state.codeDensity
+    && cached.searchQuery === searchQuery
+    && cached.plainHighlight === state.plainHighlight
+    && cached.lineSpacing === state.lineSpacing
+  ) {
+    return cached.lines;
+  }
+
+  const chapter = book.chapters[state.chapterIndex];
+  const lines = renderBlocks(
     chapter.blocks,
     state.renderMode,
     width,
     state.theme,
     state.codeLanguage,
     state.codeDensity,
-    state.searchState?.query,
+    searchQuery,
     state.plainHighlight,
     0,
     true,
     state.lineSpacing
   );
+  state.chapterRenderCache = {
+    bookId: book.id,
+    chapterIndex: state.chapterIndex,
+    renderMode: state.renderMode,
+    width,
+    theme: state.theme,
+    codeLanguage: state.codeLanguage,
+    codeDensity: state.codeDensity,
+    searchQuery,
+    plainHighlight: state.plainHighlight,
+    lineSpacing: state.lineSpacing,
+    lines
+  };
+  return lines;
 }
 
 function chapterTransitionLine(state: AppState, width: number): string | null {
@@ -145,132 +203,8 @@ function chapterTransitionLine(state: AppState, width: number): string | null {
   return bg(state.theme.accent, fg(state.theme.background, padded.padEnd(width, " ")));
 }
 
-function formatRelativeTime(timestamp: number): string {
-  const elapsedMs = Math.max(0, Date.now() - timestamp);
-  const minute = 60_000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-  if (elapsedMs < minute) {
-    return "agora";
-  }
-  if (elapsedMs < hour) {
-    const minutes = Math.floor(elapsedMs / minute);
-    return `há ${minutes} min`;
-  }
-  if (elapsedMs < day) {
-    const hours = Math.floor(elapsedMs / hour);
-    return `há ${hours} h`;
-  }
-  const days = Math.floor(elapsedMs / day);
-  return `há ${days} dia${days > 1 ? "s" : ""}`;
-}
-
 export function renderOverlay(state: AppState, width: number, height: number): string[] {
   switch (state.overlay) {
-    case "chapters":
-      if (!state.currentBook) {
-        return ["No book open."];
-      }
-      const visibleRows = Math.max(1, height - 2);
-      const start = computeWindowStart(state.currentBook.chapters.length, visibleRows, state.overlayCursor);
-      return state.currentBook.chapters
-        .slice(start, start + visibleRows)
-        .map((chapter) => {
-          const marker = chapter.index === state.overlayCursor ? ">" : " ";
-          return `${marker} ${String(chapter.index + 1).padStart(2, "0")} ${truncate(chapter.title, width - 6)}`;
-        });
-    case "books": {
-      const items = libraryPickerItems(state);
-      const latestBookId = state.storage.getLatestBookId();
-      const tagsByBookId = state.booksTagMap;
-      const sortKeyLabels: Record<string, string> = {
-        lastOpened: "Last Opened",
-        title: "Title",
-        author: "Author",
-        progress: "Progress"
-      };
-      const dirArrow = state.librarySortDir === "asc" ? "↑" : "↓";
-      const filterNote = state.booksTagFilter ? `  Filter: #${state.booksTagFilter} (Esc clears)` : "";
-      const header = truncate(
-        `  Library · Sort: ${sortKeyLabels[state.librarySortKey]} ${dirArrow}${filterNote}`,
-        width
-      );
-      const continueAction = latestBookId
-        ? state.booksTagFilter
-          ? "Enter continue/open"
-          : "Enter continues selected book"
-        : "Enter open";
-      const resumeHint = state.booksTagFilter ? "/resume latest" : "/resume opens latest";
-      const actionHint = truncate(
-        `  ${continueAction} · ${resumeHint} · b bookmarks · n notes · /book search`,
-        width
-      );
-      return [
-        header,
-        actionHint,
-        ...items.map((item, index) => {
-          const marker = index === state.overlayCursor ? ">" : " ";
-          if (item.kind === "discovered") {
-            const right = "  [local · Enter to import]";
-            const title = truncate(discoveredBookLabel(item.discovery), Math.max(1, width - 2 - right.length));
-            return `${marker} ${title}${right}`;
-          }
-          const book = item.book;
-          const isLatest = book.id === latestBookId;
-          const progressTag = book.bookProgress !== null
-            ? `[Ch.${(book.chapterIndex ?? 0) + 1} · ${Math.round(book.bookProgress * 100)}%]`
-            : "[not started]";
-          const latestTag = isLatest ? "[continue] " : "";
-          const tags = tagsByBookId.get(book.id) ?? [];
-          const tagsStr = tags.length > 0 ? `  ${tags.map((t) => `#${t}`).join(" ")}` : "";
-          const right = `  ${latestTag}${progressTag}${tagsStr}`;
-          const titleAuthor = truncate(`${book.title}  —  ${book.author}`, Math.max(1, width - 2 - right.length));
-          return `${marker} ${titleAuthor}${right}`;
-        })
-      ];
-    }
-    case "bookmarks": {
-      if (!state.currentBook) {
-        return ["No book open."];
-      }
-      const bookmarks = state.storage.listBookmarks(state.currentBook.id);
-      return bookmarks.map((bookmark, index) => {
-        const marker = index === state.overlayCursor ? ">" : " ";
-        const location = `Ch.${bookmark.chapterIndex + 1} §${bookmark.blockOffset}`;
-        const label = bookmark.label ? ` — "${bookmark.label}"` : "";
-        const age = `[${formatRelativeTime(bookmark.createdAt)}]`;
-        const left = truncate(`${location}${label}`, Math.max(1, width - age.length - 1));
-        return `${marker} ${left} ${age}`;
-      });
-    }
-    case "notes": {
-      if (!state.currentBook) {
-        return ["No book open."];
-      }
-      const notes = state.storage.listNotes(state.currentBook.id);
-      if (notes.length === 0) {
-        return ["No notes for this book yet."];
-      }
-      return notes.map((note, index) => {
-        const marker = index === state.overlayCursor ? ">" : " ";
-        const location = note.chapterIndex !== null
-          ? `Ch.${note.chapterIndex + 1} §${note.blockOffset ?? 0}`
-          : "Book";
-        const age = `[${formatRelativeTime(note.createdAt)}]`;
-        const left = truncate(`${location}  "${note.content}"`, Math.max(1, width - age.length - 1));
-        return `${marker} ${left} ${age}`;
-      });
-    }
-    case "colorschemes":
-      return THEMES.map((theme, index) => {
-        const marker = index === state.overlayCursor ? ">" : " ";
-        return `${marker} ${theme.label} (${theme.id})`;
-      });
-    case "themes":
-      return APPEARANCE_THEMES.map((theme, index) => {
-        const marker = index === state.overlayCursor ? ">" : " ";
-        return `${marker} ${theme.label} (${theme.id})`;
-      });
     case "help":
       return commandHelp().slice(0, Math.max(1, height));
     case "diagnostics":
@@ -280,21 +214,6 @@ export function renderOverlay(state: AppState, width: number, height: number): s
       return state.currentBook?.diagnostics.length
         ? state.currentBook.diagnostics.map((item) => `${item.severity.toUpperCase()} ${item.message}${item.context ? ` (${item.context})` : ""}`)
         : ["No diagnostics for the current book."];
-    case "file-picker": {
-      if (state.filePickerItems.length === 0) {
-        return ["No books found in this folder."];
-      }
-      const lines: string[] = [];
-      for (let index = 0; index < state.filePickerItems.length; index += 1) {
-        const item = state.filePickerItems[index];
-        const cursor = index === state.filePickerCursor ? ">" : " ";
-        const check = state.filePickerSelected.has(index) ? "[x]" : "[ ]";
-        const label = truncate(item.fileName, Math.max(1, width - 6));
-        const row = `${cursor} ${check} ${label}`;
-        lines.push(index === state.filePickerCursor ? fg(state.theme.accent, row) : fg(state.theme.dim, row));
-      }
-      return lines;
-    }
     default:
       return [];
   }
@@ -314,7 +233,7 @@ function draw(state: AppState): void {
   if (state.overlay === "help") {
     state.overlayCursor = clamp(state.overlayCursor, 0, helpMaxOffset);
   }
-  const fixedOverlay = state.overlay === "settings" || state.overlay === "keys";
+  const fixedOverlay = isModalOverlay(state.overlay);
   const maxOffset = state.overlay === "help"
     ? helpMaxOffset
     : fixedOverlay
@@ -342,13 +261,13 @@ function draw(state: AppState): void {
     : state.focusMode
     ? mapFocusIndexToBlockOffset(state, layout.contentWidth, state.focusBlockIndex)
     : state.blockOffset;
-  const scrollbar = state.currentBook && state.overlay !== "settings" && state.overlay !== "keys"
+  const scrollbar = state.currentBook && !isModalOverlay(state.overlay)
     ? renderScrollbar(allMainLines.length, layout.bodyHeight, effectiveOffset, state.theme, state.overlay === "help" ? false : state.focusMode)
     : state.overlay === "help"
       ? renderScrollbar(allMainLines.length, layout.bodyHeight, effectiveOffset, state.theme, false)
     : [];
   const originalOffset = state.blockOffset;
-  const progress = state.overlay === "help" || state.overlay === "settings" || state.overlay === "keys"
+  const progress = state.overlay === "help" || isModalOverlay(state.overlay)
     ? ""
     : (() => {
         state.blockOffset = effectiveOffset;
@@ -390,6 +309,12 @@ function draw(state: AppState): void {
   );
 }
 
+const positionWriteThrottle = createWriteThrottle();
+
+export function flushPendingPosition(): void {
+  positionWriteThrottle.flush();
+}
+
 function syncPosition(state: AppState): void {
   if (!state.currentBook) {
     return;
@@ -421,15 +346,21 @@ function syncPosition(state: AppState): void {
     pace = { ...applySample(pace, sample), ...nextMeta };
   }
   state.readingPace = pace;
-  persistReadingPace(state);
 
-  state.storage.savePosition({
+  const position = {
     bookId: state.currentBook.id,
     chapterIndex: state.chapterIndex,
     chapterProgress,
     bookProgress,
     blockOffset: state.blockOffset
-  });
+  };
+  // In-memory state stays exact; SQLite writes are throttled to once per
+  // window (leading-edge write, trailing-edge coalesce). Overlay opens and
+  // exit paths flush immediately.
+  positionWriteThrottle.schedule(() => {
+    persistReadingPace(state);
+    state.storage.savePosition(position);
+  }, { immediate: state.overlay !== "none" });
   if (state.focusMode) {
     state.blockOffset = originalOffset;
   }
@@ -477,6 +408,8 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     chapterTransition: null,
     mouseDrag: null,
     layoutMetrics: null,
+    chapterRenderCache: null,
+    focusLineMetrics: null,
     searchState: null,
     navHistory: [],
     navHistoryCursor: -1,
@@ -516,9 +449,29 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
   process.stdin.resume();
   process.stdin.setEncoding("utf8");
   process.stdout.write("\x1b[?1007h\x1b[?1049h\x1b[>1u\x1b[?25l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l");
+  resetRenderCache();
+
+  registerExitFlush(flushPendingPosition);
+  process.on("exit", flushPendingPosition);
+  for (const signal of ["SIGTERM", "SIGHUP"] as const) {
+    process.once(signal, () => {
+      flushPendingPosition();
+      process.exit(0);
+    });
+  }
 
   const redraw = () => draw(state);
   redraw();
+
+  if (process.stdout.isTTY) {
+    process.stdout.on("resize", () => {
+      state.layoutMetrics = null;
+      state.chapterRenderCache = null;
+      state.focusLineMetrics = null;
+      resetRenderCache();
+      redraw();
+    });
+  }
 
   let togglRefreshInFlight = false;
   const refreshTogglTimer = async () => {
@@ -536,15 +489,17 @@ export async function runTui(options?: { resume?: boolean }): Promise<void> {
     }
   };
   void refreshTogglTimer();
-  setInterval(() => void refreshTogglTimer(), 60_000).unref();
+  setInterval(() => void refreshTogglTimer(), TOGGL_REFRESH_INTERVAL_MS).unref();
 
   process.stdin.on("data", async (chunk: string) => {
     await handleInput(chunk, state, redraw, async (cmd) => {
+      flushPendingPosition();
       await executeCommand(state, cmd);
       syncPosition(state);
     }, syncPosition, async (paths, force) => {
+      flushPendingPosition();
       for (const epubPath of paths) {
-        await importAndOpen(state, epubPath, force);
+        await importAndOpen(state, epubPath, force, redraw);
       }
       syncPosition(state);
     });

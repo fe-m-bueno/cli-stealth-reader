@@ -350,6 +350,37 @@ export interface AppState {
         chapterViewCounts: number[];
       }
     | null;
+  /** Memoized full-chapter render; keyed on every input that affects the output lines. */
+  chapterRenderCache?:
+    | {
+        bookId: string;
+        chapterIndex: number;
+        renderMode: RenderMode;
+        width: number;
+        theme: ThemePreset;
+        codeLanguage: CodeLanguage;
+        codeDensity: CodeDensity;
+        searchQuery: string | undefined;
+        plainHighlight: boolean;
+        lineSpacing: LineSpacing;
+        lines: string[];
+      }
+    | null;
+  /** Memoized per-block line counts for focus-mode offset mapping. */
+  focusLineMetrics?:
+    | {
+        bookId: string;
+        chapterIndex: number;
+        renderMode: RenderMode;
+        width: number;
+        theme: ThemePreset;
+        codeLanguage: CodeLanguage;
+        codeDensity: CodeDensity;
+        plainHighlight: boolean;
+        lineSpacing: LineSpacing;
+        counts: number[];
+      }
+    | null;
   searchState: SearchState | null;
   navHistory: NavHistoryEntry[];
   navHistoryCursor: number;
@@ -363,6 +394,8 @@ export interface AppState {
   shortcutCollapsedCategories?: Set<string>;
   shortcutSearchBuffer?: string;
   shortcutSearchMode?: boolean;
+  overlaySearchBuffer?: string;
+  overlaySearchMode?: boolean;
   settingsDraft?: AppSettings | null;
   settingsTab?: SettingsTab;
   settingsSearchBuffer?: string;
