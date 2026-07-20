@@ -4,6 +4,18 @@
 
 Um leitor de EPUB para terminal em modo tela cheia, com renderização e um diferencial único: o modo **stealth** disfarça o texto como código (TypeScript, Python ou Rust) plausível, para que pareça que você está programando enquanto lê.
 
+![Modo stealth: um capítulo disfarçado como TypeScript](docs/screenshots/stealth-code-mode.png)
+
+## Screenshots
+
+| Modo Plain | Biblioteca |
+|---|---|
+| ![Modo plain](docs/screenshots/plain-mode.png) | ![Biblioteca](docs/screenshots/library.png) |
+
+| Atalhos de teclado | Configurações |
+|---|---|
+| ![Modal de atalhos](docs/screenshots/shortcuts.png) | ![Painel de configurações](docs/screenshots/settings.png) |
+
 ## Visão Geral
 
 O **cli-stealth-reader** oferece múltiplas experiências de leitura:

@@ -238,7 +238,23 @@ export class Storage {
     saveAll(Object.entries(settings) as Array<[string, AppSettings[keyof AppSettings]]>);
   }
 
+  private findRenamedBookId(book: CanonicalBook): string | null {
+    const candidates = this.prep(
+      "SELECT id, source_path FROM books WHERE import_hash = ? AND id != ? ORDER BY last_opened_at DESC"
+    ).all(book.importHash, book.id) as Array<{ id: string; source_path: string }>;
+    for (const candidate of candidates) {
+      if (!fs.existsSync(candidate.source_path)) {
+        return candidate.id;
+      }
+    }
+    return null;
+  }
+
   saveBook(book: CanonicalBook, renderMode: RenderMode): void {
+    const renamedFromId = this.findRenamedBookId(book);
+    if (renamedFromId) {
+      book.id = renamedFromId;
+    }
     const now = Date.now();
     this.db.exec("BEGIN");
     try {
