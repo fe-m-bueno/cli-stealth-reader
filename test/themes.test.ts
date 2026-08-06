@@ -79,3 +79,22 @@ test("claude keeps its coral identity in accessibility variants", () => {
   assert.equal(ansi.keyword, "ansi:brightBlue");
   assert.equal(ansi.codeString, "ansi:brightGreen");
 });
+
+test("every colorscheme and appearance combination produces a complete, stable theme contract", () => {
+  for (const colorScheme of THEMES) {
+    for (const appearanceTheme of APPEARANCE_THEMES) {
+      const first = applyAppearanceTheme(colorScheme, appearanceTheme);
+      const second = applyAppearanceTheme(colorScheme, appearanceTheme);
+
+      assert.deepEqual(first, second);
+      assert.equal(first.id, appearanceTheme.id === "dark" ? colorScheme.id : `${colorScheme.id}:${appearanceTheme.id}`);
+      assert.ok(first.label.includes(colorScheme.label));
+      for (const role of [
+        "accent", "accentMuted", "foreground", "dim", "background", "border",
+        "warning", "keyword", "codeString", "subtle"
+      ] as const) {
+        assert.ok(first[role], `${colorScheme.id}/${appearanceTheme.id} has no ${role}`);
+      }
+    }
+  }
+});

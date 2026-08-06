@@ -10,7 +10,8 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
-    "test": "node --test --import tsx"
+    "test": "node --test --import tsx",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"src/**/*.ts\" --test-coverage-lines=90 --test-coverage-branches=83 --test-coverage-functions=92 --import tsx"
   },
   "dependencies": {
     "better-sqlite3": "^12.9.0",

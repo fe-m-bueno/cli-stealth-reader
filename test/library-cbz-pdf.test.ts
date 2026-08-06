@@ -34,13 +34,14 @@ async function makeCbz(dir: string, name: string, imageNames: string[]): Promise
 function makeMinimalPdf(dir: string, name: string, text = "Hello World"): string {
   const content = `BT /F1 12 Tf 100 700 Td (${text}) Tj ET\n`;
   const stream = `stream\n${content}endstream`;
-  const streamLen = Buffer.byteLength(stream, "utf8");
+  const streamLen = Buffer.byteLength(content, "utf8");
 
   const objects = [
-    `1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj`,
-    `2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj`,
-    `3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Contents 4 0 R/Resources<</Font<</F1<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>>>>>}}endobj`,
-    `4 0 obj<</Length ${streamLen}>>\n${stream}\nendobj`
+    `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj`,
+    `2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj`,
+    `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>\nendobj`,
+    `4 0 obj\n<< /Length ${streamLen} >>\n${stream}\nendobj`,
+    `5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj`
   ];
 
   let pdf = "%PDF-1.0\n";
@@ -281,5 +282,42 @@ test("importPdf returns unique importHash based on content", async () => {
     const book1 = await importPdf(p1);
     const book2 = await importPdf(p2);
     assert.notEqual(book1.importHash, book2.importHash);
+  });
+});
+
+test("importPdf converts extractable page text into canonical chapters and paragraphs", async () => {
+  await withTempDir(async (dir) => {
+    const filePath = makeMinimalPdf(dir, "readable.pdf", "Hello from a portable PDF");
+
+    const book = await importPdf(filePath);
+
+    assert.equal(book.title, "readable");
+    assert.equal(book.author, "Unknown");
+    assert.equal(book.diagnostics.length, 0);
+    assert.equal(book.chapters.length, 1);
+    assert.equal(book.chapters[0]?.title, "Page 1");
+    assert.equal(book.chapters[0]?.href, "page-1");
+    assert.equal(book.chapters[0]?.wordCount, 5);
+    assert.deepEqual(book.chapters[0]?.blocks.map((block) => ({ type: block.type, text: block.text })), [
+      { type: "paragraph", text: "Hello from a portable PDF" }
+    ]);
+  });
+});
+
+test("importPdf preserves an image-only page as an explicit canonical placeholder", async () => {
+  await withTempDir(async (dir) => {
+    const filePath = makeMinimalPdf(dir, "scanned.pdf", "");
+
+    const book = await importPdf(filePath);
+
+    assert.equal(book.chapters.length, 1);
+    assert.equal(book.chapters[0]?.wordCount, 0);
+    assert.deepEqual(book.chapters[0]?.blocks.map((block) => ({ type: block.type, text: block.text })), [
+      { type: "paragraph", text: "[Page 1: no text content]" }
+    ]);
+    assert.deepEqual(book.diagnostics, [{
+      severity: "warning",
+      message: "Page 1 has no extractable text (may be an image-only page)."
+    }]);
   });
 });
