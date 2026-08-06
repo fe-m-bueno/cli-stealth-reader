@@ -4,6 +4,7 @@ import type { Storage } from "./storage.js";
 
 const API_BASE = "https://focus.toggl.com/api";
 const TOKEN_PAGE = "https://focus.toggl.com/settings";
+const FOCUS_MAX_PAGE_SIZE = 100;
 
 export interface TogglProject {
   id: number;
@@ -383,7 +384,7 @@ export async function syncToggl(storage: Storage): Promise<TogglCache> {
     client?: { name?: string };
     color?: string;
     active?: boolean;
-  }>(storage, scopedPath(storage, "/projects"), 200);
+  }>(storage, scopedPath(storage, "/projects"), FOCUS_MAX_PAGE_SIZE);
   const projects = projectRows
     .filter((project) => project.active !== false)
     .map((project) => ({

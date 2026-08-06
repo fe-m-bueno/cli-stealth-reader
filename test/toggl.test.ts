@@ -326,16 +326,20 @@ test("Toggl sync reconciles the account's current running timer", async (t) => {
   );
 });
 
-test("Toggl sync fetches every project page beyond the first 200", async (t) => {
+test("Toggl sync fetches every project page using the API page-size limit", async (t) => {
   const storage = fakeStorageWithCache();
   const projectPages: number[] = [];
   t.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
     const url = new URL(String(input));
     if (url.pathname.endsWith("/projects")) {
       const page = Number(url.searchParams.get("page"));
+      const perPage = Number(url.searchParams.get("per_page"));
+      if (perPage > 100) {
+        return Response.json({ error: "validation" }, { status: 400 });
+      }
       projectPages.push(page);
-      const start = page === 1 ? 1 : 201;
-      const count = page === 1 ? 200 : 1;
+      const start = (page - 1) * 100 + 1;
+      const count = page < 3 ? 100 : 1;
       return Response.json({
         data: Array.from({ length: count }, (_, index) => ({
           id: start + index,
@@ -344,7 +348,7 @@ test("Toggl sync fetches every project page beyond the first 200", async (t) => 
           active: true
         })),
         page,
-        per_page: 200,
+        per_page: 100,
         total: 201
       });
     }
@@ -356,7 +360,7 @@ test("Toggl sync fetches every project page beyond the first 200", async (t) => 
 
   const cache = await syncToggl(storage);
 
-  assert.deepEqual(projectPages, [1, 2]);
+  assert.deepEqual(projectPages, [1, 2, 3]);
   assert.equal(cache.projects.length, 201);
   assert.equal(cache.projects.some((project) => project.id === 201), true);
 });
