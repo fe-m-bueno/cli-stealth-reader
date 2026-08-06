@@ -224,28 +224,49 @@ function positiveId(value: number | undefined): number | null {
   return Number.isInteger(value) && Number(value) > 0 ? Number(value) : null;
 }
 
-export function extractTogglOrganizationId(input: string): number {
+export interface TogglScope {
+  organizationId: number;
+  workspaceId: number | null;
+}
+
+export function extractTogglScope(input: string): TogglScope {
   const candidate = input.trim();
   if (/^\d+$/.test(candidate)) {
     const id = Number(candidate);
-    if (positiveId(id)) return id;
+    if (positiveId(id)) return { organizationId: id, workspaceId: null };
   }
 
   try {
     const url = new URL(candidate);
     if (url.hostname !== "focus.toggl.com") throw new Error("not a Focus URL");
-    for (const key of ["organization_id", "organizationId", "organization", "org_id"]) {
-      const id = Number(url.searchParams.get(key));
-      if (positiveId(id)) return id;
-    }
-    const pathMatch = url.pathname.match(/\/(?:organizations?|orgs?)\/(\d+)(?:\/|$)/i);
-    const pathId = pathMatch ? Number(pathMatch[1]) : NaN;
-    if (positiveId(pathId)) return pathId;
+    const queryId = (keys: string[]): number | null => {
+      for (const key of keys) {
+        const id = Number(url.searchParams.get(key));
+        if (positiveId(id)) return id;
+      }
+      return null;
+    };
+    const organizationQueryId = queryId(["organization_id", "organizationId", "organization", "org_id"]);
+    const workspaceQueryId = queryId(["workspace_id", "workspaceId", "workspace"]);
+    const organizationPathMatch = url.pathname.match(/\/(?:organizations?|orgs?)\/(\d+)(?:\/|$)/i);
+    const compactPathMatch = url.pathname.match(/^\/(\d+)\/workspaces\/(\d+)(?:\/|$)/i);
+    const workspacePathMatch = url.pathname.match(/\/workspaces\/(\d+)(?:\/|$)/i);
+    const organizationId = organizationQueryId
+      ?? positiveId(organizationPathMatch ? Number(organizationPathMatch[1]) : NaN)
+      ?? positiveId(compactPathMatch ? Number(compactPathMatch[1]) : NaN);
+    const workspaceId = workspaceQueryId
+      ?? positiveId(workspacePathMatch ? Number(workspacePathMatch[1]) : NaN)
+      ?? positiveId(compactPathMatch ? Number(compactPathMatch[2]) : NaN);
+    if (organizationId) return { organizationId, workspaceId };
   } catch {
     // The actionable error below is shared by malformed and incomplete URLs.
   }
 
   throw new Error("Could not find an organization ID. Paste the Focus workspace URL or the numeric organization ID.");
+}
+
+export function extractTogglOrganizationId(input: string): number {
+  return extractTogglScope(input).organizationId;
 }
 
 type FocusUserSettings = {
@@ -399,9 +420,13 @@ export async function syncToggl(storage: Storage): Promise<TogglCache> {
 }
 
 export async function completeTogglSetup(storage: Storage, organizationSource: string): Promise<TogglCache> {
-  const organizationId = extractTogglOrganizationId(organizationSource);
+  const { organizationId, workspaceId } = extractTogglScope(organizationSource);
   const previous = readCache(storage);
-  writeCache(storage, { ...previous, defaultOrganizationId: organizationId });
+  writeCache(storage, {
+    ...previous,
+    defaultOrganizationId: organizationId,
+    defaultWorkspaceId: workspaceId ?? previous.defaultWorkspaceId
+  });
   try {
     return await syncToggl(storage);
   } catch (error) {

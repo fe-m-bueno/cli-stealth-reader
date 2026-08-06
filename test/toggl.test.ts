@@ -196,12 +196,12 @@ test("Toggl auth opens a guided organization prompt when Focus cannot return the
   assert.match(state.status, /paste.*Focus workspace URL/i);
 });
 
-test("Toggl setup saves the organization from the pasted URL and completes sync", async (t) => {
+test("Toggl setup accepts the compact Focus URL and syncs its workspace", async (t) => {
   const storage = new FakeStorage();
   storage.setRawSetting("togglApiToken", "toggl_sk_valid");
   storage.setRawSetting("togglCache", JSON.stringify({
     defaultOrganizationId: null,
-    defaultWorkspaceId: 1,
+    defaultWorkspaceId: 999,
     projects: [],
     descriptions: [],
     syncedAt: null
@@ -216,8 +216,10 @@ test("Toggl setup saves the organization from the pasted URL and completes sync"
     commandSuggestionIndex: 0,
     status: "Ready"
   } as unknown as AppState;
+  const requests: string[] = [];
   t.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
     const url = String(input);
+    requests.push(url);
     if (url.endsWith("/tracking/current")) return new Response(null, { status: 204 });
     return new Response(JSON.stringify({ data: [], page: 1, per_page: 25 }), {
       status: 200,
@@ -225,9 +227,13 @@ test("Toggl setup saves the organization from the pasted URL and completes sync"
     });
   });
 
-  await executeCommand(state, "/toggl setup https://focus.toggl.com/organizations/7/workspaces/1");
+  await executeCommand(state, "/toggl setup https://focus.toggl.com/123456/workspaces/789012/");
 
-  assert.equal(getTogglCache(storage as unknown as Storage).defaultOrganizationId, 7);
+  assert.equal(getTogglCache(storage as unknown as Storage).defaultOrganizationId, 123456);
+  assert.equal(getTogglCache(storage as unknown as Storage).defaultWorkspaceId, 789012);
+  assert.ok(requests.some((url) => url.includes("/api/organizations/123456/workspaces/789012/projects?")));
+  assert.ok(requests.some((url) => url.includes("/api/organizations/123456/workspaces/789012/time-entries?")));
+  assert.ok(requests.some((url) => url.endsWith("/api/organizations/123456/workspaces/789012/tracking/current")));
   assert.match(state.status, /connected Toggl 2\.0/i);
 });
 
