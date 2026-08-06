@@ -1,9 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
-import { createRequire } from "node:module";
-const require = createRequire(import.meta.url);
-const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string; numpages: number; info: Record<string, string> }>;
+import { PDFParse } from "pdf-parse";
 import type { CanonicalBlock, CanonicalBook, CanonicalChapter, ImportDiagnostic } from "../types.js";
 
 export async function importPdf(filePath: string): Promise<CanonicalBook> {
@@ -13,10 +11,17 @@ export async function importPdf(filePath: string): Promise<CanonicalBook> {
   const importHash = crypto.createHash("sha256").update(buf).digest("hex");
 
   const diagnostics: ImportDiagnostic[] = [];
-  let parsed: { text: string; numpages: number; info: Record<string, string> };
+  let parsed: { pageTexts: string[]; numpages: number; info: Record<string, string> };
+  const parser = new PDFParse({ data: buf });
 
   try {
-    parsed = await pdfParse(buf);
+    const textResult = await parser.getText();
+    const infoResult = await parser.getInfo();
+    parsed = {
+      pageTexts: textResult.pages.map((page) => page.text),
+      numpages: textResult.total,
+      info: infoResult.info ?? {}
+    };
   } catch (err) {
     diagnostics.push({
       severity: "error",
@@ -32,11 +37,12 @@ export async function importPdf(filePath: string): Promise<CanonicalBook> {
       diagnostics,
       chapters: []
     };
+  } finally {
+    await parser.destroy().catch(() => {});
   }
 
-  const pageTexts = parsed.text.split(/\f/);
-  const totalPages = parsed.numpages ?? pageTexts.length;
-  const cappedTexts = pageTexts.slice(0, totalPages);
+  const totalPages = parsed.numpages ?? parsed.pageTexts.length;
+  const cappedTexts = parsed.pageTexts.slice(0, totalPages);
 
   const chapters: CanonicalChapter[] = [];
   for (let i = 0; i < totalPages; i++) {
