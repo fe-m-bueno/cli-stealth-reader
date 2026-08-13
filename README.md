@@ -2,59 +2,59 @@
 
 [Node.js](https://nodejs.org/)
 
-Um leitor de EPUB para terminal em modo tela cheia, com renderização e um diferencial único: o modo **stealth** disfarça o texto como código (TypeScript, Python ou Rust) plausível, para que pareça que você está programando enquanto lê.
+A full-screen EPUB reader for the terminal, with rich rendering and one distinctive twist: **stealth** mode disguises the text as plausible code (TypeScript, Python, or Rust), so it looks like you're programming while you read.
 
-![Modo stealth: um capítulo disfarçado como TypeScript](docs/screenshots/stealth-code-mode.png)
+![Stealth mode: a chapter disguised as TypeScript](docs/screenshots/stealth-code-mode.png)
 
 ## Screenshots
 
-| Modo Plain | Biblioteca |
+| Plain mode | Library |
 |---|---|
-| ![Modo plain](docs/screenshots/plain-mode.png) | ![Biblioteca](docs/screenshots/library.png) |
+| ![Plain mode](docs/screenshots/plain-mode.png) | ![Library](docs/screenshots/library.png) |
 
-| Atalhos de teclado | Configurações |
+| Keyboard shortcuts | Settings |
 |---|---|
-| ![Modal de atalhos](docs/screenshots/shortcuts.png) | ![Painel de configurações](docs/screenshots/settings.png) |
+| ![Shortcuts modal](docs/screenshots/shortcuts.png) | ![Settings panel](docs/screenshots/settings.png) |
 
-## Visão Geral
+## Overview
 
-O **cli-stealth-reader** oferece múltiplas experiências de leitura:
+**cli-stealth-reader** offers several reading experiences:
 
-- **Modo TypeScript (Stealth)**: O texto é renderizado como TypeScript realista — 12 padrões contextuais (const, let, arrow functions, export, await, nullish coalescing, type annotations, etc.) com nomes de variáveis gerados a partir das palavras do próprio texto
-- **Modo Python (Stealth)**: Disfarça o texto como código Python
-- **Modo Rust (Stealth)**: Disfarça o texto como código Rust
-- **Modo Plain**: Prosa limpa e legível com formatação visual clara
+- **TypeScript mode (stealth)**: The text is rendered as realistic TypeScript — 12 contextual patterns (const, let, arrow functions, export, await, nullish coalescing, type annotations, and so on) with variable names generated from the words of the text itself
+- **Python mode (stealth)**: Disguises the text as Python code
+- **Rust mode (stealth)**: Disguises the text as Rust code
+- **Plain mode**: Clean, readable prose with clear visual formatting
 
-Além disso:
+On top of that:
 
-- Interface TUI moderna com status bar integrada
-- 5 colorschemes e 6 temas de aparência (dark, light, colorblind-friendly e ANSI)
-- 25+ slash commands com suporte a argumentos, aliases e flags
-- Biblioteca SQLite persistida com XDG directories via `better-sqlite3`
-- Import rigoroso de EPUB com suporte a EPUB3, NCX fallback e fragmentos de âncora
-- Suporte a CBZ (quadrinhos) e PDF além de EPUB
-- Auto-detecção de arquivos `.epub`, `.cbz` e `.pdf` no diretório atual
-- Posição de leitura sincronizada por livro
-- Picker interativo de arquivos no diretório atual
-- Scroll com mouse e barra lateral de progresso
-- Barra de atalhos clicável e modal pesquisável com `Ctrl+.`
-- Modo foco: visualização centralizada de bloco único para leitura imersiva
-- Busca com highlighting e ciclo de resultados
-- Bookmarks com overlay de navegação
-- Tags e notas por posição de leitura
-- Export/Import de estado (posições, bookmarks, notas, tags) para sincronização entre máquinas
-- Ordenação da biblioteca por título, autor, progresso ou último aberto
-- Destaque de diálogos no modo plain
-- Controle de densidade do código stealth (1–5)
+- A modern TUI with an integrated status bar
+- 5 colorschemes and 6 appearance themes (dark, light, colorblind-friendly, and ANSI)
+- 25+ slash commands with support for arguments, aliases, and flags
+- A persisted SQLite library using XDG directories via `better-sqlite3`
+- Strict EPUB import with EPUB3 support, NCX fallback, and anchor fragments
+- CBZ (comics) and PDF support in addition to EPUB
+- Auto-detection of `.epub`, `.cbz`, and `.pdf` files in the current directory
+- Reading position synced per book
+- An interactive file picker for the current directory
+- Mouse scrolling and a progress sidebar
+- A clickable shortcut bar and a searchable modal via `Ctrl+.`
+- Focus mode: a centered single-block view for immersive reading
+- Search with highlighting and result cycling
+- Bookmarks with a navigation overlay
+- Tags and notes per reading position
+- State export/import (positions, bookmarks, notes, tags) for syncing across machines
+- Library sorting by title, author, progress, or last opened
+- Dialogue highlighting in plain mode
+- Stealth code density control (1–5)
 
-## Instalação
+## Installation
 
-### Requisitos
+### Requirements
 
 - **Node.js 20+**
-- Terminal com suporte a cores 24-bit
+- A terminal with 24-bit color support
 
-### Setup Rápido
+### Quick Setup
 
 ```bash
 git clone https://github.com/felipebueno/cli-stealth-reader.git
@@ -63,14 +63,14 @@ npm install
 npm run dev
 ```
 
-Para compilar a CLI:
+To build the CLI:
 
 ```bash
 npm run build
 node dist/index.js
 ```
 
-Para instalar o comando globalmente no seu ambiente (via link local):
+To install the command globally in your environment (via a local link):
 
 ```bash
 npm run build
@@ -78,288 +78,289 @@ npm link
 which stealth-reader
 ```
 
-Depois disso, você pode executar `stealth-reader` em qualquer diretório.
+After that, you can run `stealth-reader` from any directory.
 
-## Uso Rápido
+## Quick Start
 
-1. Inicie o leitor: `npm run dev`
-2. Importe um livro com `/add` ou pressione `Enter` para abrir o picker recursivo de EPUBs/CBZ/PDF da biblioteca configurada
-3. Use `j`/`k`, setas, `Space`/`b` ou a roda do mouse para navegar
-4. Pressione `m` para ciclar entre os modos de renderização (plain, typescript, python, rust)
-5. Pressione `f` para ativar o modo foco (leitura de bloco único centralizado)
-6. Pressione `/` para abrir a barra de comandos
-7. Pressione `Ctrl+.` (`Ctrl+X` em terminais sem suporte ao atalho) para ver todos os atalhos
+1. Start the reader: `npm run dev`
+2. Import a book with `/add`, or press `Enter` to open the recursive EPUB/CBZ/PDF picker for the configured library
+3. Use `j`/`k`, the arrow keys, `Space`/`b`, or the mouse wheel to navigate
+4. Press `m` to cycle through the rendering modes (plain, typescript, python, rust)
+5. Press `f` to enable focus mode (centered single-block reading)
+6. Press `/` to open the command bar
+7. Press `Ctrl+.` (`Ctrl+X` on terminals that don't support the shortcut) to see every shortcut
 
-### Exemplo: Trocar de Modo
-
-```
-/mode plain        # Ativa modo de leitura simples
-/mode typescript   # Ativa modo stealth TypeScript (padrão)
-/mode python       # Ativa modo stealth Python
-/mode rust         # Ativa modo stealth Rust
-```
-
-Ou use `m` para ciclar entre os modos sem abrir o comando.
-
-### Exemplo: Mudar Colorscheme e Tema
+### Example: Switching Modes
 
 ```
-/colorscheme codex      # Monocromático com azul OpenAI
-/colorscheme claude     # Coral e lavanda do Claude Code
-/colorscheme graphite   # Tema neutro
-/colorscheme amber      # Tema quente
-/colorscheme forest     # Tema verde
-
-/theme dark             # Tema escuro atual
-/theme light            # Tema claro com fundo chalk
-/theme dark-colorblind  # Tema escuro colorblind-friendly
-/theme light-colorblind # Tema claro colorblind-friendly
-/theme dark-ansi        # Tema escuro com cores ANSI
-/theme light-ansi       # Tema claro com cores ANSI
+/mode plain        # Enables simple reading mode
+/mode typescript   # Enables TypeScript stealth mode (default)
+/mode python       # Enables Python stealth mode
+/mode rust         # Enables Rust stealth mode
 ```
 
-## Modos de Renderização
+Or use `m` to cycle through the modes without opening the command bar.
 
-### Modos Stealth (TypeScript, Python, Rust)
+### Example: Changing Colorscheme and Theme
 
-A tecla `m` cicla entre os modos: **plain → typescript → python → rust → plain**
+```
+/colorscheme codex      # Monochrome with OpenAI blue
+/colorscheme claude     # Claude Code's coral and lavender
+/colorscheme graphite   # Neutral theme
+/colorscheme amber      # Warm theme
+/colorscheme forest     # Green theme
 
-O texto é mascarado como código real de cada linguagem. No modo TypeScript, 12 padrões contextuais são usados, com nomes de variáveis e funções gerados a partir das palavras do próprio livro:
+/theme dark             # Current dark theme
+/theme light            # Light theme with a chalk background
+/theme dark-colorblind  # Colorblind-friendly dark theme
+/theme light-colorblind # Colorblind-friendly light theme
+/theme dark-ansi        # Dark theme with ANSI colors
+/theme light-ansi       # Light theme with ANSI colors
+```
+
+## Rendering Modes
+
+### Stealth Modes (TypeScript, Python, Rust)
+
+The `m` key cycles through the modes: **plain → typescript → python → rust → plain**
+
+The text is masked as real code in each language. In TypeScript mode, 12 contextual patterns are used, with variable and function names generated from the book's own words:
 
 ```typescript
-const aliceComecou = "Uma vez que Alice começou a se entediar de ficar";
-// ao lado de sua irmã no banco, sem nada fazer.
-const olhadinha = () => "Ela ocasionalmente dava uma olhadinha";
-export const figuras = "no livro que sua irmã lia, mas não havia figuras";
-const livroConversas: string = "ou conversas nele, 'e que serve um livro', pensou Alice,";
-// 'sem figuras ou conversas?'
-throw new Error("O dia era muito quente e sonolento para ela.");
-console.log("Alice começou a sentir muito sono e preguiça.");
+const aliceBeginning = "Alice was beginning to get very tired of sitting";
+// by her sister on the bank, and of having nothing to do.
+const peeped = () => "Once or twice she had peeped into the book";
+export const pictures = "her sister was reading, but it had no pictures";
+const conversations: string = "or conversations in it, 'and what is the use of a book',";
+// thought Alice, 'without pictures or conversations?'
+throw new Error("The day was very hot and made her feel sleepy.");
+console.log("Alice began to feel very sleepy and stupid.");
 ```
 
-Blocos estruturais ocasionais (imports, interfaces, funções async) são inseridos para simular um arquivo real. A **densidade do código** é controlável de 1 a 5 (tecla `d` ou `/density`): densidade 1 favorece comentários, densidade 5 é código puro.
+Occasional structural blocks (imports, interfaces, async functions) are inserted to simulate a real file. **Code density** is adjustable from 1 to 5 (the `d` key or `/density`): density 1 favors comments, density 5 is pure code.
 
-**Benefício**: Ninguém notará que você está lendo. Parece trabalho legítimo!
+**The benefit**: nobody will notice you're reading. It looks like legitimate work.
 
-### Modo Plain
+### Plain Mode
 
-Interface clara e legível com formatação visual:
+A clear, readable interface with visual formatting:
 
 ```
-CAPÍTULO 1 — ABAIXO PELA TOCA DO COELHO
+CHAPTER 1 — DOWN THE RABBIT-HOLE
 
-Uma vez que Alice começou a se entediar de ficar ao lado de sua irmã
-no banco, sem nada fazer. Ela ocasionalmente dava uma olhadinha no livro
-que sua irmã lia, mas não havia figuras ou conversas nele, 'e que serve um
-livro', pensou Alice, 'sem figuras ou conversas?'
+Alice was beginning to get very tired of sitting by her sister on the
+bank, and of having nothing to do. Once or twice she had peeped into the
+book her sister was reading, but it had no pictures or conversations in
+it, 'and what is the use of a book', thought Alice, 'without pictures or
+conversations?'
 
-▏ O dia era muito quente e sonolento para ela. Alice começou a sentir
-▏ muito sono e preguiça.
+▏ The day was very hot and made her feel sleepy. Alice began to feel
+▏ very sleepy and stupid.
 
 · · · · · · ·
 
-▏ De repente, um Coelho Branco com olhos rosas passou correndo perto dela.
+▏ Suddenly a White Rabbit with pink eyes ran close by her.
 ```
 
-- Headings em maiúsculas com cor destaque
-- Citações com prefixo `▏`
-- Itens de lista com `·`
-- Quebras de cena com `· · · · · · ·`
+- Uppercase headings in an accent color
+- Quotes prefixed with `▏`
+- List items with `·`
+- Scene breaks as `· · · · · · ·`
 
-## Atalhos de Teclado
+## Keyboard Shortcuts
 
-### Navegação
-
-
-| Tecla     | Ação                                       |
-| --------- | ------------------------------------------ |
-| `j` / `↑` | Scroll para cima                           |
-| `k` / `↓` | Scroll para baixo                          |
-| `Space`   | Página para frente                         |
-| `b`       | Página para trás                           |
-| `Home`    | Ir para o início do capítulo               |
-| `End`     | Ir para o fim do capítulo                  |
-| `←` / `→` | Capítulo anterior / próximo capítulo       |
-| `T`       | Abrir tabela de conteúdos                  |
-| `B`       | Abrir overlay de bookmarks                 |
-| `[` / `]` | Voltar / avançar no histórico de navegação |
-| `wheel`   | Scroll com mouse                           |
-| `g`       | Ir para o topo da leitura atual            |
-| `G`       | Ir para o fim da leitura atual             |
+### Navigation
 
 
-### Comandos
+| Key       | Action                                  |
+| --------- | --------------------------------------- |
+| `j` / `↑` | Scroll up                               |
+| `k` / `↓` | Scroll down                             |
+| `Space`   | Page forward                            |
+| `b`       | Page back                               |
+| `Home`    | Go to the start of the chapter          |
+| `End`     | Go to the end of the chapter            |
+| `←` / `→` | Previous chapter / next chapter         |
+| `T`       | Open the table of contents              |
+| `B`       | Open the bookmarks overlay              |
+| `[` / `]` | Go back / forward in navigation history |
+| `wheel`   | Scroll with the mouse                   |
+| `g`       | Go to the top of the current reading    |
+| `G`       | Go to the end of the current reading    |
 
 
-| Tecla     | Ação                                                          |
-| --------- | ------------------------------------------------------------- |
-| `/`       | Abrir barra de comandos                                       |
-| `Enter`   | Executar comando ativo                                        |
-| `Esc`     | Fechar overlay ou limpar input                                |
-| `Tab`     | Navegar seleção / completar comando                           |
-| `n` / `N` | Próximo / anterior resultado de busca (após `/search`)        |
-| `d`       | Deletar bookmark selecionado (dentro do overlay de bookmarks) |
+### Commands
+
+
+| Key       | Action                                                    |
+| --------- | --------------------------------------------------------- |
+| `/`       | Open the command bar                                      |
+| `Enter`   | Run the active command                                    |
+| `Esc`     | Close an overlay or clear the input                       |
+| `Tab`     | Move through the selection / complete the command         |
+| `n` / `N` | Next / previous search result (after `/search`)           |
+| `d`       | Delete the selected bookmark (inside the bookmark overlay) |
 
 
 ### Interface
 
 
-| Tecla | Ação                                                             |
+| Key   | Action                                                          |
 | ----- | ---------------------------------------------------------------- |
-| `m`   | Ciclar modo de renderização (plain → typescript → python → rust) |
-| `f`   | Alternar modo foco (bloco único centralizado)                    |
-| `d`   | Ciclar densidade do código stealth (1 → 3 → 5)                   |
-| `c`   | Abrir picker de colorscheme                                      |
-| `C`   | Abrir picker de tema                                             |
-| `S`   | Abrir configurações em abas com preview ao vivo                  |
-| `p`   | Ciclar progresso (tempo restante capítulo/livro → % → hidden)    |
-| `Ctrl+.` | Ver atalhos de teclado (`Ctrl+X` é o fallback compatível)     |
-| `q`   | Sair do leitor                                                   |
+| `m`   | Cycle the rendering mode (plain → typescript → python → rust)    |
+| `f`   | Toggle focus mode (centered single block)                        |
+| `d`   | Cycle the stealth code density (1 → 3 → 5)                       |
+| `c`   | Open the colorscheme picker                                      |
+| `C`   | Open the theme picker                                            |
+| `S`   | Open tabbed settings with a live preview                         |
+| `p`   | Cycle progress (chapter/book time remaining → % → hidden)         |
+| `Ctrl+.` | Show keyboard shortcuts (`Ctrl+X` is the compatible fallback) |
+| `q`   | Quit the reader                                                  |
 
 
-### Na Biblioteca (`/book`)
+### In the Library (`/book`)
 
 
-| Tecla | Ação                                                                      |
-| ----- | ------------------------------------------------------------------------- |
-| `s`   | Ciclar critério de ordenação (último aberto → título → autor → progresso) |
-| `r`   | Reverter direção de ordenação                                             |
+| Key   | Action                                                                |
+| ----- | --------------------------------------------------------------------- |
+| `s`   | Cycle the sort criterion (last opened → title → author → progress)    |
+| `r`   | Reverse the sort direction                                            |
 
 
 ## Slash Commands
 
-Pressione `/` para abrir a barra de comandos. Todos os comandos suportam argumentos e flags.
+Press `/` to open the command bar. Every command supports arguments and flags.
 
-### Navegação
+### Navigation
 
 ```bash
-/prev [count]          # Ir ao capítulo anterior (ou N capítulos atrás)
-/next [count]          # Ir ao próximo capítulo (ou N capítulos adiante)
-/chapters [query]      # Abrir table of contents
-  --current            # Destacar capítulo atual
-  --flat               # Mostrar estrutura plana (sem hierarquia)
+/prev [count]          # Go to the previous chapter (or back N chapters)
+/next [count]          # Go to the next chapter (or forward N chapters)
+/chapters [query]      # Open the table of contents
+  --current            # Highlight the current chapter
+  --flat               # Show a flat structure (no hierarchy)
 
-/goto <position>       # Pular para posição no livro
-  10%                  # Por percentagem global
-  --chapter 3          # Por número de capítulo
+/goto <position>       # Jump to a position in the book
+  10%                  # By global percentage
+  --chapter 3          # By chapter number
 
-/search [term]         # Buscar texto no livro
-  --global / -g        # Busca global (todos os capítulos)
+/search [term]         # Search the book's text
+  --global / -g        # Global search (all chapters)
 ```
 
-Use `n` / `N` após `/search` para ciclar entre os resultados.
+Use `n` / `N` after `/search` to cycle through the results.
 
-Use `[` / `]` para navegar no histórico (back/forward).
+Use `[` / `]` to move through the history (back/forward).
 
 ### Bookmarks
 
 ```bash
-/mark [label]          # Criar bookmark na posição atual
-/marks                 # Abrir overlay de bookmarks
-/delmark <id-or-label> # Remover bookmark por ID ou label
+/mark [label]          # Create a bookmark at the current position
+/marks                 # Open the bookmarks overlay
+/delmark <id-or-label> # Remove a bookmark by ID or label
 ```
 
-A tecla `B` abre o overlay de bookmarks. Dentro dele, `Enter` navega para o bookmark e `d` o remove.
+The `B` key opens the bookmarks overlay. Inside it, `Enter` navigates to the bookmark and `d` removes it.
 
-### Livros
+### Books
 
 ```bash
-/changebook [query]    # Trocar para outro livro
-  --recent             # Listar apenas lidos recentemente
-  --cwd                # Buscar apenas na pasta atual
-  --sort               # Abrir picker com ordenação
+/changebook [query]    # Switch to another book
+  --recent             # List only recently read books
+  --cwd                # Search only the current folder
+  --sort               # Open the picker with sorting
 
-/resume [book-query]   # Retomar um livro específico
-  --latest             # Retomar o último lido
+/resume [book-query]   # Resume a specific book
+  --latest             # Resume the last one read
 
-/add [path]            # Importar um EPUB, CBZ ou PDF; ou abrir o picker
-  --cwd                # Procurar arquivos na pasta atual
-  --force              # Reimportar mesmo que já exista
+/add [path]            # Import an EPUB, CBZ, or PDF; or open the picker
+  --cwd                # Look for files in the current folder
+  --force              # Re-import even if it already exists
 
-/librarydir [path]     # Exibir/configurar a raiz da biblioteca (`--cwd` restaura o CWD)
+/librarydir [path]     # Show/set the library root (`--cwd` restores the CWD)
 
-/remove [book-query]   # Remover livro da biblioteca
-  --current            # Remover o livro atual
+/remove [book-query]   # Remove a book from the library
+  --current            # Remove the current book
 
-/removecurrent         # Remover apenas o livro em leitura
+/removecurrent         # Remove only the book being read
 ```
 
-### Tags e Notas
+### Tags and Notes
 
 ```bash
-/tag [tag]             # Adicionar tag ao livro atual; sem argumento lista as tags
-  -d <tag>             # Remover tag
+/tag [tag]             # Add a tag to the current book; with no argument, lists the tags
+  -d <tag>             # Remove a tag
 
-/tags                  # Listar tags do livro atual (alias de /tag)
+/tags                  # List the current book's tags (alias for /tag)
 
-/note <text>           # Adicionar nota na posição atual
-  -l                   # Abrir overlay de notas
-  -d <id>              # Deletar nota por ID
+/note <text>           # Add a note at the current position
+  -l                   # Open the notes overlay
+  -d <id>              # Delete a note by ID
 ```
 
-Tags aparecem na biblioteca ao lado do progresso. Filtre por tag usando `/changebook <tag>`.
+Tags appear in the library next to the progress. Filter by tag using `/changebook <tag>`.
 
 ### Export / Import
 
 ```bash
-/export [path]         # Exportar posições, bookmarks, notas e tags para JSON
-/import [path]         # Importar estado de leitura de um arquivo JSON
+/export [path]         # Export positions, bookmarks, notes, and tags to JSON
+/import [path]         # Import reading state from a JSON file
 ```
 
-O arquivo exportado é indexado por `importHash` — sem dependência de caminho, ideal para sincronizar leitura entre máquinas.
+The exported file is indexed by `importHash` — no path dependency, which makes it ideal for syncing your reading across machines.
 
 ### Toggl Track
 
 ```bash
-/toggl auth                         # Abrir a página do token da API
-/toggl auth <token>                 # Conectar e sincronizar a conta
-/toggl sync                         # Atualizar projetos, descrições e timer ativo
-/toggl recent                       # Ver projetos e descrições recentes
-/toggl start "Livro" --project "Reading books"
+/toggl auth                         # Open the API token page
+/toggl auth <token>                 # Connect and sync the account
+/toggl sync                         # Refresh projects, descriptions, and the active timer
+/toggl recent                       # See recent projects and descriptions
+/toggl start "Book" --project "Reading books"
 /toggl stop
-/toggl log "Livro" --duration 45m --project "Reading books"
+/toggl log "Book" --duration 45m --project "Reading books"
 /toggl --disconnect
 ```
 
-Durações aceitam formatos como `25m`, `1.5h` e `900s`. O token fica no banco local de configurações; o histórico de comandos sempre substitui credenciais por `<redacted>`.
+Durations accept formats like `25m`, `1.5h`, and `900s`. The token is stored in the local settings database; command history always replaces credentials with `<redacted>`.
 
-### Visualização
+### View
 
 ```bash
-/mode <mode>           # Trocar modo de renderização
+/mode <mode>           # Change the rendering mode
   plain | typescript | python | rust
 
-/density [level]       # Controlar densidade do código stealth (1–5)
-  1 = mais comentários, 5 = código puro
+/density [level]       # Control the stealth code density (1–5)
+  1 = more comments, 5 = pure code
 
-/colorscheme [scheme]  # Mudar colorscheme
-  --list               # Listar colorschemes disponíveis
-  --preview            # Flag aceita por compatibilidade
+/colorscheme [scheme]  # Change the colorscheme
+  --list               # List the available colorschemes
+  --preview            # Flag accepted for compatibility
 
-/theme [theme]         # Mudar tema de aparência
+/theme [theme]         # Change the appearance theme
   dark | light | dark-colorblind | light-colorblind | dark-ansi | light-ansi
-  --list               # Listar temas disponíveis
+  --list               # List the available themes
 
-/highlight             # Ativar destaque de diálogos no modo plain
-  --on                 # Ativar
-  --off                # Desativar
+/highlight             # Enable dialogue highlighting in plain mode
+  --on                 # Enable
+  --off                # Disable
 
-/toggleprogress [mode] # Progresso: time-chapter|time-book|book|both|chapter|hidden
+/toggleprogress [mode] # Progress: time-chapter|time-book|book|both|chapter|hidden
   time-chapter | time-book | book | both | chapter | hidden
 
-/settings              # Abrir painel pesquisável de configurações do leitor
-                       # ←/→ muda aba, ↑/↓ seleciona, Space altera
-                       # Enter salva, / pesquisa na aba, Esc cancela
+/settings              # Open the searchable reader settings panel
+                       # ←/→ changes tab, ↑/↓ selects, Space toggles
+                       # Enter saves, / searches within the tab, Esc cancels
 ```
 
-### Sistema
+### System
 
 ```bash
-/help [command]        # Ver ajuda de um comando específico
-  --all                # Listar todos os comandos
+/help [command]        # See help for a specific command
+  --all                # List every command
 
-/keyboardshortcuts     # Ver atalhos de teclado
-  --category <tipo>    # Filtrar por: navigation, commands, view
+/keyboardshortcuts     # See the keyboard shortcuts
+  --category <type>    # Filter by: navigation, commands, view
 ```
 
 ### Aliases
@@ -369,73 +370,73 @@ Durações aceitam formatos como `25m`, `1.5h` e `900s`. O token fica no banco l
 - `/config` → `/settings`
 - `/tags` → `/tag`
 
-### Modo Foco
+### Focus Mode
 
-Pressione `f` para entrar no modo foco: a tela exibe um único bloco de conteúdo centralizado, sem distrações. Use `j`/`k` ou as setas para avançar/recuar bloco a bloco. Ao sair do modo foco, a posição equivalente é preservada no scroll normal.
+Press `f` to enter focus mode: the screen shows a single centered block of content, free of distractions. Use `j`/`k` or the arrow keys to move forward and back block by block. When you leave focus mode, the equivalent position is preserved in normal scrolling.
 
-## Temas de Cores
+## Color Themes
 
-Cinco temas pensados para leitura prolongada:
+Five themes designed for extended reading:
 
-### Codex (Padrão)
+### Codex (Default)
 
-Preto, branco e cinza com o azul de marca do Codex CLI.
+Black, white, and gray with the Codex CLI brand blue.
 
 ### Claude Code
 
-Coral, lavanda e verde sobre neutros escuros, seguindo a hierarquia visual do Claude Code.
+Coral, lavender, and green over dark neutrals, following Claude Code's visual hierarchy.
 
 ### Graphite
 
-Cinza neutro minimalista — clássico e profissional. Máxima discrição.
+Minimalist neutral gray — classic and professional. Maximum discretion.
 
 ### Amber
 
-Tons quentes de ouro e laranja — confortável para noites. Reduz fadiga ocular.
+Warm gold and orange tones — comfortable at night. Reduces eye strain.
 
 ### Forest
 
-Verde natural suave — ambiente calmo. Ideal para sessões longas de leitura.
+Soft natural green — a calm environment. Ideal for long reading sessions.
 
-## Arquitetura
+## Architecture
 
 ```
 src/
-  index.ts           # Ponto de entrada CLI
-  tui.ts             # Loop principal da TUI e estado da app
-  types.ts           # Tipos compartilhados (CanonicalBook, CanonicalBlock, etc)
-  commands.ts        # Definições e parser de slash commands
-  executor.ts        # Execução dos slash commands
-  renderers.ts       # Dispatcher de renderização (plain vs código)
-  focus.ts           # Lógica do modo foco (bloco único centralizado)
-  themes.ts          # Colorschemes e temas de aparência pré-definidos
-  help.ts            # Definições de atalhos de teclado
-  color.ts           # Utilitários de formatação ANSI
-  storage.ts         # Abstração SQLite com WAL (XDG dirs)
-  paths.ts           # Resolução de caminhos XDG
-  discovery.ts       # Descoberta recursiva de EPUBs/CBZ/PDF na biblioteca configurada
-  screen.ts          # Gerenciamento da tela do terminal
-  input.ts           # Gerenciamento de input do teclado
-  
+  index.ts           # CLI entry point
+  tui.ts             # Main TUI loop and app state
+  types.ts           # Shared types (CanonicalBook, CanonicalBlock, etc.)
+  commands.ts        # Slash command definitions and parser
+  executor.ts        # Slash command execution
+  renderers.ts       # Rendering dispatcher (plain vs. code)
+  focus.ts           # Focus mode logic (centered single block)
+  themes.ts          # Predefined colorschemes and appearance themes
+  help.ts            # Keyboard shortcut definitions
+  color.ts           # ANSI formatting utilities
+  storage.ts         # SQLite abstraction with WAL (XDG dirs)
+  paths.ts           # XDG path resolution
+  discovery.ts       # Recursive EPUB/CBZ/PDF discovery in the configured library
+  screen.ts          # Terminal screen management
+  input.ts           # Keyboard input management
+
   renderers/
-    typescript.ts    # Renderizador TypeScript (12 padrões contextuais)
-    python.ts        # Renderizador Python
-    rust.ts          # Renderizador Rust
-    shared.ts        # Utilitários compartilhados entre renderizadores
+    typescript.ts    # TypeScript renderer (12 contextual patterns)
+    python.ts        # Python renderer
+    rust.ts          # Rust renderer
+    shared.ts        # Utilities shared across renderers
 
   parser/
-    epub.ts          # Pipeline de import EPUB (JSZip + validação)
-    cbz.ts           # Parser CBZ (quadrinhos em ZIP)
-    pdf.ts           # Parser PDF
-    html.ts          # Extração de blocos de HTML (parse5)
-    xml.ts           # Utilitários de parsing XML
-    index.ts         # Dispatcher de parsers por tipo de arquivo
+    epub.ts          # EPUB import pipeline (JSZip + validation)
+    cbz.ts           # CBZ parser (comics in ZIP)
+    pdf.ts           # PDF parser
+    html.ts          # Block extraction from HTML (parse5)
+    xml.ts           # XML parsing utilities
+    index.ts         # Parser dispatcher by file type
 ```
 
-### Fluxo de Dados
+### Data Flow
 
 ```
-Arquivo EPUB → epub.ts (JSZip + parsing) → CanonicalBook (chapters → blocks)
+EPUB file → epub.ts (JSZip + parsing) → CanonicalBook (chapters → blocks)
                                                   ↓
                                        storage.ts (SQLite)
                                                   ↓
@@ -444,37 +445,37 @@ Arquivo EPUB → epub.ts (JSZip + parsing) → CanonicalBook (chapters → block
                           renderers.ts → ANSI output → Terminal
 ```
 
-### Armazenamento
+### Storage
 
-O estado é persistido em diretórios XDG-padrão:
+State is persisted in standard XDG directories:
 
-- `**$XDG_DATA_HOME/cli-stealth-reader/**`: Banco de dados SQLite (WAL mode)
-  - Tabelas: `books`, `chapters`, `positions`, `diagnostics`, `settings`, `command_history`, `bookmarks`, `book_tags`, `notes`
-- `**$XDG_CACHE_HOME/cli-stealth-reader/**`: Cache de JSON de livros
+- `**$XDG_DATA_HOME/cli-stealth-reader/**`: SQLite database (WAL mode)
+  - Tables: `books`, `chapters`, `positions`, `diagnostics`, `settings`, `command_history`, `bookmarks`, `book_tags`, `notes`
+- `**$XDG_CACHE_HOME/cli-stealth-reader/**`: JSON cache of books
 
-EPUBs, CBZs e PDFs encontrados recursivamente na biblioteca configurada são oferecidos na tela inicial e em `/add`. Use `/librarydir ~/Books` para persistir outra raiz ou `/add --cwd` para procurar temporariamente no diretório atual.
+EPUBs, CBZs, and PDFs found recursively in the configured library are offered on the start screen and in `/add`. Use `/librarydir ~/Books` to persist a different root, or `/add --cwd` to search the current directory temporarily.
 
-## Desenvolvimento
+## Development
 
 ### Scripts
 
 ```bash
-npm run dev            # Executar com tsx (sem build necessário)
-npm run build          # Compilar TypeScript → dist/
-npm start              # Rodar dist/index.js (CLI compilada)
-npm test               # Rodar todos os testes
+npm run dev            # Run with tsx (no build needed)
+npm run build          # Compile TypeScript → dist/
+npm start              # Run dist/index.js (the built CLI)
+npm test               # Run all tests
 ```
 
-### Rodar Teste Único
+### Running a Single Test
 
 ```bash
 node --import tsx --test test/epub.test.ts
 node --import tsx --test test/commands.test.ts
 ```
 
-### Modelo de Dados Principal
+### Core Data Model
 
-`**CanonicalBlock**` — Unidade básica de conteúdo:
+`**CanonicalBlock**` — the basic unit of content:
 
 ```typescript
 type CanonicalBlock = 
@@ -487,7 +488,7 @@ type CanonicalBlock =
   | { type: "anchor"; id: string }
 ```
 
-`**CanonicalChapter**` — Capítulo com metadados:
+`**CanonicalChapter**` — a chapter with metadata:
 
 ```typescript
 {
@@ -498,7 +499,7 @@ type CanonicalBlock =
 }
 ```
 
-`**CanonicalBook**` — Livro completo:
+`**CanonicalBook**` — a complete book:
 
 ```typescript
 {
@@ -510,31 +511,31 @@ type CanonicalBlock =
 }
 ```
 
-### Pipeline de Import EPUB
+### EPUB Import Pipeline
 
-1. Validar arquivo: mimetype, `META-INF/container.xml`
-2. Parsear OPF manifest e spine
-3. Extrair TOC: EPUB3 `nav.xhtml` → NCX fallback → spine fallback
-4. Para cada item do TOC: parsear HTML, extrair blocos, resolver fragmentos de âncora
-5. Normalizar para formato canônico, calcular word counts, coletar diagnósticos
+1. Validate the file: mimetype, `META-INF/container.xml`
+2. Parse the OPF manifest and spine
+3. Extract the TOC: EPUB3 `nav.xhtml` → NCX fallback → spine fallback
+4. For each TOC item: parse the HTML, extract blocks, resolve anchor fragments
+5. Normalize to the canonical format, compute word counts, collect diagnostics
 
-## Notas de Implementação
+## Implementation Notes
 
-- Estado de app e todas as strings renderizadas passam por `tui.ts` — a "fonte da verdade"
-- Comandos suportam aliases (ex: `/book` é alias para `/changebook`)
-- Argumentos entre aspas são interpretados literalmente (ex: `/add "Meu Livro.epub"`)
-- Progresso customizável: tempo restante (ritmo de leitura aprendido) ou barras `%` (`time-chapter`, `time-book`, `book`, `both`, `chapter`, `hidden`)
-- Remoção de livro apaga apenas a entrada da biblioteca — o arquivo original não é deletado
-- Posição de leitura é persistida por livro automaticamente
-- Modos stealth (TypeScript, Python, Rust) são persistidos via `settings`; a tecla `m` cicla entre eles
-- A densidade do código stealth (1–5) é persistida via `settings`; a tecla `d` cicla entre 1→3→5
-- O painel de configurações usa abas `Themes`, `Reading`, `Layout` e `More`, com preview transacional
-- `Text size`, `Page margins` e `Line spacing` ajustam a coluna de leitura sem depender do emulador de terminal
-- O modo foco preserva a posição equivalente ao retornar ao scroll normal
-- Export/import usa `importHash` como chave, sem dependência de caminho do arquivo no sistema
-- Tags são case-insensitive no banco (LOWER); notas são indexadas por `book_id`
-- Histórico de navegação (back/forward) é mantido apenas em memória (não persistido)
+- App state and every rendered string go through `tui.ts` — the "source of truth"
+- Commands support aliases (for example, `/book` is an alias for `/changebook`)
+- Quoted arguments are interpreted literally (for example, `/add "My Book.epub"`)
+- Customizable progress: time remaining (from a learned reading pace) or `%` bars (`time-chapter`, `time-book`, `book`, `both`, `chapter`, `hidden`)
+- Removing a book only deletes the library entry — the original file is not deleted
+- Reading position is persisted per book automatically
+- Stealth modes (TypeScript, Python, Rust) are persisted via `settings`; the `m` key cycles through them
+- Stealth code density (1–5) is persisted via `settings`; the `d` key cycles 1→3→5
+- The settings panel uses `Themes`, `Reading`, `Layout`, and `More` tabs, with a transactional preview
+- `Text size`, `Page margins`, and `Line spacing` adjust the reading column without depending on the terminal emulator
+- Focus mode preserves the equivalent position when you return to normal scrolling
+- Export/import uses `importHash` as the key, with no dependency on the file's path on the system
+- Tags are case-insensitive in the database (LOWER); notes are indexed by `book_id`
+- Navigation history (back/forward) is kept in memory only (not persisted)
 
-## Contribuição
+## Contributing
 
-Contribuições são bem-vindas! Siga o estilo de código existente e rode os testes antes de abrir um PR.
+Contributions are welcome. Follow the existing code style and run the tests before opening a PR.
